@@ -8,7 +8,7 @@ UNIT   		?= $(TEST_DIR)/$(UNIT_TEST)
 BUILD_DIR 	:= build
 DYNAMIC_LIB	:= $(BUILD_DIR)/libtiledcuda.so
 
-.PHONY: build
+.PHONY: build example unit_test clean
 
 build:
 	@mkdir -p build 
@@ -21,3 +21,6 @@ example: $(DYNAMIC_LIB)
 
 unit_test: $(DYNAMIC_LIB)
 	@python3 $(UNIT)
+
+clean:
+	@rm -rf build

@@ -6,19 +6,25 @@ set(CUDACXX /usr/local/cuda/bin/nvcc)
 
 project(tiledcuda LANGUAGES C CXX CUDA)
 
-
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Torch REQUIRED)
 find_package(CUDA REQUIRED)
 # find_package(CuDNN REQUIRED)
 
-include_directories(include)
+add_compile_definitions(-DCUTLASS_NVCC_ARCHS=86)
 
-file(GLOB_RECURSE SOURCES "src/kernels/*.cu")
+file(GLOB_RECURSE SOURCES "src/kernels/*.cu" "src/kernel/cell/*.cc")
 
 # Define our library target
 add_library(tiledcuda SHARED ${SOURCES})
+
+target_compile_options(tiledcuda PRIVATE -std=c++17)
+
+include_directories(include)
+
+include_directories(3rd-party/cutlass/include)
 
 # target_compile_features(tiledcuda PRIVATE cxx_std_17)
 
