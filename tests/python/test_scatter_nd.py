@@ -34,11 +34,6 @@ if __name__ == "__main__":
 
     scatter_indices = indices.flatten()
 
-    slice_size = 1
-    end_size = indices_shape[-1]
-    for i in range(end_size, len(data_shape)):
-        slice_size *= data_shape[i]
-
     update_shape = compute_output_shape(indices_shape, data_shape)
     updates = torch.empty(update_shape, dtype=torch.float32,
                           device='cuda').fill_(10.0)
@@ -46,6 +41,7 @@ if __name__ == "__main__":
 
     res = test_scatter_nd(scatter_data, scatter_indices, scatter_updates)
 
+    # Implement `scatter_nd` in Python.
     data[indices[:, 0], indices[:, 1]] = updates
 
     flattened_data = data.flatten()

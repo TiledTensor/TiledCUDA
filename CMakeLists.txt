@@ -15,7 +15,11 @@ find_package(CUDA REQUIRED)
 
 add_compile_definitions(-DCUTLASS_NVCC_ARCHS=86)
 
-file(GLOB_RECURSE SOURCES "src/kernels/*.cu" "src/kernel/cell/*.cc")
+file(GLOB_RECURSE SOURCES 
+    "src/kernels/*.cu" 
+    "src/kernel/cell/*.cc"
+    "src/kernel/cell/copy/*.cc"
+)
 
 # Define our library target
 add_library(tiledcuda SHARED ${SOURCES})

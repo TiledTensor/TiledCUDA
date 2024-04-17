@@ -2,7 +2,7 @@
 
 #include "cuda_utils.hpp"
 
-namespace tiledcuda::cell {
+namespace tiledcuda::cell::copy {
 
 // Copy a tensor from global memory to shared memory
 template <typename Element, typename SrcLayout, typename DstLayout,
