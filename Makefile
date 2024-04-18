@@ -1,6 +1,6 @@
 EXAMPLE_DIR := examples
 TEST_DIR   	:= tests/python
-UNIT_TEST 	?= test_scatter_nd
+UNIT_TEST 	?= test_gemm
 
 EXAMPLE 	?= $(EXAMPLE_DIR)/scatter_nd.py
 UNIT   		?= $(TEST_DIR)/$(UNIT_TEST).py
@@ -10,9 +10,11 @@ DYNAMIC_LIB	:= $(BUILD_DIR)/libtiledcuda.so
 
 .PHONY: build example unit_test clean
 
+
+
 build:
 	@mkdir -p build 
-	@cd build && cmake .. && make
+	@cd build && cmake .. && make -j$(proc)
 
 $(DYNAMIC_LIB): build
 
