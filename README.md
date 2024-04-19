@@ -2,8 +2,9 @@
 
 ## Introduction
 
-**TiledCUDA** is a kernel library implemented with CuTe. Its goal is to achieve more efficient fusion strategies.
+**TiledCUDA** is an efficient kernel template library implemented using CuTe, which provides a wrapper for cutlass CuTe and enables more efficient fusion.
 
+TiledCUDA uses **PyTorch** as the runtime and leverages the **Tensor** class of PyTorch for convenient testing.
 
 ## Usage
 ### Download
