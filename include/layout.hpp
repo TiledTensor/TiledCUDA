@@ -17,13 +17,15 @@ template <const int row, const int col, const int stride = row>
 using ColMajor =
     cute::Layout<Shape<Int<row>, Int<col>>, Stride<_1, Int<stride>>>;
 
-__device__ auto make_row_major_layout(const int row, const int col,
-                                      const int stride) {
+__forceinline__ __device__ auto make_row_major_layout(const int row,
+                                                      const int col,
+                                                      const int stride) {
     return cute::make_layout(make_shape(row, col), make_stride(stride, 1));
 }
 
-__device__ auto make_col_major_layout(const int row, const int col,
-                                      const int stride) {
+__forceinline__ __device__ auto make_col_major_layout(const int row,
+                                                      const int col,
+                                                      const int stride) {
     return cute::make_layout(make_shape(row, col), make_stride(1, stride));
 }
 }  // namespace tiledcuda
