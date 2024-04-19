@@ -1,10 +1,9 @@
 import torch
-import random
-
-torch.ops.load_library("build/libtiledcuda.so")
-
+import sys
+sys.path.append('./')
 
 if __name__ == "__main__":
+    import pytiledcuda
     a = torch.randn(256, 256, device='cuda')
     b = torch.randn(256, 256, device='cuda')
     c = torch.empty(256, 256, device='cuda')
@@ -12,7 +11,7 @@ if __name__ == "__main__":
     b_data = b.flatten().half()
     c_data = c.flatten().half()
 
-    torch.ops.tiledcuda.gemm(a_data, b_data, c_data, 256, 256, 256)
+    pytiledcuda.gemm(a_data, b_data, c_data, 256, 256, 256)
     ref_c = torch.mm(a.half(), b.half().t()).flatten()
 
     print(c_data)

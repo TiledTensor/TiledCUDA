@@ -10,8 +10,6 @@ DYNAMIC_LIB	:= $(BUILD_DIR)/libtiledcuda.so
 
 .PHONY: build example unit_test clean
 
-
-
 build:
 	@mkdir -p build 
 	@cd build && cmake .. && make -j$(proc)

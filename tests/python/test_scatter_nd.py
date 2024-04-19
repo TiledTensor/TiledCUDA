@@ -1,7 +1,7 @@
 import torch
 import random
-
-torch.ops.load_library("build/libtiledcuda.so")
+import sys
+sys.path.append('./')
 
 
 def compute_output_shape(index_dims, input_dims):
@@ -13,8 +13,8 @@ def compute_output_shape(index_dims, input_dims):
 
 
 def test_scatter_nd(scatter_data, scatter_indices, scatter_updates):
-    torch.ops.tiledcuda.scatter_nd(
-        scatter_data, scatter_updates, scatter_indices)
+    import pytiledcuda
+    pytiledcuda.scatter_nd(scatter_data, scatter_indices, scatter_updates)
 
     return scatter_data
 

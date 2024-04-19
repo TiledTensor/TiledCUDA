@@ -23,9 +23,9 @@ namespace tiledcuda::kernels {
  * dimension of `indices` along the memory dimensions of `data`.
  */
 template <typename T>
-__global__ void ScatterNdKernel(const T* in, T* out, const int64_t* indices,
-                                unsigned int const* __restrict__ strides,
-                                size_t n, size_t rank, size_t slice_size) {
+__global__ void scatter_nd_kernel(const T* in, T* out, const int64_t* indices,
+                                  unsigned int const* __restrict__ strides,
+                                  size_t n, size_t rank, size_t slice_size) {
     for (size_t tid = blockIdx.x * blockDim.x + threadIdx.x,
                 step = blockDim.x * gridDim.x;
          tid < n; tid += step) {
@@ -103,7 +103,7 @@ void scatter_nd(torch::Tensor& data, const torch::Tensor& updates,
     int64_t block = 256;
     int64_t grid = (n + block - 1) / block;
 
-    ScatterNdKernel<<<grid, block>>>(
+    scatter_nd_kernel<<<grid, block>>>(
         updates.const_data_ptr<T>(), data.mutable_data_ptr<T>(),
         indices.const_data_ptr<int64_t>(),
         reinterpret_cast<const unsigned int*>(device_strides), n, k,
