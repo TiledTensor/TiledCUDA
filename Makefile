@@ -1,6 +1,6 @@
 EXAMPLE_DIR := examples
 TEST_DIR   	:= tests/python
-UNIT_TEST 	?= test_gemm
+UNIT_TEST 	?= test_back2back_gemm
 
 EXAMPLE 	?= $(EXAMPLE_DIR)/scatter_nd.py
 UNIT   		?= $(TEST_DIR)/$(UNIT_TEST).py

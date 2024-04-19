@@ -1,5 +1,6 @@
 #pragma once
 #include "cell/acc.hpp"
+#include "cell/convert.hpp"
 #include "cell/copy/mod.hpp"
 #include "cell/gemm.hpp"
 #include "cell/sync.hpp"

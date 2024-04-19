@@ -17,3 +17,9 @@ cd TiledCUDA && git submodule update --init --recursive
 ```
 make unit_test UNIT_TEST=test_scatter_nd.py
 ```
+
+## Features
+- Implemented a `__device__` function wrapper that enables **static/dynamic** copying between different memoey hiercary.
+- Implemented a `__device__` function wrapper for CUDA micro kernels, such as `copy_async` and tensor core operations.
+- Implemented template wrapper for **CuTe** to make it easier to use.
+- Implemented fused kernels such as **Scatter ND**, **GEMM** and **Back2Back GEMM**.
