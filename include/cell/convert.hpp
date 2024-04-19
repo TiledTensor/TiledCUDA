@@ -7,7 +7,8 @@
 namespace tiledcuda::cell {
 
 template <typename To_type, typename Engine, typename Layout>
-__device__ auto convert_type(cute::Tensor<Engine, Layout> const& tensor) {
+__forceinline__ __device__ auto convert_type(
+    cute::Tensor<Engine, Layout> const& tensor) {
     using From_type = typename Engine::value_type;
     constexpr int numel = decltype(size(tensor))::value;
     cutlass::NumericArrayConverter<To_type, From_type, numel> convert_op;
@@ -21,9 +22,12 @@ __device__ auto convert_type(cute::Tensor<Engine, Layout> const& tensor) {
 
 template <typename Tensor>
 struct IndexedTensor_ {
-    __device__ IndexedTensor_(Tensor& tensor) : tensor_(tensor) {}
+    __forceinline__ __device__ IndexedTensor_(Tensor& tensor)
+        : tensor_(tensor) {}
 
-    __device__ const auto& operator[](int idx) { return tensor_(_, _, idx); }
+    __forceinline__ __device__ const auto& operator[](int idx) {
+        return tensor_(_, _, idx);
+    }
 
    private:
     Tensor& tensor_;
@@ -33,7 +37,7 @@ struct IndexedTensor_ {
 // MMA_N / 2) if using m16n8k16, or to (4, MMA_M, MMA_N) if using
 // m16n8k8.
 template <typename MMA, typename Tensor>
-__device__ auto& convert_layout(const Tensor& acc) {
+__forceinline__ __device__ auto& convert_layout(const Tensor& acc) {
     auto acc_layout = acc.layout();
 
     using X = Underscore;

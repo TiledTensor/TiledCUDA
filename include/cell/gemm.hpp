@@ -5,8 +5,8 @@
 
 namespace tiledcuda::cell {
 template <typename TensorA, typename TensorB, typename TensorAcc>
-__device__ void gemm(const auto& mma, const TensorA& a, const TensorB& b,
-                     TensorAcc& acc) {
+__forceinline__ __device__ void gemm(const auto& mma, const TensorA& a,
+                                     const TensorB& b, TensorAcc& acc) {
     cute::gemm(mma, a, b, acc);  // compute
 }
 

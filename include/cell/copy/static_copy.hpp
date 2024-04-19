@@ -17,8 +17,8 @@ struct R2SCopy2D {
 
    public:
     template <typename Engine, typename Layout>
-    __device__ void copy(cute::Tensor<Engine, Layout> const& acc,
-                         Element* dst_data, int tid) {
+    __forceinline__ __device__ void copy(
+        cute::Tensor<Engine, Layout> const& acc, Element* dst_data, int tid) {
         // FIXME(ying): This implementation is specifically designed
         // for TCU WMMA and assumes that the ACC value has a
         // floating-point precision. The code converts the ACC value
@@ -36,7 +36,8 @@ struct R2SCopy2D {
 
    private:
     template <typename To_type, typename Engine, typename Layout>
-    __device__ auto convert_type(cute::Tensor<Engine, Layout> const& tensor) {
+    __forceinline__ __device__ auto convert_type(
+        cute::Tensor<Engine, Layout> const& tensor) {
         using From_type = typename Engine::value_type;
         constexpr int numel = decltype(size(tensor))::value;
         cutlass::NumericArrayConverter<To_type, From_type, numel> convert_op;

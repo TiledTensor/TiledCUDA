@@ -18,7 +18,7 @@ __global__ void dyn_back2back_gemm(const Element* d_a, const Element* d_b,
     // const int kK = KeTraits::kK;
     // const int kP = KeTraits::kP;
 
-    const int kM = m;
+    // const int kM = m;
     const int kN = n;
     const int kK = k;
     const int kP = p;
@@ -120,5 +120,60 @@ __global__ void dyn_back2back_gemm(const Element* d_a, const Element* d_b,
     __syncthreads();
     copy_tensor_s2g(sD_ptr, gD_ptr, typename KeTraits::SmemLayoutD{},
                     store_d_s2g_layout, tiled_copy, tid);
+}
+
+template <typename Element, typename CtaTileShape, typename WarpShape>
+void cute_back2back_gemm(const Element* d_a, const Element* d_b,
+                         const Element* d_c, Element* d_d, int m, int n, int k,
+                         int p) {
+    static const int kTM = dim_size<0, CtaTileShape>;
+    static const int kTN = dim_size<1, CtaTileShape>;
+    static const int kTK = dim_size<2, CtaTileShape>;
+    static const int kTP = dim_size<3, CtaTileShape>;
+
+    using KeTraits =
+        cell::traits::DynBack2BackGemmTraits<Element, CtaTileShape, WarpShape>;
+
+    int shm_input = (kTM * kTK + kTK * kTN + kTN * kTP);
+    int shm_output = kTM * kTP;
+    int shm_size = shm_input < shm_output ? shm_output * sizeof(Element)
+                                          : shm_input * sizeof(Element);
+
+    auto kernel = &dyn_back2back_gemm<Element, KeTraits>;
+    if (shm_size > 48 * 1024) {
+        cudaFuncSetAttribute(
+            kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, shm_size);
+    }
+
+    // blocks are launched along the M and P dimensions.
+    int block_x = (m + kTM - 1) / kTM;
+    int block_y = (p + kTP - 1) / kTP;
+
+    kernel<<<dim3(block_x, block_y, 1), dim3(KeTraits::kThreads, 1, 1),
+             shm_size, 0>>>(d_a, d_b, d_c, d_d, m, n, k, p);
+}
+
+void custom_back2back_op(const torch::Tensor& a, const torch::Tensor& b,
+                         const torch::Tensor& c, torch::Tensor& d, int64_t m,
+                         int64_t n, int64_t k, int64_t p) {
+    using WarpShape = cell::TileShape<2, 1>;
+    using CtaTileShape = cell::TileShape<32, 32, 32, 32>;
+
+    auto dtype = a.dtype();
+    if (dtype == torch::kFloat32) {
+        // TODO: Add support for fp32.
+    } else if (dtype == torch::kHalf) {
+        const cutlass::half_t* a_ptr =
+            reinterpret_cast<const cutlass::half_t*>(a.const_data_ptr());
+        const cutlass::half_t* b_ptr =
+            reinterpret_cast<const cutlass::half_t*>(b.const_data_ptr());
+        const cutlass::half_t* c_ptr =
+            reinterpret_cast<const cutlass::half_t*>(c.const_data_ptr());
+        cutlass::half_t* d_ptr =
+            reinterpret_cast<cutlass::half_t*>(d.mutable_data_ptr());
+
+        cute_back2back_gemm<cutlass::half_t, CtaTileShape, WarpShape>(
+            a_ptr, b_ptr, c_ptr, d_ptr, m, n, k, p);
+    }
 }
 }  // namespace tiledcuda::kernels
