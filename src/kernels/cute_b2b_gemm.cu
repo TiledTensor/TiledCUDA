@@ -6,6 +6,7 @@ namespace tiledcuda::kernels {
 
 using namespace tiledcuda::cell;
 using namespace tiledcuda::cell::copy;
+using namespace tiledcuda::cell::compute;
 
 // D = A @ B @ C
 template <typename Element, typename KeTraits>
