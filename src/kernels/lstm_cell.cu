@@ -3,6 +3,8 @@
 #include "kernels/lstm_cell.hpp"
 #include "layout.hpp"
 
+#include <cutlass/half.h>
+
 namespace tiledcuda::kernels {
 using namespace tiledcuda::cell;
 using namespace tiledcuda::cell::copy;
@@ -242,5 +244,37 @@ void lstm_cell(const Element* w, const Element* x, const Element* u,
         i, f, o, c_bar, c, c_out, h_out, kMaxThreads, size);
 
     CudaCheck(cudaFree(t));
+}
+
+void custom_lstm_cell_op(const torch::Tensor& w, const torch::Tensor& x,
+                         const torch::Tensor& u, const torch::Tensor& c0,
+                         const torch::Tensor& h0, torch::Tensor& c1,
+                         torch::Tensor& h1, int64_t batch_size,
+                         int64_t hidden_size) {
+    using InstructionShape = cell::TileShape<16, 8, 16>;
+    using ValueMnk = cell::TileShape<1, 2, 1>;
+    using WarpArrangement = cell::TileShape<1, 1, 1>;
+    using CtaTileShape = cell::TileShape<16, 32, 32>;
+
+    auto dtype = w.dtype();
+
+    int m = 4 * hidden_size;
+    int n = hidden_size;
+    int k = batch_size;
+
+    if (dtype == torch::kHalf) {
+        lstm_cell<cutlass::half_t, InstructionShape, ValueMnk, WarpArrangement,
+                  CtaTileShape>(
+            reinterpret_cast<const cutlass::half_t*>(w.const_data_ptr()),
+            reinterpret_cast<const cutlass::half_t*>(x.const_data_ptr()),
+            reinterpret_cast<const cutlass::half_t*>(u.const_data_ptr()),
+            reinterpret_cast<const cutlass::half_t*>(c0.const_data_ptr()),
+            reinterpret_cast<const cutlass::half_t*>(h0.const_data_ptr()),
+            reinterpret_cast<cutlass::half_t*>(c1.mutable_data_ptr()),
+            reinterpret_cast<cutlass::half_t*>(h1.mutable_data_ptr()), m, n, k);
+    } else {
+        // Unsupported data type
+        throw std::runtime_error("Unsupported data type");
+    }
 }
 }  // namespace tiledcuda::kernels

@@ -2,6 +2,8 @@
 
 #include "cuda_utils.hpp"
 
+#include <torch/script.h>
+
 namespace tiledcuda::kernels {
 template <typename Element, typename KeTraits>
 __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
@@ -25,5 +27,11 @@ template <typename Element, typename InstructionShape, typename ValueMnk,
 void lstm_cell(const Element* w, const Element* x, const Element* u,
                const Element* c, const Element* h, Element* c_out,
                Element* h_out, int m, int n, int k);
+
+void custom_lstm_cell_op(const torch::Tensor& w, const torch::Tensor& x,
+                         const torch::Tensor& u, const torch::Tensor& c0,
+                         const torch::Tensor& h0, torch::Tensor& c1,
+                         torch::Tensor& h1, int64_t batch_size,
+                         int64_t hidden_size);
 
 }  // namespace tiledcuda::kernels
