@@ -17,7 +17,7 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
     extern __shared__ __align__(sizeof(double)) unsigned char shared_buf[];
     auto* shm = reinterpret_cast<Element*>(shared_buf);
 
-    const int kM = m;
+    // const int kM = m;
     const int kN = n;
     const int kK = k;
 
@@ -102,8 +102,15 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
     }
 
     __syncthreads();
+    if (current_block_x < total_block_x * 3 / 4) {
+        cute_sigmod(acc2);
+    } else {
+        cute_tanh(acc2);
+    }
 
-    sts.copy(acc1, shm, tid);
+    __syncthreads();
+
+    sts.copy(acc2, shm, tid);
 
     __syncthreads();
 
@@ -159,7 +166,7 @@ void lstm_gate(const Element* w, const Element* x, const Element* u,
     // Whole GEMM shape
     static const int kM = m;
     static const int kN = n;
-    static const int kK = k;
+    // static const int kK = k;
 
     // CTA GEMM shape
     static const int kTM = dim_size<0, CtaTileShape>;
@@ -218,7 +225,7 @@ void lstm_cell(const Element* w, const Element* x, const Element* u,
 
     static const int M = kM / 4;
     static const int N = kN;
-    static const int K = kK;
+    // static const int K = kK;
 
     // Cuda malloc for output
     Element* t;
