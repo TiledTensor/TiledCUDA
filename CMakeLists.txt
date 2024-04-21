@@ -22,6 +22,10 @@ file(GLOB_RECURSE SOURCES
 # Define our library target
 add_library(tiledcuda SHARED ${SOURCES})
 
+# Enable all warnings and treat them as errors
+add_compile_options(-Werror)
+add_compile_options(-Wall)
+
 target_compile_options(tiledcuda PRIVATE -std=c++17)
 target_compile_options(tiledcuda PRIVATE -fconcepts)
 target_compile_options(tiledcuda PRIVATE -fpermissive)
