@@ -87,8 +87,8 @@ __global__ void dyn_cute_gemm_kernel(const Element* dA, const Element* dB,
 
 template <typename Element, typename InstructionShape, typename ValueMnk,
           typename WarpArrangement, typename CtaTileShape>
-void cute_gemm(const torch::Tensor& a, const torch::Tensor& b, torch::Tensor& c,
-               int m, int n, int k) {
+void cute_gemm(const Element* a, const Element* b, Element* c, int m, int n,
+               int k) {
     // CTA GEMM shape
     static const int kTM = dim_size<0, CtaTileShape>;
     static const int kTN = dim_size<1, CtaTileShape>;
@@ -128,14 +128,7 @@ void cute_gemm(const torch::Tensor& a, const torch::Tensor& b, torch::Tensor& c,
     dim3 gridDim(block_m, block_n);
     dim3 blockDim(kThreads, 1, 1);
 
-    // const __half* a_ptr = a.const_data_ptr();
-    // const __half* b_ptr = b.const_data_ptr();
-    // __half* c_ptr = c.mutable_data_ptr();
-
-    gemm_kernel<<<gridDim, blockDim, smem_size>>>(
-        reinterpret_cast<const Element*>(a.const_data_ptr()),
-        reinterpret_cast<const Element*>(b.const_data_ptr()),
-        reinterpret_cast<Element*>(c.mutable_data_ptr()), m, n, k);
+    gemm_kernel<<<gridDim, blockDim, smem_size>>>(a, b, c, m, n, k);
 }
 
 void custom_gemm_op(const torch::Tensor& a, const torch::Tensor& b,
@@ -150,7 +143,10 @@ void custom_gemm_op(const torch::Tensor& a, const torch::Tensor& b,
         // TODO: Add support for fp32.
     } else if (dtype == torch::kHalf) {
         cute_gemm<cutlass::half_t, InstructionShape, ValueMnk, WarpArrangement,
-                  CtaTileShape>(a, b, c, m, n, k);
+                  CtaTileShape>(
+            reinterpret_cast<const cutlass::half_t*>(a.const_data_ptr()),
+            reinterpret_cast<const cutlass::half_t*>(b.const_data_ptr()),
+            reinterpret_cast<cutlass::half_t*>(c.mutable_data_ptr()), m, n, k);
     }
 }
 

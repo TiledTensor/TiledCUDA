@@ -104,8 +104,9 @@ void scatter_nd(torch::Tensor& data, const torch::Tensor& updates,
     int64_t grid = (n + block - 1) / block;
 
     scatter_nd_kernel<<<grid, block>>>(
-        updates.const_data_ptr<T>(), data.mutable_data_ptr<T>(),
-        indices.const_data_ptr<int64_t>(),
+        reinterpret_cast<const T*>(indices.const_data_ptr()),
+        reinterpret_cast<T*>(data.mutable_data_ptr()),
+        reinterpret_cast<const int64_t*>(indices.const_data_ptr()),
         reinterpret_cast<const unsigned int*>(device_strides), n, k,
         slice_size);
 }
@@ -116,7 +117,7 @@ void custom_scatter_op(torch::Tensor& data, const torch::Tensor& updates,
     if (dtype == torch::kFloat32) {
         scatter_nd<float>(data, updates, indices);
     } else if (dtype == torch::kHalf) {
-        // scatter_nd<__half>(data, updates, indices);
+        scatter_nd<__half>(data, updates, indices);
     }
 }
 
