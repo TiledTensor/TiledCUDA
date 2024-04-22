@@ -9,8 +9,6 @@ project(tiledcuda LANGUAGES C CXX CUDA)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_PREFIX_PATH "/home/yincao/.local/lib/python3.11/site-packages/torch" ${CMAKE_PREFIX_PATH})
-
 find_package(Torch REQUIRED)
 find_package(CUDA REQUIRED)
 
