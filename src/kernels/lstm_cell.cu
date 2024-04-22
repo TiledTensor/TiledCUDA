@@ -5,6 +5,8 @@
 
 #include <cutlass/half.h>
 
+#include <iostream>
+
 namespace tiledcuda::kernels {
 using namespace tiledcuda::cell;
 using namespace tiledcuda::cell::copy;
@@ -266,8 +268,8 @@ void custom_lstm_cell_op(const torch::Tensor& w, const torch::Tensor& x,
     auto dtype = w.dtype();
 
     int m = 4 * hidden_size;
-    int n = hidden_size;
-    int k = batch_size;
+    int n = batch_size;
+    int k = hidden_size;
 
     if (dtype == torch::kHalf) {
         lstm_cell<cutlass::half_t, InstructionShape, ValueMnk, WarpArrangement,
