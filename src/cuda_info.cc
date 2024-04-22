@@ -80,7 +80,7 @@ std::string GetDeviceName() {
 
     std::stringstream out_ss;
     int i = 0;
-    for (; i < out.size() - 1; ++i) out_ss << out[i] << "_";
+    for (; i < static_cast<int>(out.size()) - 1; ++i) out_ss << out[i] << "_";
     out_ss << out[i];
     return out_ss.str();
 }
