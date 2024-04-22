@@ -9,10 +9,12 @@ project(tiledcuda LANGUAGES C CXX CUDA)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-
 find_package(Torch REQUIRED)
 find_package(CUDA REQUIRED)
 
+# Enable all warnings and treat them as errors
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wall")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --Werror all-warnings")
 
 file(GLOB_RECURSE SOURCES 
     "src/kernels/*.cu" 
@@ -21,6 +23,7 @@ file(GLOB_RECURSE SOURCES
 
 # Define our library target
 add_library(tiledcuda SHARED ${SOURCES})
+
 
 target_compile_options(tiledcuda PRIVATE -std=c++17)
 target_compile_options(tiledcuda PRIVATE -fconcepts)

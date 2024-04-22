@@ -11,7 +11,7 @@ using namespace cute;
 // __device__ auto& get_acc(const auto& tiled_mma);
 
 template <const int m, const int n>
-__device__ auto& get_acc(const auto& tiled_mma) {
+__device__ auto get_acc(const auto& tiled_mma) {
     auto acc = partition_fragment_C(tiled_mma, Shape<Int<m>, Int<n>>{});
     clear(acc);
 

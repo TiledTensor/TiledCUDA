@@ -123,8 +123,8 @@ __global__ void lstm_element_wise(const Element* i, const Element* f,
                                   const Element* o, const Element* c0,
                                   const Element* c1, Element* c2, Element* h,
                                   int block_size, int size) {
-    extern __shared__ __align__(sizeof(double)) unsigned char shared_buf[];
-    auto* shm = reinterpret_cast<Element*>(shared_buf);
+    // extern __shared__ __align__(sizeof(double)) unsigned char shared_buf[];
+    // auto* shm = reinterpret_cast<Element*>(shared_buf);
 
     // Add Batch Size
     int batch = blockIdx.y;
@@ -221,7 +221,7 @@ void lstm_cell(const Element* w, const Element* x, const Element* u,
                Element* h_out, int m, int n, int k) {
     static const int kM = m;
     static const int kN = n;
-    static const int kK = k;
+    // static const int kK = k;
 
     static const int M = kM / 4;
     static const int N = kN;

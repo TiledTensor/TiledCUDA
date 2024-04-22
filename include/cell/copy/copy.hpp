@@ -22,7 +22,7 @@ struct Shm2RegLoad {
 
     __forceinline__ __device__ int get_iters() { return size<2>(dst_); }
 
-    __forceinline__ __device__ const auto& operator[](int idx) {
+    __forceinline__ __device__ const auto operator[](int idx) {
         return dst_(_, _, idx);
     }
 
@@ -34,9 +34,9 @@ struct Shm2RegLoad {
 };
 
 template <typename Element, typename Layout, typename TiledMma>
-__forceinline__ __device__ auto& make_s2rA(const Element* data, int tid,
-                                           const Layout& layout,
-                                           const TiledMma& tiled_mma) {
+__forceinline__ __device__ auto make_s2rA(const Element* data, int tid,
+                                          const Layout& layout,
+                                          const TiledMma& tiled_mma) {
     auto tensor = make_tensor(make_smem_ptr(data), layout);
 
     using SmemLoadAtom = Copy_Atom<SM75_U32x4_LDSM_N, Element>;
@@ -57,9 +57,9 @@ __forceinline__ __device__ auto& make_s2rA(const Element* data, int tid,
 /// FIXIME(ying): the current implementation is for fast experiment, it is
 /// coupled shared memory layout with the register layout
 template <typename Element, typename Layout, typename TiledMma>
-__forceinline__ __device__ auto& make_s2rB(const Element* data, int tid,
-                                           const Layout& layout,
-                                           const TiledMma& tiled_mma) {
+__forceinline__ __device__ auto make_s2rB(const Element* data, int tid,
+                                          const Layout& layout,
+                                          const TiledMma& tiled_mma) {
     using SmemLoadAtom = Copy_Atom<SM75_U32x4_LDSM_N, Element>;
     auto tiled_copy = make_tiled_copy_B(SmemLoadAtom{}, tiled_mma);
     auto thrd_copy = tiled_copy.get_thread_slice(tid);

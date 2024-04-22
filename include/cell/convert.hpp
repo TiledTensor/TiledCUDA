@@ -25,7 +25,7 @@ struct IndexedTensor_ {
     __forceinline__ __device__ IndexedTensor_(Tensor& tensor)
         : tensor_(tensor) {}
 
-    __forceinline__ __device__ const auto& operator[](int idx) {
+    __forceinline__ __device__ const auto operator[](int idx) {
         return tensor_(_, _, idx);
     }
 
@@ -37,7 +37,7 @@ struct IndexedTensor_ {
 // MMA_N / 2) if using m16n8k16, or to (4, MMA_M, MMA_N) if using
 // m16n8k8.
 template <typename MMA, typename Tensor>
-__forceinline__ __device__ auto& convert_layout(const Tensor& acc) {
+__forceinline__ __device__ auto convert_layout(const Tensor& acc) {
     auto acc_layout = acc.layout();
 
     using X = Underscore;
