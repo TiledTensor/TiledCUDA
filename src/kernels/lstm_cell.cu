@@ -122,41 +122,28 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
 
 template <typename Element>
 __global__ void lstm_element_wise(const Element* i, const Element* f,
-                                  const Element* o, const Element* c0,
-                                  const Element* c1, Element* c2, Element* h,
-                                  int block_size, int size) {
-    // extern __shared__ __align__(sizeof(double)) unsigned char shared_buf[];
-    // auto* shm = reinterpret_cast<Element*>(shared_buf);
-
-    // Add Batch Size
-    int batch = blockIdx.y;
-    const Element* i2 = i + 4 * batch * size;
-    const Element* f2 = f + 4 * batch * size;
-    const Element* o2 = o + 4 * batch * size;
-    const Element* c3 = c0 + 4 * batch * size;
-    const Element* c4 = c1 + 4 * batch * size;
-    Element* c5 = c2 + 4 * batch * size;
-    Element* h2 = h + 4 * batch * size;
-
+                                  const Element* o, const Element* c_candidate,
+                                  const Element* c, Element* c_out,
+                                  Element* h_out, int block_size, int size) {
     int tid = threadIdx.x;
 
     int index = blockIdx.x * block_size + tid;
 
     if (index < size) {
-        // TODO: Loading data into shared memory and computing, versus computing
-        // directly in global memory, does not seem to make a difference. This
-        // seems to require further optimization, such as reconsidering
-        // redistributing data to different threads and performing vectorized
-        // loading and storing.
+        // TODO: Loading data into shared memory and computing, versus
+        // computing directly in global memory, does not seem to make a
+        // difference. This seems to require further optimization, such as
+        // reconsidering redistributing data to different threads and performing
+        // vectorized loading and storing.
 
         // This is a very naive kernel that loads data into shared memory and
         // then performs computations. It has been temporarily commented out.
 
-        c5[index] = f[index] * c4[index] + i[index] * c3[index];
+        c_out[index] = f[index] * c[index] + i[index] * c_candidate[index];
 
         __syncthreads();
 
-        h2[index] = o2[index] * tanh(c5[index]);
+        h_out[index] = o[index] * tanh(c_out[index]);
     }
 }
 
@@ -239,18 +226,21 @@ void lstm_cell(const Element* w, const Element* x, const Element* u,
     const Element* i = t;
     const Element* f = t + M * N;
     const Element* o = t + 2 * M * N;
-    const Element* c_bar = t + 3 * M * N;
+    const Element* c_candidate = t + 3 * M * N;
 
     auto element_wise = &lstm_element_wise<Element>;
 
-    int kMaxThreads = GetGPUMaxThreadsPerMultiProcessor(0);
+    // int kMaxThreads = GetGPUMaxThreadsPerMultiProcessor(0);
     int size = M * N;
-    int block_size = (size + kMaxThreads - 1) / kMaxThreads;
+    int block = 1024;
+    // int block_size = (size + kMaxThreads - 1) / kMaxThreads;
+    int block_size = (size + block - 1) / block;
     dim3 element_wise_grid_dim(block_size, 1, 1);
-    dim3 element_wise_block_dim(kMaxThreads, 1, 1);
+    // dim3 element_wise_block_dim(kMaxThreads, 1, 1);
+    dim3 element_wise_block_dim(block, 1, 1);
 
     element_wise<<<element_wise_grid_dim, element_wise_block_dim>>>(
-        i, f, o, c_bar, c, c_out, h_out, kMaxThreads, size);
+        i, f, o, c_candidate, c, c_out, h_out, block, size);
 
     CudaCheck(cudaFree(t));
 }

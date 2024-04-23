@@ -63,18 +63,11 @@ if __name__ == "__main__":
     c1_data = c1.flatten().half()
     h1_data = h1.flatten().half()
 
-    print(c1_data)
-    print(h1_data)
-
     pytiledcuda.lstm_cell(w_data, x_data, u_data, c0_data,
                           h0_data, c1_data, h1_data, hidden, batch)
-
-    print("lstm cell done.")
 
     # ref_lstm = FineGrainedOpLstmCell(w, x, u, c0, h0, c1, h1, batch, hidden)
     # ref_c, ref_h = ref_lstm.forward()
 
     print(c1_data)
-    # print(ref_c.flatten().half())
-    # print(h1_data)
-    # print(ref_h.flatten().half())
+    print(h1_data)
