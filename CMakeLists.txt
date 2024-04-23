@@ -16,14 +16,11 @@ find_package(CUDA REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wall")
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --Werror all-warnings")
 
-file(GLOB_RECURSE SOURCES 
-    "src/kernels/*.cu" 
-    "src/*.cc"
-)
+file(GLOB_RECURSE SOURCES "src/kernels/*.cu" "src/*.cc")
 
 # Define our library target
-add_library(tiledcuda SHARED ${SOURCES})
 
+add_library(tiledcuda SHARED ${SOURCES})
 
 target_compile_options(tiledcuda PRIVATE -std=c++17)
 target_compile_options(tiledcuda PRIVATE -fconcepts)
@@ -32,7 +29,6 @@ target_compile_options(tiledcuda PRIVATE -fpermissive)
 include_directories(include)
 
 include_directories(3rd-party/cutlass/include)
-
 
 # Link against LibTorch
 target_link_libraries(tiledcuda "${TORCH_LIBRARIES}")

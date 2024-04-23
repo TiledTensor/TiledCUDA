@@ -16,5 +16,4 @@ struct TraitsBase {
     static constexpr int kElmentBits = cutlass::sizeof_bits<Element>::value;
     static constexpr int kNumPerAccess = kAccessInBits / kElmentBits;
 };
-
 }  // namespace tiledcuda::cell::traits

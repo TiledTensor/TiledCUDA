@@ -1,0 +1,33 @@
+repos:
+-   repo: https://github.com/Lucas-C/pre-commit-hooks.git
+    rev: v1.5.5
+    hooks:
+    -   id: remove-crlf
+        files: (?!.*third_party)^.*$ | (?!.*book)^.*$
+-   repo: https://github.com/pre-commit/mirrors-yapf.git
+    rev: v0.32.0
+    hooks:
+    -   id: yapf
+        files: (.*\.(py|bzl)|BUILD|.*\.BUILD|WORKSPACE)$
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+    -   id: check-added-large-files
+    -   id: check-merge-conflict
+    -   id: check-symlinks
+    -   id: detect-private-key
+        files: (?!.*third_party)^.*$ | (?!.*book)^.*$
+    -   id: end-of-file-fixer
+    -   id: check-shebang-scripts-are-executable
+-   repo: local
+    hooks:
+    -   id: clang-format-with-version-check
+        name: clang-format
+        description: Format files with ClangFormat.
+        entry: bash ./scripts/clang_format.hook -i
+        language: system
+        files: \.(c|cc|cxx|cpp|cu|h|cuh|hpp|hxx|proto)$
+- repo: https://github.com/iconmaster5326/cmake-format-pre-commit-hook
+  rev: v0.6.9
+  hooks:
+    - id: cmake-format

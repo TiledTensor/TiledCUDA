@@ -33,9 +33,9 @@ struct IndexedTensor_ {
     Tensor& tensor_;
 };
 
-// Convert acc_layout from (MMA=4, MMA_M, MMA_N) to ((4, 2), MMA_M,
-// MMA_N / 2) if using m16n8k16, or to (4, MMA_M, MMA_N) if using
-// m16n8k8.
+// Convert acc_layout from (MMA=4, MMA_M, MMA_N) to
+// ((4, 2), MMA_M, MMA_N / 2) if using m16n8k16, or to (4, MMA_M, MMA_N) if
+// using m16n8k8.
 template <typename MMA, typename Tensor>
 __forceinline__ __device__ auto convert_layout(const Tensor& acc) {
     auto acc_layout = acc.layout();

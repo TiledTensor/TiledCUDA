@@ -1,4 +1,5 @@
 #pragma once
+
 #include "cuda_utils.hpp"
 
 namespace tiledcuda::cell {

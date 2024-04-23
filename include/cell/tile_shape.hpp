@@ -12,4 +12,4 @@ inline static constexpr size_t dim_size = cute::get<I>(TileShape{});
 template <typename TileShape>
 inline static constexpr int64_t get_numel = cute::size(TileShape{});
 
-}
+}  // namespace tiledcuda::cell

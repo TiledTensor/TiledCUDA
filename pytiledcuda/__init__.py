@@ -4,8 +4,8 @@ torch.ops.load_library("build/libtiledcuda.so")
 
 
 def scatter_nd(scatter_data, scatter_indices, scatter_updates):
-    torch.ops.tiledcuda.scatter_nd(
-        scatter_data, scatter_updates, scatter_indices)
+    torch.ops.tiledcuda.scatter_nd(scatter_data, scatter_updates,
+                                   scatter_indices)
 
 
 def gemm(a, b, c, m, n, k):
