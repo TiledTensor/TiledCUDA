@@ -18,7 +18,7 @@ cd TiledCUDA && git submodule update --init --recursive
 - **Run all unit tests**: `./scripts/unittests/python.sh`
 
 ## Features
-- Implemented `__device__` function wrapper that enables **static/dynamic** copying between different memoey hiercary.
+- Implemented `__device__` function wrapper that enables **static/dynamic** copying between different memoey hierarchy.
 - Implemented `__device__` function wrapper for CUDA **micro kernels**, such as `copy_async` and tensor core operations.
 - Implemented template wrapper for **CuTe** to make it easier to use.
 - Implemented fused kernels such as **GEMM**, **Back2Back GEMM**, **Batched GEMM**, **Lstm Cell**, etc.

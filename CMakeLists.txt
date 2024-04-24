@@ -16,14 +16,10 @@ find_package(CUDA REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wall")
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --Werror all-warnings")
 
-
-file(GLOB_RECURSE SOURCES 
-    "src/kernels/*.cu" 
-    "src/*.cc"
-    "src/*.cu"
-)
+file(GLOB_RECURSE SOURCES "src/kernels/*.cu" "src/*.cc")
 
 # Define our library target
+
 add_library(tiledcuda SHARED ${SOURCES})
 
 target_compile_options(tiledcuda PRIVATE -std=c++17)

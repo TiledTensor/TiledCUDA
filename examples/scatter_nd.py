@@ -1,8 +1,8 @@
 import torch
+
 import random
 from functools import reduce
 from operator import mul
-
 
 torch.ops.load_library("build/libtiledcuda.so")
 
@@ -46,8 +46,8 @@ def test_scatter_nd():
                           device='cuda').fill_(10.0)
     scatter_updates = updates.flatten()
 
-    torch.ops.tiledcuda.scatter_nd(
-        scatter_data, scatter_updates, scatter_indices)
+    torch.ops.tiledcuda.scatter_nd(scatter_data, scatter_updates,
+                                   scatter_indices)
 
     return scatter_data
 

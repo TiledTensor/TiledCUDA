@@ -3,7 +3,6 @@
 #include <cublas_v2.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
-// #include <cudnn.h>
 #include <curand.h>
 #include <stdio.h>
 #include <stdlib.h>

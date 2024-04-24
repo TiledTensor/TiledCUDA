@@ -72,4 +72,5 @@ struct DynLstmGateTraits : public Base {
 
     using StoreE_R2S = cell::copy::R2SCopy2D<Element, TiledMma, SmemLayoutE>;
 };
+
 }  // namespace tiledcuda::cell::traits

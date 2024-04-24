@@ -17,5 +17,4 @@ __device__ auto get_acc(const auto& tiled_mma) {
 
     return acc;
 }
-
 }  // namespace tiledcuda::cell
