@@ -105,7 +105,6 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
     }
 
     __syncthreads();
-    // cute_gemm_add(acc1, acc2);
     cute::axpby(1.0, acc1, 1.0, acc2);
 
     __syncthreads();
@@ -146,24 +145,9 @@ __global__ void lstm_element_wise(const Element* i, const Element* f,
 
         c_out[index] = f[index] * c[index] + i[index] * c_candidate[index];
 
-        // printf("f[%d]: %f\n", index,
-        //        __half2float(static_cast<__half>(f[index])));
-        // printf("c[%d]: %f\n", index,
-        //        __half2float(static_cast<__half>(c[index])));
-        // printf("i[%d]: %f\n", index,
-        //        __half2float(static_cast<__half>(i[index])));
-        // printf("c_candidate[%d]: %f\n", index,
-        //        __half2float(static_cast<__half>(c_candidate[index])));
-
-        // printf("c_out[%d]: %f\n", index,
-        //        __half2float(static_cast<__half>(c_out[index])));
-
         __syncthreads();
 
         h_out[index] = o[index] * tanh(c_out[index]);
-
-        // printf("h_out[%d]: %f\n", index,
-        //        __half2float(static_cast<__half>(h_out[index])));
     }
 }
 
@@ -230,11 +214,9 @@ void lstm_cell(const Element* w, const Element* x, const Element* u,
                Element* h_out, int m, int n, int k) {
     static const int kM = m;
     static const int kN = n;
-    // static const int kK = k;
 
     static const int M = kM / 4;
     static const int N = kN;
-    // static const int K = kK;
 
     // Cuda malloc for output
     Element* t;
@@ -250,17 +232,25 @@ void lstm_cell(const Element* w, const Element* x, const Element* u,
 
     auto element_wise = &lstm_element_wise<Element>;
 
+    /*
+    TODO: Use `kMaxThreads` will case a runtime error:
+    ```
+    RuntimeError: CUDA error: invalid configuration argument
+    CUDA kernel errors might be asynchronously reported at some other API call,
+    so the stacktrace below might be incorrect. For debugging consider passing
+    CUDA_LAUNCH_BLOCKING=1. Compile with `TORCH_USE_CUDA_DSA` to enable
+    device-side assertions.
+    ```
+    */
     // int kMaxThreads = GetGPUMaxThreadsPerMultiProcessor(0);
     int size = M * N;
-    int block = 512;
-    // int block_size = (size + kMaxThreads - 1) / kMaxThreads;
-    int block_size = (size + block - 1) / block;
+    int block_threads = 512;
+    int block_size = (size + block_threads - 1) / block_threads;
     dim3 element_wise_grid_dim(block_size, 1, 1);
-    // dim3 element_wise_block_dim(kMaxThreads, 1, 1);
-    dim3 element_wise_block_dim(block, 1, 1);
+    dim3 element_wise_block_dim(block_threads, 1, 1);
 
     element_wise<<<element_wise_grid_dim, element_wise_block_dim>>>(
-        i, f, o, c_candidate, c, c_out, h_out, block, size);
+        i, f, o, c_candidate, c, c_out, h_out, block_threads, size);
 
     CudaCheck(cudaFree(t));
 }

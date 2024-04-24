@@ -14,12 +14,6 @@ __global__ void dyn_back2back_gemm(const Element* d_a, const Element* d_b,
                                    const Element* d_c, Element* d_d, int m,
                                    int n, int k, int p) {
     // whole problem shape
-    // const int kM = KeTraits::kM;
-    // const int kN = KeTraits::kN;
-    // const int kK = KeTraits::kK;
-    // const int kP = KeTraits::kP;
-
-    // const int kM = m;
     const int kN = n;
     const int kK = k;
     const int kP = p;

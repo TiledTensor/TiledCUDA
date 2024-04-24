@@ -74,4 +74,4 @@ if __name__ == "__main__":
     assert torch.allclose(c1_data, ref_c, atol=1e-1)
     assert torch.allclose(h1_data, ref_h, atol=1e-1)
 
-    print("Lstm Cell test passed")
+    print("Lstm Cell test passed.")

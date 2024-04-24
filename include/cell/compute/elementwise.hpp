@@ -26,11 +26,4 @@ __forceinline__ __device__ void cute_sigmoid(
     }
 }
 
-// template <class XEngine, class XLayout, class YEngine, class YLayout>
-// __forceinline__ __device__ void cute_gemm_add(
-//     const cute::Tensor<XEngine, XLayout>& a,
-//     const cute::Tensor<YEngine, YLayout>& b) {
-//     cute::axpby(1.0, a, 1.0, b);
-// }
-
 }  // namespace tiledcuda::cell::compute
