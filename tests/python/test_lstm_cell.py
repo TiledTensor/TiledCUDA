@@ -20,10 +20,10 @@ class FineGrainedOpLstmCell(nn.Module):
 
     def forward(self) -> Tuple[torch.Tensor, torch.Tensor]:
         # Implement `lstm_cell` in Python.
-        # Forget gate
+        # Input gate
         i = torch.sigmoid(torch.mm(self.wi[0], self.xi) +
                           torch.mm(self.ui[0], self.h0))
-        # Input gate
+        # Forget gate
         f = torch.sigmoid(torch.mm(self.wi[1], self.xi) +
                           torch.mm(self.ui[1], self.h0))
         # Output gate
