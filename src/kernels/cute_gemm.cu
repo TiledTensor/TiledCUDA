@@ -17,7 +17,6 @@ __global__ void dyn_cute_gemm_kernel(const Element* dA, const Element* dB,
     auto* shm = reinterpret_cast<Element*>(shared_buf);
 
     // Whole GEMM shape
-    // const int kM = m;
     const int kN = n;
     const int kK = k;
 

@@ -5,6 +5,8 @@
 
 #include <cutlass/half.h>
 
+#include <iostream>
+
 namespace tiledcuda::kernels {
 using namespace tiledcuda::cell;
 using namespace tiledcuda::cell::copy;
@@ -44,6 +46,7 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
     Element* sxs_ptr = shm + kTM * kTK;
     Element* sus_ptr = shm + kTM * kTK + kTK * kTN;
     Element* shs_ptr = shm + kTM * kTK + kTK * kTN + kTM * kTK;
+    Element* sts_ptr = shm;
 
     // declare shared memory to register file copy plan.
     // tcu's wmma instruction prescribes a strict data to thread
@@ -102,8 +105,11 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
     }
 
     __syncthreads();
+    cute::axpby(1.0, acc1, 1.0, acc2);
+
+    __syncthreads();
     if (current_block_x < total_block_x * 3 / 4) {
-        cute_sigmod(acc2);
+        cute_sigmoid(acc2);
     } else {
         cute_tanh(acc2);
     }
@@ -114,47 +120,34 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
 
     __syncthreads();
 
-    copy_tensor_s2g(shs_ptr, ghs_ptr, typename KeTraits::SmemLayoutE{},
+    copy_tensor_s2g(sts_ptr, gts_ptr, typename KeTraits::SmemLayoutE{},
                     store_e_s2g_layout, tiled_copy, tid);
 }
 
 template <typename Element>
 __global__ void lstm_element_wise(const Element* i, const Element* f,
-                                  const Element* o, const Element* c0,
-                                  const Element* c1, Element* c2, Element* h,
-                                  int block_size, int size) {
-    // extern __shared__ __align__(sizeof(double)) unsigned char shared_buf[];
-    // auto* shm = reinterpret_cast<Element*>(shared_buf);
-
-    // Add Batch Size
-    int batch = blockIdx.y;
-    const Element* i2 = i + 4 * batch * size;
-    const Element* f2 = f + 4 * batch * size;
-    const Element* o2 = o + 4 * batch * size;
-    const Element* c3 = c0 + 4 * batch * size;
-    const Element* c4 = c1 + 4 * batch * size;
-    Element* c5 = c2 + 4 * batch * size;
-    Element* h2 = h + 4 * batch * size;
-
+                                  const Element* o, const Element* c_candidate,
+                                  const Element* c, Element* c_out,
+                                  Element* h_out, int block_size, int size) {
     int tid = threadIdx.x;
 
     int index = blockIdx.x * block_size + tid;
 
     if (index < size) {
-        // TODO: Loading data into shared memory and computing, versus computing
-        // directly in global memory, does not seem to make a difference. This
-        // seems to require further optimization, such as reconsidering
-        // redistributing data to different threads and performing vectorized
-        // loading and storing.
+        // TODO: Loading data into shared memory and computing, versus
+        // computing directly in global memory, does not seem to make a
+        // difference. This seems to require further optimization, such as
+        // reconsidering redistributing data to different threads and performing
+        // vectorized loading and storing.
 
         // This is a very naive kernel that loads data into shared memory and
         // then performs computations. It has been temporarily commented out.
 
-        c5[index] = f[index] * c4[index] + i[index] * c3[index];
+        c_out[index] = f[index] * c[index] + i[index] * c_candidate[index];
 
         __syncthreads();
 
-        h2[index] = o2[index] * tanh(c5[index]);
+        h_out[index] = o[index] * tanh(c_out[index]);
     }
 }
 
@@ -221,11 +214,9 @@ void lstm_cell(const Element* w, const Element* x, const Element* u,
                Element* h_out, int m, int n, int k) {
     static const int kM = m;
     static const int kN = n;
-    // static const int kK = k;
 
     static const int M = kM / 4;
     static const int N = kN;
-    // static const int K = kK;
 
     // Cuda malloc for output
     Element* t;
@@ -237,18 +228,29 @@ void lstm_cell(const Element* w, const Element* x, const Element* u,
     const Element* i = t;
     const Element* f = t + M * N;
     const Element* o = t + 2 * M * N;
-    const Element* c_bar = t + 3 * M * N;
+    const Element* c_candidate = t + 3 * M * N;
 
     auto element_wise = &lstm_element_wise<Element>;
 
-    int kMaxThreads = GetGPUMaxThreadsPerMultiProcessor(0);
+    /*
+    TODO: Use `kMaxThreads` will case a runtime error:
+    ```
+    RuntimeError: CUDA error: invalid configuration argument
+    CUDA kernel errors might be asynchronously reported at some other API call,
+    so the stacktrace below might be incorrect. For debugging consider passing
+    CUDA_LAUNCH_BLOCKING=1. Compile with `TORCH_USE_CUDA_DSA` to enable
+    device-side assertions.
+    ```
+    */
+    // int kMaxThreads = GetGPUMaxThreadsPerMultiProcessor(0);
     int size = M * N;
-    int block_size = (size + kMaxThreads - 1) / kMaxThreads;
+    int block_threads = 512;
+    int block_size = (size + block_threads - 1) / block_threads;
     dim3 element_wise_grid_dim(block_size, 1, 1);
-    dim3 element_wise_block_dim(kMaxThreads, 1, 1);
+    dim3 element_wise_block_dim(block_threads, 1, 1);
 
     element_wise<<<element_wise_grid_dim, element_wise_block_dim>>>(
-        i, f, o, c_bar, c, c_out, h_out, kMaxThreads, size);
+        i, f, o, c_candidate, c, c_out, h_out, block_threads, size);
 
     CudaCheck(cudaFree(t));
 }
@@ -266,8 +268,8 @@ void custom_lstm_cell_op(const torch::Tensor& w, const torch::Tensor& x,
     auto dtype = w.dtype();
 
     int m = 4 * hidden_size;
-    int n = hidden_size;
-    int k = batch_size;
+    int n = batch_size;
+    int k = hidden_size;
 
     if (dtype == torch::kHalf) {
         lstm_cell<cutlass::half_t, InstructionShape, ValueMnk, WarpArrangement,

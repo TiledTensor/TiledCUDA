@@ -2,6 +2,7 @@
 
 #include "cuda_utils.hpp"
 
+#include <cute/algorithm/axpby.hpp>
 #include <cute/config.hpp>
 #include <cute/tensor.hpp>
 
@@ -17,11 +18,12 @@ __forceinline__ __device__ void cute_tanh(
 }
 
 template <class XEngine, class XLayout>
-__forceinline__ __device__ void cute_sigmod(
+__forceinline__ __device__ void cute_sigmoid(
     cute::Tensor<XEngine, XLayout>& tensor) {
 #pragma unroll
     for (int i = 0; i < size(tensor); ++i) {
         tensor(i) = 1.0 / (1.0 + exp(-tensor(i)));
     }
 }
+
 }  // namespace tiledcuda::cell::compute
