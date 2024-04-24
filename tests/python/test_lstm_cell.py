@@ -44,8 +44,8 @@ if __name__ == "__main__":
     import pytiledcuda
 
     os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-    hidden = 256
-    batch = 256
+    hidden = 32
+    batch = 32
 
     w = torch.randn(4, hidden, hidden, device='cuda')
     x = torch.randn(hidden, batch, device='cuda')
@@ -66,8 +66,11 @@ if __name__ == "__main__":
     pytiledcuda.lstm_cell(w_data, x_data, u_data, c0_data,
                           h0_data, c1_data, h1_data, hidden, batch)
 
-    # ref_lstm = FineGrainedOpLstmCell(w, x, u, c0, h0, c1, h1, batch, hidden)
-    # ref_c, ref_h = ref_lstm.forward()
+    ref_lstm = FineGrainedOpLstmCell(
+        w.half(), x.half(), u.half(), c0.half(), h0.half(), c1.half(), h1.half(), batch, hidden)
+    ref_c, ref_h = ref_lstm.forward()
 
     print(c1_data)
     print(h1_data)
+    print(ref_c.flatten().half())
+    print(ref_h.flatten().half())

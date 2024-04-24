@@ -46,6 +46,7 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
     Element* sxs_ptr = shm + kTM * kTK;
     Element* sus_ptr = shm + kTM * kTK + kTK * kTN;
     Element* shs_ptr = shm + kTM * kTK + kTK * kTN + kTM * kTK;
+    Element* sts_ptr = shm;
 
     // declare shared memory to register file copy plan.
     // tcu's wmma instruction prescribes a strict data to thread
@@ -116,7 +117,7 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
 
     __syncthreads();
 
-    copy_tensor_s2g(shs_ptr, ghs_ptr, typename KeTraits::SmemLayoutE{},
+    copy_tensor_s2g(sts_ptr, gts_ptr, typename KeTraits::SmemLayoutE{},
                     store_e_s2g_layout, tiled_copy, tid);
 }
 
@@ -141,9 +142,24 @@ __global__ void lstm_element_wise(const Element* i, const Element* f,
 
         c_out[index] = f[index] * c[index] + i[index] * c_candidate[index];
 
+        // printf("f[%d]: %f\n", index,
+        //        __half2float(static_cast<__half>(f[index])));
+        // printf("c[%d]: %f\n", index,
+        //        __half2float(static_cast<__half>(c[index])));
+        // printf("i[%d]: %f\n", index,
+        //        __half2float(static_cast<__half>(i[index])));
+        // printf("c_candidate[%d]: %f\n", index,
+        //        __half2float(static_cast<__half>(c_candidate[index])));
+
+        // printf("c_out[%d]: %f\n", index,
+        //        __half2float(static_cast<__half>(c_out[index])));
+
         __syncthreads();
 
         h_out[index] = o[index] * tanh(c_out[index]);
+
+        // printf("h_out[%d]: %f\n", index,
+        //        __half2float(static_cast<__half>(h_out[index])));
     }
 }
 
@@ -232,7 +248,7 @@ void lstm_cell(const Element* w, const Element* x, const Element* u,
 
     // int kMaxThreads = GetGPUMaxThreadsPerMultiProcessor(0);
     int size = M * N;
-    int block = 1024;
+    int block = 512;
     // int block_size = (size + kMaxThreads - 1) / kMaxThreads;
     int block_size = (size + block - 1) / block;
     dim3 element_wise_grid_dim(block_size, 1, 1);

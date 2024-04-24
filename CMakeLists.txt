@@ -20,6 +20,7 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --Werror all-warnings")
 file(GLOB_RECURSE SOURCES 
     "src/kernels/*.cu" 
     "src/*.cc"
+    "src/*.cu"
 )
 
 # Define our library target
