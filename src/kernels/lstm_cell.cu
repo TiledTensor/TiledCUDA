@@ -105,8 +105,12 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
     }
 
     __syncthreads();
+    // cute_gemm_add(acc1, acc2);
+    cute::axpby(1.0, acc1, 1.0, acc2);
+
+    __syncthreads();
     if (current_block_x < total_block_x * 3 / 4) {
-        cute_sigmod(acc2);
+        cute_sigmoid(acc2);
     } else {
         cute_tanh(acc2);
     }

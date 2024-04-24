@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from typing import Tuple
 import sys
-import os
 sys.path.append('./')
 
 
@@ -22,10 +21,10 @@ class FineGrainedOpLstmCell(nn.Module):
     def forward(self) -> Tuple[torch.Tensor, torch.Tensor]:
         # Implement `lstm_cell` in Python.
         # Forget gate
-        f = torch.sigmoid(torch.mm(self.wi[0], self.xi) +
+        i = torch.sigmoid(torch.mm(self.wi[0], self.xi) +
                           torch.mm(self.ui[0], self.h0))
         # Input gate
-        i = torch.sigmoid(torch.mm(self.wi[1], self.xi) +
+        f = torch.sigmoid(torch.mm(self.wi[1], self.xi) +
                           torch.mm(self.ui[1], self.h0))
         # Output gate
         o = torch.sigmoid(torch.mm(self.wi[2], self.xi) +
@@ -43,9 +42,8 @@ class FineGrainedOpLstmCell(nn.Module):
 if __name__ == "__main__":
     import pytiledcuda
 
-    os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-    hidden = 32
-    batch = 32
+    hidden = 256
+    batch = 256
 
     w = torch.randn(4, hidden, hidden, device='cuda')
     x = torch.randn(hidden, batch, device='cuda')
@@ -70,7 +68,10 @@ if __name__ == "__main__":
         w.half(), x.half(), u.half(), c0.half(), h0.half(), c1.half(), h1.half(), batch, hidden)
     ref_c, ref_h = ref_lstm.forward()
 
-    print(c1_data)
-    print(h1_data)
-    print(ref_c.flatten().half())
-    print(ref_h.flatten().half())
+    ref_c = ref_c.flatten()
+    ref_h = ref_h.flatten()
+
+    assert torch.allclose(c1_data, ref_c, atol=1e-1)
+    assert torch.allclose(h1_data, ref_h, atol=1e-1)
+
+    print("Lstm Cell test passed")
