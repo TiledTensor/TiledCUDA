@@ -47,7 +47,8 @@ struct DynLstmGateTraits : public Base {
     using ThreadLayout = Layout<Shape<Int<kThreadsPerRow>, Int<kThreadsPerCol>>,
                                 Stride<Int<kThreadsPerCol>, _1>>;
 
-    static const bool enable_cp_async = false;  // change this flag
+    // change this flag to enable async copy
+    static const bool enable_cp_async = false;
     using CopyInst = std::conditional_t<
         enable_cp_async,
         Copy_Atom<SM80_CP_ASYNC_CACHEGLOBAL<cute::uint128_t>, Element>,
@@ -57,7 +58,7 @@ struct DynLstmGateTraits : public Base {
         CopyInst{}, ThreadLayout{},
         Layout<Shape<_1, Int<Base::kNumPerAccess>>>{}));
 
-    // TODO(ying): The current implementation uses ldmatrix.x4
+    // TODO(haruhi): The current implementation uses ldmatrix.x4
     // instruction which requires the TileMMA configuration to be
     // fixed as follows. Make it able to be tuned by policy in
     // future implementation.

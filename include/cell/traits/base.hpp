@@ -3,7 +3,7 @@
 
 namespace tiledcuda::cell::traits {
 
-// FIXME(ying). The swizzle function requires a data tile with a minimal
+// FIXME(haruhi). The swizzle function requires a data tile with a minimal
 // shape of <8, 32> for the <2, 3, 3> case, and a minimal shape of <8, 64> for
 // the <3, 3, 3> case. Here requires some check to ensure that the data tile
 // meets these requirements before using this function.
