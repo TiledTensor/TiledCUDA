@@ -1,5 +1,8 @@
-set(SUBDIRS cell kernels)
+set(TEST_ROOT ${PROJECT_SOURCE_DIR}/tests/cpp)
+message(STATUS "TEST_ROOT is set to: ${TEST_ROOT}")
 
-foreach(SUBDIR ${SUBDIRS})
-  add_subdirectory(${SUBDIR})
-endforeach()
+include_directories(${TEST_ROOT})
+
+cuda_test(test_copy SRCS ${TEST_ROOT}/cell/test_copy.cu)
+cuda_test(test_gemm SRCS ${TEST_ROOT}/kernels/test_gemm.cu)
+cuda_test(test_scatter_nd SRCS ${TEST_ROOT}/kernels/test_scatter_nd.cu)

@@ -1,7 +1,7 @@
-# include cutlass
-include_directories(3rd-party/cutlass/include)
+# add cutlass into dependence
+include_directories(${CMAKE_CURRENT_LIST_DIR}/../3rd-party/cutlass/include)
 
-# include gtest
+# add googletest into dependence
 set(INSTALL_GTEST
     OFF
     CACHE BOOL "Install gtest." FORCE)
