@@ -10,8 +10,8 @@ endif()
 find_package(CUDA REQUIRED)
 find_package(Torch REQUIRED)
 
-include(cmake/generic.cmake)
-include(cmake/dependencies.cmake)
+include(scripts/cmake/generic.cmake)
+include(scripts/cmake/dependencies.cmake)
 
 include_directories(include)
 add_subdirectory(src)

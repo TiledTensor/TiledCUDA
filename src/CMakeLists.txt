@@ -1,4 +1,4 @@
-set(TARGET tiledcuda)
+set(TARGET "tiledcuda")
 
 file(GLOB_RECURSE SOURCES "kernels/*.cu" "*.cc")
 
