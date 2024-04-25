@@ -53,7 +53,7 @@ struct DynBatchedGemmTraits : public Base {
         CopyInst{}, ThreadLayout{},
         Layout<Shape<_1, Int<Base::kNumPerAccess>>>{}));
 
-    // TODO(ying): The current implementation uses ldmatrix.x4
+    // TODO(haruhi): The current implementation uses ldmatrix.x4
     // instruction which requires the TileMMA configuration to be
     // fixed as follows. Make it able to be tuned by policy in
     // future implementation.

@@ -54,8 +54,8 @@ __forceinline__ __device__ auto make_s2rA(const Element* data, int tid,
     return loader;
 }
 
-/// FIXIME(ying): the current implementation is for fast experiment, it is
-/// coupled shared memory layout with the register layout
+// FIXIME(haruhi): the current implementation is for fast experiment,
+// it is coupled shared memory layout with the register layout
 template <typename Element, typename Layout, typename TiledMma>
 __forceinline__ __device__ auto make_s2rB(const Element* data, int tid,
                                           const Layout& layout,

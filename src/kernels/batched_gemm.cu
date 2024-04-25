@@ -72,8 +72,8 @@ __global__ void dyn_cute_batched_gemm_kernel(const Element* dA,
             rA.copy(i);  // load A register tile from shared memory
             rB.copy(i);  // load B register tile from shared memory
 
-            gemm(mma, rA[i], rB[i],
-                 acc);  // compute using tcu's wmma instruction
+            // compute using tcu's wmma instruction
+            gemm(mma, rA[i], rB[i], acc);
         }
         __syncthreads();
 
