@@ -4,4 +4,3 @@
 [submodule "3rd-party/googletest"]
 	path = 3rd-party/googletest
 	url = git@github.com:google/googletest.git
-	branch = main
