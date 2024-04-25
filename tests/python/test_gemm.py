@@ -1,9 +1,9 @@
-import torch
-import sys
-
 import unittest
 
-sys.path.append('./')
+import torch
+
+import context
+from pytiledcuda import gemm
 
 
 class TestGemm(unittest.TestCase):
@@ -12,7 +12,6 @@ class TestGemm(unittest.TestCase):
         torch.manual_seed(1234)
 
     def test_gemm(self):
-        import pytiledcuda
 
         a = torch.randn(256, 256, device='cuda')
         b = torch.randn(256, 256, device='cuda')
@@ -22,7 +21,7 @@ class TestGemm(unittest.TestCase):
         b_data = b.flatten().half()
         c_data = c.flatten().half()
 
-        pytiledcuda.gemm(a_data, b_data, c_data, 256, 256, 256)
+        gemm(a_data, b_data, c_data, 256, 256, 256)
         ref_c = torch.mm(a.half(), b.half().t()).flatten()
 
         self.assertTrue(torch.allclose(c_data, ref_c, atol=1e-3))

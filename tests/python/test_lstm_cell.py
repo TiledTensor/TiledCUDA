@@ -1,11 +1,11 @@
-import torch
-import torch.nn as nn
 from typing import Tuple
-import sys
-
 import unittest
 
-sys.path.append('./')
+import torch
+import torch.nn as nn
+
+import context
+from pytiledcuda import lstm_cell
 
 
 class FineGrainedOpLstmCell(nn.Module):
@@ -49,7 +49,6 @@ class TestLstmCell(unittest.TestCase):
         torch.manual_seed(1234)
 
     def test_lstm_cell(self):
-        import pytiledcuda
 
         hidden = 256
         batch = 256
@@ -70,8 +69,8 @@ class TestLstmCell(unittest.TestCase):
         c1_data = c1.flatten().half()
         h1_data = h1.flatten().half()
 
-        pytiledcuda.lstm_cell(w_data, x_data, u_data, c0_data, h0_data,
-                              c1_data, h1_data, hidden, batch)
+        lstm_cell(w_data, x_data, u_data, c0_data, h0_data, c1_data, h1_data,
+                  hidden, batch)
 
         ref_lstm = FineGrainedOpLstmCell(w.half(), x.half(), u.half(),
                                          c0.half(), h0.half(), c1.half(),

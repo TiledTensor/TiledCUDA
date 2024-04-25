@@ -1,9 +1,10 @@
-import torch
 import random
-import sys
 import unittest
 
-sys.path.append('./')
+import torch
+
+import context
+from pytiledcuda import scatter_nd
 
 
 class TestGemm(unittest.TestCase):
@@ -38,8 +39,8 @@ class TestGemm(unittest.TestCase):
                               device='cuda').fill_(10.0)
         scatter_updates = updates.flatten()
 
-        import pytiledcuda
-        pytiledcuda.scatter_nd(scatter_data, scatter_indices, scatter_updates)
+        # import pytiledcuda
+        scatter_nd(scatter_data, scatter_indices, scatter_updates)
 
         # Implement `scatter_nd` in Python.
         data[indices[:, 0], indices[:, 1]] = updates

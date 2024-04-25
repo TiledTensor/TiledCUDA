@@ -1,8 +1,9 @@
-import torch
-import sys
 import unittest
 
-sys.path.append('./')
+import torch
+
+import context
+from pytiledcuda import back2back_gemm
 
 
 class Back2BackGemm(unittest.TestCase):
@@ -11,7 +12,6 @@ class Back2BackGemm(unittest.TestCase):
         torch.manual_seed(1234)
 
     def test_b2b_gemm(self):
-        import pytiledcuda
 
         a = torch.randn(256, 256, device='cuda')
         b = torch.randn(256, 256, device='cuda')
@@ -23,8 +23,7 @@ class Back2BackGemm(unittest.TestCase):
         c_data = c.flatten().half()
         d_data = d.flatten().half()
 
-        pytiledcuda.back2back_gemm(a_data, b_data, c_data, d_data, 256, 256,
-                                   256, 256)
+        back2back_gemm(a_data, b_data, c_data, d_data, 256, 256, 256, 256)
 
         ref_d = torch.mm(a.half(), b.half().t()).mm(c.half().t()).flatten()
         print(d_data)
