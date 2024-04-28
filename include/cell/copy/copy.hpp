@@ -3,10 +3,13 @@
 #include "cuda_utils.hpp"
 
 #include <cute/algorithm/copy.hpp>
+#include <cutlass/half.h>
 
 namespace tiledcuda::cell::copy {
 
 using namespace cute;
+
+namespace {
 
 template <typename TiledCopy, typename STensor, typename DTensor,
           typename DTensorView>
@@ -32,6 +35,7 @@ struct Shm2RegLoad {
     DTensor& dst_;
     DTensorView& dst_view_;
 };
+}  // namespace
 
 template <typename Element, typename Layout, typename TiledMma>
 __forceinline__ __device__ auto make_s2rA(const Element* data, int tid,
@@ -48,7 +52,7 @@ __forceinline__ __device__ auto make_s2rA(const Element* data, int tid,
     // partition register
     auto thr_mma = tiled_mma.get_thread_slice(tid);
     auto dst = thr_mma.partition_fragment_A(tensor);
-    auto dst_view = thrd_copy.retile_S(dst);
+    auto dst_view = thrd_copy.retile_D(dst);
 
     Shm2RegLoad loader(tiled_copy, src, dst, dst_view);
     return loader;

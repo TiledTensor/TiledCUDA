@@ -4,14 +4,16 @@
 
 namespace tiledcuda::cell::copy {
 
-// Copy a tensor from global memory to shared memory
+// Copy a 2d data tile from global memory to shared memory
+// @param src_data: the pointer of source data in global memory
+// @param dst_data: the pointer of destination data in shared memory
+// @param src_layout: the layout of source 2d data tile
+// @param dst_layout: the layout of destination 2d data tile
 template <typename Element, typename SrcLayout, typename DstLayout,
           typename TiledCopy>
-__forceinline__ __device__ void copy_tensor_g2s(const Element* src_data,
-                                                Element* dst_data,
-                                                SrcLayout src_layout,
-                                                DstLayout dst_layout,
-                                                TiledCopy tiled_copy, int tid) {
+__forceinline__ __device__ void copy_2d_tile_g2s(
+    const Element* src_data, Element* dst_data, SrcLayout src_layout,
+    DstLayout dst_layout, TiledCopy tiled_copy, int tid) {
     auto gtile = make_tensor(make_gmem_ptr(src_data), src_layout);
     auto stile = make_tensor(make_smem_ptr(dst_data), dst_layout);
 
@@ -30,11 +32,9 @@ __forceinline__ __device__ void copy_tensor_g2s(const Element* src_data,
 // Copy a tensor from shared memory to global memory
 template <typename Element, typename SrcLayout, typename DstLayout,
           typename TiledCopy>
-__forceinline__ __device__ void copy_tensor_s2g(const Element* src_data,
-                                                Element* dst_data,
-                                                SrcLayout src_layout,
-                                                DstLayout dst_layout,
-                                                TiledCopy tiled_copy, int tid) {
+__forceinline__ __device__ void copy_2d_tile_s2g(
+    const Element* src_data, Element* dst_data, SrcLayout src_layout,
+    DstLayout dst_layout, TiledCopy tiled_copy, int tid) {
     auto stile = make_tensor(make_smem_ptr(src_data), src_layout);
     auto gtile = make_tensor(make_gmem_ptr(dst_data), dst_layout);
 

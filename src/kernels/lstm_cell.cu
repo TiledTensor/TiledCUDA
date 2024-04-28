@@ -4,6 +4,7 @@
 #include "layout.hpp"
 
 #include <cutlass/half.h>
+#include <glog/logging.h>
 
 #include <iostream>
 
@@ -73,14 +74,14 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
 
     for (int k = 0; k < kK; k += kTK) {
         // TODO: Load data from global memory to shared memory
-        copy_tensor_g2s(gws_ptr, sws_ptr, load_a_g2s_layout,
-                        typename KeTraits::SmemLayoutA{}, tiled_copy, tid);
-        copy_tensor_g2s(gxs_ptr, sxs_ptr, load_b_g2s_layout,
-                        typename KeTraits::SmemLayoutB{}, tiled_copy, tid);
-        copy_tensor_g2s(gus_ptr, sus_ptr, load_c_g2s_layout,
-                        typename KeTraits::SmemLayoutC{}, tiled_copy, tid);
-        copy_tensor_g2s(ghs_ptr, shs_ptr, load_d_g2s_layout,
-                        typename KeTraits::SmemLayoutD{}, tiled_copy, tid);
+        copy_2d_tile_g2s(gws_ptr, sws_ptr, load_a_g2s_layout,
+                         typename KeTraits::SmemLayoutA{}, tiled_copy, tid);
+        copy_2d_tile_g2s(gxs_ptr, sxs_ptr, load_b_g2s_layout,
+                         typename KeTraits::SmemLayoutB{}, tiled_copy, tid);
+        copy_2d_tile_g2s(gus_ptr, sus_ptr, load_c_g2s_layout,
+                         typename KeTraits::SmemLayoutC{}, tiled_copy, tid);
+        copy_2d_tile_g2s(ghs_ptr, shs_ptr, load_d_g2s_layout,
+                         typename KeTraits::SmemLayoutD{}, tiled_copy, tid);
 
         __copy_async();
         __syncthreads();
@@ -120,8 +121,8 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
 
     __syncthreads();
 
-    copy_tensor_s2g(sts_ptr, gts_ptr, typename KeTraits::SmemLayoutE{},
-                    store_e_s2g_layout, tiled_copy, tid);
+    copy_2d_tile_s2g(sts_ptr, gts_ptr, typename KeTraits::SmemLayoutE{},
+                     store_e_s2g_layout, tiled_copy, tid);
 }
 
 template <typename Element>
@@ -283,7 +284,8 @@ void custom_lstm_cell_op(const torch::Tensor& w, const torch::Tensor& x,
             reinterpret_cast<cutlass::half_t*>(h1.mutable_data_ptr()), m, n, k);
     } else {
         // Unsupported data type
-        throw std::runtime_error("Unsupported data type");
+        // throw std::runtime_error("Unsupported data type");
+        LOG(FATAL) << "Unsupported data type";
     }
 }
 }  // namespace tiledcuda::kernels

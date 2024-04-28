@@ -45,7 +45,9 @@ function(cuda_test TARGET_NAME)
                         "${multiValueArgs}" ${ARGN})
   cuda_add_executable(
     ${TARGET_NAME} ${PROJECT_SOURCE_DIR}/tests/cpp/test_unit.cc ${nv_test_SRCS})
-  target_link_libraries(${TARGET_NAME} ${nv_test_DEPS} gtest)
-  add_dependencies(${TARGET_NAME} ${nv_test_DEPS} gtest)
+  target_link_libraries(${TARGET_NAME} ${nv_test_DEPS} gtest glog::glog)
+  add_dependencies(${TARGET_NAME} ${nv_test_DEPS} gtest glog::glog)
+
+  # add a test with the same name as the target
   add_test(${TARGET_NAME} ${TARGET_NAME})
 endfunction(cuda_test)
