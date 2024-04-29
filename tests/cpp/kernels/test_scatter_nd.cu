@@ -1,4 +1,4 @@
-#include "tiled_cuda_test.h"
+#include "common/test_utils.hpp"
 
 namespace tiledcuda {
 namespace testing {
