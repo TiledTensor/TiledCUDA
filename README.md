@@ -17,8 +17,10 @@ cd TiledCUDA && git submodule update --init --recursive
 
 ### Unit Test
 
-- **Run single unit test**: `make unit_test UNIT_TEST=test_scatter_nd.py`
+- **Run a single unit test**: `make unit_test UNIT_TEST=test_scatter_nd.py`
 - **Run all unit tests**: `./scripts/unittests/python.sh`
+- **Run a single cpp unit test**: `make unit_test_cpp CPP_UT=test_copy`
+- **Run all cpp unit tests**: `make unit_test_cpps`
 
 ## Features
 
