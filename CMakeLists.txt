@@ -7,6 +7,11 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
   message(FATAL_ERROR "In-source build are not supported")
 endif()
 
+option(WITH_TESTING "Build with CTests" ON)
+if(WITH_TESTING)
+  enable_testing()
+endif()
+
 find_package(CUDA REQUIRED)
 find_package(Torch REQUIRED)
 

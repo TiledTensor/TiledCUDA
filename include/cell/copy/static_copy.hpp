@@ -19,8 +19,8 @@ struct R2SCopy2D {
     template <typename Engine, typename Layout>
     __forceinline__ __device__ void copy(
         cute::Tensor<Engine, Layout> const& acc, Element* dst_data, int tid) {
-        // FIXME(ying): This implementation is specifically designed
-        // for TCU WMMA and assumes that the ACC value has a
+        // FIXME(haruhi): This implementation is specifically designed
+        // for tcu WMMA and assumes that the ACC value has a
         // floating-point precision. The code converts the ACC value
         // to half-precision.
         auto src_tensor = convert_type<Element>(acc);

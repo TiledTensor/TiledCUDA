@@ -2,7 +2,7 @@
 #include "kernels/batched_gemm.hpp"
 #include "layout.hpp"
 
-#include <cutlass/half.h>
+#include <glog/logging.h>
 
 namespace tiledcuda::kernels {
 
@@ -61,10 +61,10 @@ __global__ void dyn_cute_batched_gemm_kernel(const Element* dA,
     typename KeTraits::StoreC_R2S sC;  // declare register to shared store plan
 
     for (int k = 0; k < kK; k += kTK) {  // iterator over K
-        copy_tensor_g2s(gA_ptr, sA_ptr, load_a_g2s_layout,
-                        typename KeTraits::SmemLayoutA{}, tiled_copy, tid);
-        copy_tensor_g2s(gB_ptr, sB_ptr, load_b_g2s_layout,
-                        typename KeTraits::SmemLayoutB{}, tiled_copy, tid);
+        copy_2d_tile_g2s(gA_ptr, sA_ptr, load_a_g2s_layout,
+                         typename KeTraits::SmemLayoutA{}, tiled_copy, tid);
+        copy_2d_tile_g2s(gB_ptr, sB_ptr, load_b_g2s_layout,
+                         typename KeTraits::SmemLayoutB{}, tiled_copy, tid);
         __copy_async();
         __syncthreads();
 
@@ -84,9 +84,9 @@ __global__ void dyn_cute_batched_gemm_kernel(const Element* dA,
     sC.copy(acc, shm, tid);  // store register tile to shared memory
     __syncthreads();
 
-    copy_tensor_s2g(sC_ptr, gC_ptr, typename KeTraits::SmemLayoutC{},
-                    store_c_s2g_layout, tiled_copy,
-                    tid);  // store shared memory tile to global memory
+    copy_2d_tile_s2g(sC_ptr, gC_ptr, typename KeTraits::SmemLayoutC{},
+                     store_c_s2g_layout, tiled_copy,
+                     tid);  // store shared memory tile to global memory
 }
 
 template <typename Element, typename InstructionShape, typename ValueMnk,
@@ -154,7 +154,7 @@ void custom_batched_gemm_op(const torch::Tensor& a, const torch::Tensor& b,
             reinterpret_cast<cutlass::half_t*>(c.mutable_data_ptr()), m, n, k,
             batch_count);
     } else {
-        throw std::runtime_error("Unsupported data type");
+        LOG(FATAL) << "Unsupported data type";
     }
 }
 }  // namespace tiledcuda::kernels

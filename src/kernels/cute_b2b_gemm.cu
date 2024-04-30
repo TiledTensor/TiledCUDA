@@ -65,10 +65,10 @@ __global__ void dyn_back2back_gemm(const Element* d_a, const Element* d_b,
         gB_ptr = B + n * kK;
         for (int k = 0; k < kK; k += kTK) {  // iterate over K
 
-            copy_tensor_g2s(gA_ptr, sA_ptr, load_a_g2s_layout,
-                            typename KeTraits::SmemLayoutA{}, tiled_copy, tid);
-            copy_tensor_g2s(gB_ptr, sB_ptr, load_b_g2s_layout,
-                            typename KeTraits::SmemLayoutB{}, tiled_copy, tid);
+            copy_2d_tile_g2s(gA_ptr, sA_ptr, load_a_g2s_layout,
+                             typename KeTraits::SmemLayoutA{}, tiled_copy, tid);
+            copy_2d_tile_g2s(gB_ptr, sB_ptr, load_b_g2s_layout,
+                             typename KeTraits::SmemLayoutB{}, tiled_copy, tid);
 
             __copy_async();
             __syncthreads();
@@ -91,8 +91,8 @@ __global__ void dyn_back2back_gemm(const Element* d_a, const Element* d_b,
         auto rA2 = convert_layout<KeTraits::TiledMma>(acc_half);
 
         // load C tile from global to shared memory
-        copy_tensor_g2s(gC_ptr, sC_ptr, load_c_g2s_layout,
-                        typename KeTraits::SmemLayoutC{}, tiled_copy, tid);
+        copy_2d_tile_g2s(gC_ptr, sC_ptr, load_c_g2s_layout,
+                         typename KeTraits::SmemLayoutC{}, tiled_copy, tid);
         __copy_async();
         __syncthreads();
 
@@ -110,8 +110,8 @@ __global__ void dyn_back2back_gemm(const Element* d_a, const Element* d_b,
     // store register tile to shared memory
     sD.copy(acc2, shm, tid);
     __syncthreads();
-    copy_tensor_s2g(sD_ptr, gD_ptr, typename KeTraits::SmemLayoutD{},
-                    store_d_s2g_layout, tiled_copy, tid);
+    copy_2d_tile_s2g(sD_ptr, gD_ptr, typename KeTraits::SmemLayoutD{},
+                     store_d_s2g_layout, tiled_copy, tid);
 }
 
 template <typename Element, typename CtaTileShape, typename WarpShape>

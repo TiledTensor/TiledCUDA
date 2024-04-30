@@ -20,7 +20,7 @@ message(STATUS "Python interpreter path: ${PYTHON_EXECUTABLE}")
 
 # set device compiler flags
 cuda_select_nvcc_arch_flags(ARCH_FLAGS "Auto")
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${ARCH_FLAGS} --Werror all-warnings")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${ARCH_FLAGS}  --Werror all-warnings")
 
 # FIXME(haruhi): -std=c++17 has to be set explicitly here, otherwise compiling
 # with torchlibs raises errors
@@ -44,8 +44,11 @@ function(cuda_test TARGET_NAME)
   cmake_parse_arguments(nv_test "${options}" "${oneValueArgs}"
                         "${multiValueArgs}" ${ARGN})
   cuda_add_executable(
-    ${TARGET_NAME} ${PROJECT_SOURCE_DIR}/tests/cpp/test_unit.cc ${nv_test_SRCS})
-  target_link_libraries(${TARGET_NAME} ${nv_test_DEPS} gtest)
-  add_dependencies(${TARGET_NAME} ${nv_test_DEPS} gtest)
+    ${TARGET_NAME} ${PROJECT_SOURCE_DIR}/tests/cpp/test_unit.cc
+    ${PROJECT_SOURCE_DIR}/tests/cpp/common/test_utils.cc ${nv_test_SRCS})
+  target_link_libraries(${TARGET_NAME} ${nv_test_DEPS} gtest glog::glog)
+  add_dependencies(${TARGET_NAME} ${nv_test_DEPS} gtest glog::glog)
+
+  # add a test with the same name as the target
   add_test(${TARGET_NAME} ${TARGET_NAME})
 endfunction(cuda_test)
