@@ -10,7 +10,6 @@ namespace traits = tiledcuda::cell::traits;
 
 namespace tiledcuda {
 
-namespace {
 // the host function to call the device copy function
 template <typename Element, typename G2STraits, typename S2GTraits>
 __global__ void Copy(const Element* src, Element* trg) {
@@ -33,7 +32,6 @@ __global__ void Copy(const Element* src, Element* trg) {
     cell::__copy_async();
     __syncthreads();
 }
-}  // namespace
 
 namespace testing {
 

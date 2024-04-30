@@ -8,8 +8,6 @@ namespace tiledcuda::cell::copy {
 
 using namespace cute;
 
-namespace {
-
 template <typename TiledCopy, typename STensor, typename DTensor,
           typename DTensorView>
 struct Shm2RegLoad {
@@ -34,7 +32,6 @@ struct Shm2RegLoad {
     DTensor& dst_;
     DTensorView& dst_view_;
 };
-}  // namespace
 
 template <typename Element, typename Layout, typename TiledMma>
 __forceinline__ __device__ auto make_s2rA(const Element* data, int tid,
