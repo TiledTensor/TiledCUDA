@@ -12,8 +12,6 @@ void CheckResult(const __half* v1, const __half* v2, int64_t numel) {
     for (int i = 0; i < numel; ++i) {
         a = __half2float(v1[i]);
         b = __half2float(v2[i]);
-        // LOG(INFO) << "v1[" << i << "] vs. v2[" << i << "] = " << a << " vs. "
-        //           << b << std::endl;
 
         EXPECT_NEAR(a, b, epsilon) << "v1[" << i << "] vs. v2[" << i
                                    << "] = " << a << " vs. " << b << std::endl;

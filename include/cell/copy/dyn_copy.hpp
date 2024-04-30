@@ -43,17 +43,6 @@ DEVICE void copy_2d_tile_s2g(const Element* src_data, Element* dst_data,
     auto src = loader.partition_S(stile);
     auto dst = loader.partition_D(gtile);
 
-    // if (threadIdx.x == 0) {
-    //     print(src_layout);
-    //     printf("\n");
-    //     print(dst_layout);
-    //     printf("\n");
-    //     print(src);
-    //     printf("\n");
-    //     print(dst);
-    //     printf("\n");
-    // }
-
 #pragma unroll
     for (int i = 0; i < int(size<1>(src)); ++i)
 #pragma unroll

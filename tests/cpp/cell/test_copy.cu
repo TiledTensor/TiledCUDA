@@ -11,20 +11,6 @@ namespace traits = tiledcuda::cell::traits;
 namespace tiledcuda {
 
 namespace {
-
-DEVICE void DebugPrint(const cutlass::half_t* input, int row, int col) {
-    auto* data = reinterpret_cast<const __half*>(input);
-
-    for (int i = 0; i < row; ++i) {
-        printf("[%d]:\t", i);
-        for (int j = 0; j < col - 1; ++j) {
-            printf("%.0f,", __half2float(data[i * col + j]));
-        }
-        printf("%.0f\n", __half2float(data[(i + 1) * col - 1]));
-    }
-    printf("\n");
-}
-
 // the host function to call the device copy function
 template <typename Element, typename G2STraits, typename S2GTraits>
 __global__ void Copy(const Element* src, Element* trg) {
@@ -33,49 +19,33 @@ __global__ void Copy(const Element* src, Element* trg) {
 
     int tid = threadIdx.x;
 
-    // int rows = KeTraits::kRows;
-    // int cols = KeTraits::kCols;
-
-    // int shm_rows = KeTraits::kShmRows;
-    // int shm_cols = KeTraits::kShmCols;
-
-    // const int x_block = blockIdx.x;
-    // const int y_block = blockIdx.y;
-
-    // advance the pointer to the input data to the current CTA
-    // const int offset = x_block * (shm_rows * cols) + y_block * shm_cols;
-
+    // transfer a 2D data tile from global memory to shared memory.
     cell::copy::copy_2d_tile_g2s(src, buf, typename G2STraits::SrcLayout{},
                                  typename G2STraits::DstLayout{},
                                  typename G2STraits::TiledCopy{}, tid);
     cell::__copy_async();
     __syncthreads();
 
-    // if (tid == 0) {
-    //     printf("tid: %d\n", tid);
-    //     DebugPrint(buf, KeTraits::kRows, KeTraits::kCols);
-    // }
-
+    // transfer a 2D data tile from shared memory to global memory.
     cell::copy::copy_2d_tile_s2g(buf, trg, typename S2GTraits::SrcLayout{},
                                  typename S2GTraits::DstLayout{},
                                  typename S2GTraits::TiledCopy{}, tid);
     cell::__copy_async();
     __syncthreads();
-
-    // if (tid == 0) {
-    //     printf("tid: %d\n", tid);
-    //     DebugPrint(trg, KeTraits::kRows, KeTraits::kCols);
-    // }
 }
 }  // namespace
 
 namespace testing {
 
-TEST(TestG2SCopy, Copy2DTile) {
+TEST(TestG2SCopy, Copy2DTile1) {
+    // The simple test case for 2D copy. Copy a 16x32 matrix from global memory
+    // to shared memory using a single warp.
+    // NOTE: This unitttest represents the minimum shape and threads in a thread
+    // block allowed for a 2D copy operation.
     using Element = cutlass::half_t;
 
     static constexpr int kRows = 16;
-    static constexpr int kCols = 8 * 4;
+    static constexpr int kCols = 32;
 
     static constexpr int kShmRows = kRows;
     static constexpr int kShmCols = kCols;
@@ -87,8 +57,7 @@ TEST(TestG2SCopy, Copy2DTile) {
     thrust::host_vector<Element> h_A(numel);
     srand(42);
     for (int i = 0; i < h_A.size(); ++i) {
-        // h_A[i] = __float2half(10 * (rand() / float(RAND_MAX)) - 5);
-        h_A[i] = __float2half(i);
+        h_A[i] = __float2half(10 * (rand() / float(RAND_MAX)) - 5);
     }
 
     // copy data from host to device
@@ -98,8 +67,6 @@ TEST(TestG2SCopy, Copy2DTile) {
 
     int m = CeilDiv<kRows, kShmRows>;
     int n = CeilDiv<kCols, kShmCols>;
-    LOG(INFO) << "blocks m: " << m << ", blocks n: " << n;
-
     dim3 dim_grid(m, n);
     dim3 dim_block(kThreads);
 
@@ -108,9 +75,6 @@ TEST(TestG2SCopy, Copy2DTile) {
 
     using S2GCopyTraits = traits::S2G2DCopyTraits<Element, kRows, kCols,
                                                   kShmRows, kShmCols, kThreads>;
-
-    LOG(INFO) << "threads arrangement: " << G2SCopyTraits::kThreadsRows << " x "
-              << G2SCopyTraits::kThreadsCols;
 
     Copy<Element, G2SCopyTraits, S2GCopyTraits>
         <<<dim_grid, dim_block, kShmRows * kShmCols>>>(

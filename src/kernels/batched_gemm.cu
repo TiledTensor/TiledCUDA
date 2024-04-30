@@ -2,7 +2,6 @@
 #include "kernels/batched_gemm.hpp"
 #include "layout.hpp"
 
-#include <cutlass/half.h>
 #include <glog/logging.h>
 
 namespace tiledcuda::kernels {
@@ -156,7 +155,6 @@ void custom_batched_gemm_op(const torch::Tensor& a, const torch::Tensor& b,
             batch_count);
     } else {
         LOG(FATAL) << "Unsupported data type";
-        // throw std::runtime_error("Unsupported data type");
     }
 }
 }  // namespace tiledcuda::kernels

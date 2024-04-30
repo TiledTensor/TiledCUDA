@@ -3,7 +3,6 @@
 #include "cuda_utils.hpp"
 
 #include <cute/algorithm/copy.hpp>
-#include <cutlass/half.h>
 
 namespace tiledcuda::cell::copy {
 

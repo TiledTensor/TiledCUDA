@@ -3,10 +3,7 @@
 #include "kernels/lstm_cell.hpp"
 #include "layout.hpp"
 
-#include <cutlass/half.h>
 #include <glog/logging.h>
-
-#include <iostream>
 
 namespace tiledcuda::kernels {
 using namespace tiledcuda::cell;
@@ -284,7 +281,6 @@ void custom_lstm_cell_op(const torch::Tensor& w, const torch::Tensor& x,
             reinterpret_cast<cutlass::half_t*>(h1.mutable_data_ptr()), m, n, k);
     } else {
         // Unsupported data type
-        // throw std::runtime_error("Unsupported data type");
         LOG(FATAL) << "Unsupported data type";
     }
 }
