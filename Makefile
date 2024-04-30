@@ -1,7 +1,8 @@
 EXAMPLE_DIR := examples
 TEST_DIR   	:= tests/python
 UNIT_TEST 	?= test_lstm_cell
-CPP_UNIT 	:= scripts/unittests/run_all_cpp_test.sh
+CPP_UT		?= test_copy
+CPP_UTS 	:= scripts/unittests/run_all_cpp_test.sh
 
 EXAMPLE 	?= $(EXAMPLE_DIR)/scatter_nd.py
 UNIT   		?= $(TEST_DIR)/$(UNIT_TEST).py
@@ -26,7 +27,10 @@ unit_test: $(DYNAMIC_LIB)
 	@python3 $(UNIT)
 
 unit_test_cpp: $(DYNAMIC_LIB)
-	@sh $(CPP_UNIT)
+	@cd $(BUILD_DIR) && ctest -R $(CPP_UT) -V
+
+unit_test_cpps: $(DYNAMIC_LIB)
+	@sh $(CPP_UTS)
 
 clean:
 	@rm -rf build

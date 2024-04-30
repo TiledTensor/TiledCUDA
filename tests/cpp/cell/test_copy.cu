@@ -12,7 +12,7 @@ namespace tiledcuda {
 
 // the host function to call the device copy function
 template <typename Element, typename G2STraits, typename S2GTraits>
-__global__ void Copy(const Element* src, Element* trg) {
+__global__ void copy(const Element* src, Element* trg) {
     extern __shared__ __align__(sizeof(double)) unsigned char shared_buf[];
     auto* buf = reinterpret_cast<Element*>(shared_buf);
 
@@ -74,7 +74,7 @@ TEST(TestG2SCopy, Copy2DTile1) {
     using S2GCopyTraits = traits::S2G2DCopyTraits<Element, kRows, kCols,
                                                   kShmRows, kShmCols, kThreads>;
 
-    Copy<Element, G2SCopyTraits, S2GCopyTraits>
+    copy<Element, G2SCopyTraits, S2GCopyTraits>
         <<<dim_grid, dim_block, kShmRows * kShmCols>>>(
             thrust::raw_pointer_cast(d_A.data()),
             thrust::raw_pointer_cast(d_B.data()));
