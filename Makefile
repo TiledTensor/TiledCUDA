@@ -2,7 +2,7 @@ EXAMPLE_DIR := examples
 TEST_DIR   	:= tests/python
 UNIT_TEST 	?= test_lstm_cell
 CPP_UT		?= test_copy
-CPP_UTS 	:= scripts/unittests/run_all_cpp_test.sh
+CPP_UTS 	:= scripts/unittests/run_all_cpp_tests.sh
 
 EXAMPLE 	?= $(EXAMPLE_DIR)/scatter_nd.py
 UNIT   		?= $(TEST_DIR)/$(UNIT_TEST).py
