@@ -1,5 +1,5 @@
 #include "cell/mod.hpp"
-#include "kernels/cute_b2b_gemm.hpp"
+#include "kernels/b2b_gemm.hpp"
 #include "layout.hpp"
 
 namespace tiledcuda::kernels {

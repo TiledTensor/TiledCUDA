@@ -1,8 +1,6 @@
 #include "cell/mod.hpp"
-#include "kernels/batched_gemm.hpp"
+#include "kernels/gemm.hpp"
 #include "layout.hpp"
-
-#include <glog/logging.h>
 
 namespace tiledcuda::kernels {
 
@@ -11,14 +9,12 @@ using namespace tiledcuda::cell::copy;
 using namespace tiledcuda::cell::compute;
 
 template <typename Element, typename KeTraits>
-__global__ void dyn_cute_batched_gemm_kernel(const Element* dA,
-                                             const Element* dB, Element* dC,
-                                             int m, int n, int k) {
+__global__ void dyn_cute_gemm_kernel(const Element* dA, const Element* dB,
+                                     Element* dC, int m, int n, int k) {
     extern __shared__ __align__(sizeof(double)) unsigned char shared_buf[];
     auto* shm = reinterpret_cast<Element*>(shared_buf);
 
     // Whole GEMM shape
-    const int kM = m;
     const int kN = n;
     const int kK = k;
 
@@ -30,12 +26,9 @@ __global__ void dyn_cute_batched_gemm_kernel(const Element* dA,
     int tid = threadIdx.x;
 
     // Advance to the global data tile to the current CTA.
-    Element* gA_ptr =
-        const_cast<Element*>(dA) + blockIdx.x * kK * kTM + blockIdx.z * kK * kM;
-    Element* gB_ptr =
-        const_cast<Element*>(dB) + blockIdx.y * kK * kTN + blockIdx.z * kK * kN;
-    Element* gC_ptr =
-        dC + blockIdx.x * kTM * kN + blockIdx.y * kTN + blockIdx.z * kM * kN;
+    Element* gA_ptr = const_cast<Element*>(dA) + blockIdx.x * kK * kTM;
+    Element* gB_ptr = const_cast<Element*>(dB) + blockIdx.y * kK * kTN;
+    Element* gC_ptr = dC + blockIdx.x * kTM * kN + blockIdx.y * kTN;
 
     // pointers to shared memory tiles
     Element* sA_ptr = shm;
@@ -91,8 +84,8 @@ __global__ void dyn_cute_batched_gemm_kernel(const Element* dA,
 
 template <typename Element, typename InstructionShape, typename ValueMnk,
           typename WarpArrangement, typename CtaTileShape>
-void cute_batched_gemm(const Element* a, const Element* b, Element* c, int m,
-                       int n, int k, int batch_count) {
+void cute_gemm(const Element* a, const Element* b, Element* c, int m, int n,
+               int k) {
     // CTA GEMM shape
     static const int kTM = dim_size<0, CtaTileShape>;
     static const int kTN = dim_size<1, CtaTileShape>;
@@ -108,19 +101,18 @@ void cute_batched_gemm(const Element* a, const Element* b, Element* c, int m,
                   "number of warps along that that dimension.");
 
     using GemmTraits =
-        traits::DynBatchedGemmTraits<Element, InstructionShape, ValueMnk,
-                                     WarpArrangement, CtaTileShape>;
+        traits::DynGemmTraits<Element, InstructionShape, ValueMnk,
+                              WarpArrangement, CtaTileShape>;
 
     static constexpr int smem_size =
         std::max(kTK * (kTN + kTM), kTM * kTN) * sizeof(Element);
 
-    auto batched_gemm_kernel =
-        &dyn_cute_batched_gemm_kernel<Element, GemmTraits>;
+    auto gemm_kernel = &dyn_cute_gemm_kernel<Element, GemmTraits>;
 
     // maximal statically allocated smem per block
     const int kMaxSmemPerBlock = 48 * 1024;
     if (smem_size > kMaxSmemPerBlock) {
-        cudaFuncSetAttribute(batched_gemm_kernel,
+        cudaFuncSetAttribute(gemm_kernel,
                              cudaFuncAttributeMaxDynamicSharedMemorySize,
                              smem_size);
     }
@@ -130,31 +122,29 @@ void cute_batched_gemm(const Element* a, const Element* b, Element* c, int m,
 
     const int kThreads = GemmTraits::kThreads;
 
-    dim3 gridDim(block_m, block_n, batch_count);
+    dim3 gridDim(block_m, block_n);
     dim3 blockDim(kThreads, 1, 1);
 
-    batched_gemm_kernel<<<gridDim, blockDim, smem_size>>>(a, b, c, m, n, k);
+    gemm_kernel<<<gridDim, blockDim, smem_size>>>(a, b, c, m, n, k);
 }
 
-void custom_batched_gemm_op(const torch::Tensor& a, const torch::Tensor& b,
-                            torch::Tensor& c, int64_t m, int64_t n, int64_t k,
-                            int64_t batch_count) {
+void custom_gemm_op(const torch::Tensor& a, const torch::Tensor& b,
+                    torch::Tensor& c, int64_t m, int64_t n, int64_t k) {
     using InstructionShape = cell::TileShape<16, 8, 16>;
     using ValueMnk = cell::TileShape<1, 2, 1>;
     using WarpArrangement = cell::TileShape<1, 1, 1>;
     using CtaTileShape = cell::TileShape<16, 32, 32>;
 
     auto dtype = a.dtype();
-
-    if (dtype == torch::kHalf) {
-        cute_batched_gemm<cutlass::half_t, InstructionShape, ValueMnk,
-                          WarpArrangement, CtaTileShape>(
+    if (dtype == torch::kFloat32) {
+        // TODO: Add support for fp32.
+    } else if (dtype == torch::kHalf) {
+        cute_gemm<cutlass::half_t, InstructionShape, ValueMnk, WarpArrangement,
+                  CtaTileShape>(
             reinterpret_cast<const cutlass::half_t*>(a.const_data_ptr()),
             reinterpret_cast<const cutlass::half_t*>(b.const_data_ptr()),
-            reinterpret_cast<cutlass::half_t*>(c.mutable_data_ptr()), m, n, k,
-            batch_count);
-    } else {
-        LOG(FATAL) << "Unsupported data type";
+            reinterpret_cast<cutlass::half_t*>(c.mutable_data_ptr()), m, n, k);
     }
 }
+
 }  // namespace tiledcuda::kernels
