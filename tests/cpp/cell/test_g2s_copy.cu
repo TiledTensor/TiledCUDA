@@ -1,4 +1,4 @@
-#include "cell/copy/dyn_copy.hpp"
+#include "cell/copy/mod.hpp"
 #include "cell/sync.hpp"
 #include "cell/traits/copy.hpp"
 #include "common/test_utils.hpp"
@@ -10,11 +10,12 @@ namespace traits = tiledcuda::cell::traits;
 
 namespace tiledcuda {
 
+namespace {
 // the host function to call the device copy function
 template <typename Element, typename G2STraits, typename S2GTraits>
-__global__ void copy(const Element* src, Element* trg) {
-    extern __shared__ __align__(sizeof(double)) unsigned char shared_buf[];
-    auto* buf = reinterpret_cast<Element*>(shared_buf);
+__global__ void copy_g2s(const Element* src, Element* trg) {
+    extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
+    auto* buf = reinterpret_cast<Element*>(buf_);
 
     int tid = threadIdx.x;
 
@@ -32,14 +33,15 @@ __global__ void copy(const Element* src, Element* trg) {
     cell::__copy_async();
     __syncthreads();
 }
+}  // namespace
 
 namespace testing {
 
-TEST(TestG2SCopy, Copy2DTile1) {
-    // The simple test case for 2D copy. Copy a 16x32 matrix from global memory
-    // to shared memory using a single warp.
-    // NOTE: This unitttest represents the minimum shape and threads in a thread
-    // block allowed for a 2D copy operation.
+TEST(TestG2ShmCopy, copy_2d_tile_g2s) {
+    // The simple test case for 2D copy. Copy a 16x32 matrix from global
+    // memory  to shared memory using a single warp.
+    // NOTE: This unitttest represents the minimum shape and threads in a
+    // thread  block allowed for a 2D copy operation.
     using Element = cutlass::half_t;
 
     static constexpr int kRows = 16;
@@ -70,12 +72,12 @@ TEST(TestG2SCopy, Copy2DTile1) {
 
     using G2SCopyTraits = traits::G2S2DCopyTraits<Element, kRows, kCols,
                                                   kShmRows, kShmCols, kThreads>;
-
     using S2GCopyTraits = traits::S2G2DCopyTraits<Element, kRows, kCols,
                                                   kShmRows, kShmCols, kThreads>;
 
-    copy<Element, G2SCopyTraits, S2GCopyTraits>
-        <<<dim_grid, dim_block, kShmRows * kShmCols>>>(
+    int shm_size = kShmRows * kShmCols * sizeof(Element);
+    copy_g2s<Element, G2SCopyTraits, S2GCopyTraits>
+        <<<dim_grid, dim_block, shm_size>>>(
             thrust::raw_pointer_cast(d_A.data()),
             thrust::raw_pointer_cast(d_B.data()));
     cudaDeviceSynchronize();

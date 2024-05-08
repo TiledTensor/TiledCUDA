@@ -89,4 +89,14 @@ struct S2G2DCopyTraits : public Base {
         Copy_Atom<DefaultCopy, Element>{}, ThreadLayout{}, ValueLayout{}));
 };
 
+template <typename Element_, typename SrcLayout_, typename DstLayout_,
+          typename ThreadLayout_>
+struct S2R2DCopyTraits {
+    using Element = Element_;
+
+    using SrcLayout = SrcLayout_;
+    using DstLayout = DstLayout_;
+    using ThreadLayout = ThreadLayout_;
+};
+
 }  // namespace tiledcuda::cell::traits
