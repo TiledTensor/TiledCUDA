@@ -5,5 +5,5 @@
 #include "cell/convert.hpp"
 #include "cell/copy/mod.hpp"
 #include "cell/sync.hpp"
-#include "cell/tile_shape.hpp"
 #include "cell/traits/mod.hpp"
+#include "types/tile_shape.hpp"

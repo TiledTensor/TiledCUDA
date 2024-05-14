@@ -2,12 +2,14 @@
 #include "cuda_info.hpp"
 #include "errors.hpp"
 #include "kernels/lstm_cell.hpp"
-#include "layout.hpp"
+#include "types/layout.hpp"
 
 namespace tiledcuda::kernels {
+
 using namespace tiledcuda::cell;
 using namespace tiledcuda::cell::copy;
 using namespace tiledcuda::cell::compute;
+namespace tl = tiledcuda::tile_layout;
 
 template <typename Element, typename KeTraits>
 __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
@@ -59,11 +61,11 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
     auto acc1 = get_acc<kTM, kTN>(mma);
     auto acc2 = get_acc<kTM, kTN>(mma);
 
-    auto load_a_g2s_layout = make_row_major_layout(kTM, kTK, kK);
-    auto load_b_g2s_layout = make_row_major_layout(kTN, kTK, kK);
-    auto load_c_g2s_layout = make_row_major_layout(kTM, kTK, kK);
-    auto load_d_g2s_layout = make_row_major_layout(kTN, kTK, kK);
-    auto store_e_s2g_layout = make_row_major_layout(kTM, kTN, kN);
+    auto load_a_g2s_layout = tl::make_row_major_layout(kTM, kTK, kK);
+    auto load_b_g2s_layout = tl::make_row_major_layout(kTN, kTK, kK);
+    auto load_c_g2s_layout = tl::make_row_major_layout(kTM, kTK, kK);
+    auto load_d_g2s_layout = tl::make_row_major_layout(kTN, kTK, kK);
+    auto store_e_s2g_layout = tl::make_row_major_layout(kTM, kTN, kN);
 
     typename KeTraits::StoreE_R2S sts;  // declare register to shared store
 

@@ -4,9 +4,11 @@
 
 #include <cute/layout.hpp>
 
+namespace tiledcuda {
+namespace tile_layout {
+
 using namespace cute;
 
-namespace tiledcuda {
 // In the row major layout, the contiguous dimension in memory is the
 // last dimension.
 template <const int row, const int col, const int stride = col>
@@ -18,6 +20,12 @@ using RowMajor =
 template <const int row, const int col, const int stride = row>
 using ColMajor =
     cute::Layout<Shape<Int<row>, Int<col>>, Stride<_1, Int<stride>>>;
+
+template <typename Layout_>
+static constexpr size_t num_rows = cute::size<0>(Layout_{});
+
+template <typename Layout_> /*  */
+static constexpr size_t num_cols = cute::size<1>(Layout_{});
 
 HOST_DEVICE auto make_row_major_layout(const int row, const int col,
                                        const int stride) {
@@ -73,4 +81,5 @@ struct SwizzledRowMajor<cutlass::half_t, kRows, kCols, 1> {
                                               Shape<Int<kRows>, Int<kCols>>{}));
 };
 
+}  // namespace tile_layout
 }  // namespace tiledcuda

@@ -34,7 +34,7 @@ struct Shm2RegLoad {
 template <typename Element, typename Layout, typename TiledMma>
 DEVICE auto make_s2rA(const Element* data, int tid, const Layout& layout,
                       const TiledMma& tiled_mma) {
-    auto tensor = make_tensor(make_smem_ptr(data), layout);
+    auto tensor = cute::make_tensor(make_smem_ptr(data), layout);
 
     using SmemLoadAtom = Copy_Atom<SM75_U32x4_LDSM_N, Element>;
     auto tiled_copy = make_tiled_copy_A(SmemLoadAtom{}, tiled_mma);

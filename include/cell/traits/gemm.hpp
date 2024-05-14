@@ -1,8 +1,8 @@
 #pragma once
 
 #include "cell/copy/static_copy.hpp"
-#include "cell/tile_shape.hpp"
 #include "cell/traits/base.hpp"
+#include "types/tile_shape.hpp"
 
 #include <cute/arch/copy.hpp>
 #include <cute/tensor.hpp>

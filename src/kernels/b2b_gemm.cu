@@ -1,12 +1,13 @@
 #include "cell/mod.hpp"
 #include "kernels/b2b_gemm.hpp"
-#include "layout.hpp"
 
 namespace tiledcuda::kernels {
 
 using namespace tiledcuda::cell;
 using namespace tiledcuda::cell::copy;
 using namespace tiledcuda::cell::compute;
+
+namespace tl = tiledcuda::tile_layout;
 
 // D = A @ B @ C
 template <typename Element, typename KeTraits>
@@ -43,10 +44,10 @@ __global__ void dyn_back2back_gemm(const Element* d_a, const Element* d_b,
 
     int tid = threadIdx.x;
 
-    auto load_a_g2s_layout = make_row_major_layout(kTM, kTK, kK);
-    auto load_b_g2s_layout = make_row_major_layout(kTN, kTK, kK);
-    auto load_c_g2s_layout = make_row_major_layout(kTP, kTN, kN);
-    auto store_d_s2g_layout = make_row_major_layout(kTM, kTP, kP);
+    auto load_a_g2s_layout = tl::make_row_major_layout(kTM, kTK, kK);
+    auto load_b_g2s_layout = tl::make_row_major_layout(kTN, kTK, kK);
+    auto load_c_g2s_layout = tl::make_row_major_layout(kTP, kTN, kN);
+    auto store_d_s2g_layout = tl::make_row_major_layout(kTM, kTP, kP);
 
     typename KeTraits::TiledMma mma;  // for shared memory to register copy
     typename KeTraits::TiledCopy tiled_copy;

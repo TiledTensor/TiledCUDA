@@ -39,9 +39,9 @@ namespace testing {
 
 TEST(TestG2ShmCopy, copy_2d_tile_g2s) {
     // The simple test case for 2D copy. Copy a 16x32 matrix from global
-    // memory  to shared memory using a single warp.
+    // memory to shared memory using a single warp.
     // NOTE: This unitttest represents the minimum shape and threads in a
-    // thread  block allowed for a 2D copy operation.
+    // thread block allowed for a 2D copy operation.
     using Element = cutlass::half_t;
 
     static constexpr int kRows = 16;

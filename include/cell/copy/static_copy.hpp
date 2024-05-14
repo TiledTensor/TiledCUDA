@@ -7,6 +7,7 @@
 #include <cutlass/numeric_types.h>
 
 namespace tiledcuda::cell::copy {
+
 using namespace cute;
 
 template <typename Element, typename TiledMma_, typename DstLayout>
@@ -48,48 +49,8 @@ struct R2SCopy2D {
     }
 };
 
-namespace {
-template <typename Element, typename Layout, typename TiledMma>
-DEVICE auto make_s2rA(const Element* data, int tid, const Layout& layout,
-                      const TiledMma& tiled_mma) {
-    auto tensor = make_tensor(make_smem_ptr(data), layout);
-
-    using SmemLoadAtom = Copy_Atom<SM75_U32x4_LDSM_N, Element>;
-    auto tiled_copy = make_tiled_copy_A(SmemLoadAtom{}, tiled_mma);
-
-    auto thrd_copy = tiled_copy.get_thread_slice(tid);
-    auto src = thrd_copy.partition_S(tensor);
-
-    // partition register
-    auto thr_mma = tiled_mma.get_thread_slice(tid);
-    auto dst = thr_mma.partition_fragment_A(tensor);
-    auto dst_view = thrd_copy.retile_D(dst);
-
-    Shm2RegLoad loader(tiled_copy, src, dst, dst_view);
-    return loader;
-}
-}  // namespace
-
-// @tparam src_ptr: pointer to the source data
-// @tparam src_layout: layout of the source data
-// @tparam dst_ptr: pointer to the destination data
-// @tparam dst_layout: layout of the destination data
-// @tparam thread_layout: layout of the thread
-// @tparam tid: thread id
-template <typename Element, typename SrcLayout, typename DstLayout,
-          typename ThreadLayout>
-DEVICE void copy_2d_tile_s2r(const Element* src, Element* dst, int tid) {
-    auto tensor = make_tensor(make_smem_ptr(src), SrcLayout{});
-
-    using SmemLoadAtom = Copy_Atom<SM75_U32x4_LDSM_N, Element>;
-    auto tiled_copy = make_tiled_copy_A(SmemLoadAtom{}, tiled_mma);
-
-    using GmemTiledCopy =
-        decltype(make_tiled_copy(SmemLoadAtom{}, ThreadLayout{}, ValLayout{}));
-
-    // auto thrd_copy = tiled_copy.get_thread_slice(tid);
-    // auto src = thrd_copy.partition_S(tensor);
-}
+template <typename SrcTile, typename DstTile>
+DEVICE void copy_2d_tile_s2r(const SrcTile& src, DstTile& dst) {}
 
 DEVICE void copy_2d_tile_r2s() {}
 
