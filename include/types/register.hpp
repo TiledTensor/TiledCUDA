@@ -8,8 +8,10 @@ namespace tiledcuda {
 namespace tl = tile_layout;
 
 template <typename Element_, typename Layout_>
-struct RegTile {
+class RegTile {
+  public:
     using Element = Element_;
+    using Layout = Layout_;  // to keep the behavior consistent with SharedTile
 
     constexpr static int kRows = tl::num_rows<Layout_>;
     constexpr static int kCols = tl::num_cols<Layout_>;
@@ -20,12 +22,13 @@ struct RegTile {
         return &data_[idx][0];
     }
 
-    DEVICE Element& operator[](int2 idx) { return data_[idx.x][idx.y]; }
+    DEVICE Element* operator[](int2 idx) { return &data_[idx.x][idx.y]; }
 
-    DEVICE const Element& operator[](int2 idx) const {
-        return data_[idx.x][idx.y];
+    DEVICE const Element* operator[](int2 idx) const {
+        return &data_[idx.x][idx.y];
     }
 
+  private:
     Element data_[kRows][kCols];  // register tile data
 };
 

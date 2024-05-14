@@ -6,8 +6,6 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
-namespace traits = tiledcuda::cell::traits;
-
 namespace tiledcuda {
 
 namespace {
@@ -38,6 +36,8 @@ __global__ void copy_g2s(const Element* src, Element* trg) {
 namespace testing {
 
 TEST(TestG2ShmCopy, copy_2d_tile_g2s) {
+    namespace traits = tiledcuda::cell::traits;
+
     // The simple test case for 2D copy. Copy a 16x32 matrix from global
     // memory to shared memory using a single warp.
     // NOTE: This unitttest represents the minimum shape and threads in a

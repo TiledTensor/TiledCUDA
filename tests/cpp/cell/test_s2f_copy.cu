@@ -1,58 +1,63 @@
-#include "cell/copy/mod.hpp"
-#include "cell/sync.hpp"
-#include "cell/traits/copy.hpp"
+#include "cell/copy/static_copy.hpp"
 #include "common/test_utils.hpp"
-#include "types/mod.hpp"
-
-#include <thrust/device_vector.h>
-#include <thrust/host_vector.h>
+#include "types/types.hpp"
 
 namespace tiledcuda {
 
+using namespace cell::copy;
 using namespace cute;
-namespace traits = cell::traits;
+
 namespace tl = tile_layout;
 
 namespace {
-template <typename Element>
-__device__ void init_data(Element* data, int64_t numel) {
-    if (threadIdx.x == 0) {
-        for (int i = 0; i < numel; ++i) {
-            data[i] = static_cast<Element>(i);
+/// utility functions
+template <typename Tile>
+__device__ void init(Tile& tile) {
+    if (threadIdx.x) return;
+
+    for (int i = 0; i < Tile::kRows; ++i) {
+        for (int j = 0; j < Tile::kCols; ++j) {
+            int2 idx = make_int2(i, j);
+            *tile[idx] =
+                static_cast<typename Tile::Element>(i * Tile::kCols + j);
         }
     }
 }
 
-template <typename Element>
-__device__ void debug_print(Element* data, int rows, int cols) {
-    if (threadIdx.x == 0) {
-        printf("\ntile shape = [%d, %d]\n", rows, cols);
-        for (int i = 0; i < rows; ++i) {
-            printf("%d: ", i);
+/// utility functions
+template <typename Tile>
+__device__ void print_tile(const Tile& tile) {
+    if (threadIdx.x) return;
 
-            for (int j = 0; j < cols - 1; ++j) {
-                printf("%.0f, ", static_cast<float>(data[i * cols + j]));
-            }
-            printf("%.0f\n", static_cast<float>(data[(i + 1) * cols - 1]));
+    for (int i = 0; i < Tile::kRows; ++i) {
+        for (int j = 0; j < Tile::kCols; ++j) {
+            int2 idx = make_int2(i, j);
+            printf("%.0f, ", __half2float(static_cast<float>(*tile[idx])));
         }
         printf("\n");
     }
+    printf("\n");
 }
 
-template <typename Element, typename SrcLayout, typename DstLayout>
+/// unittest for copy_s2r
+template <typename Element, typename SrcLayout, typename DstLayout,
+          typename ThreadLayout>
 __global__ void copy_s2r(int rows, int cols) {
     extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
     auto* buf = reinterpret_cast<Element*>(buf_);
-    init_data(buf, rows * cols);
-    // debug_print(buf, rows, cols);
 
     SharedTile<Element, SrcLayout> s_tile(buf);
     RegTile<Element, DstLayout> r_tile;
 
-    for (int k = 0; k < 2; ++k) {
-        cell::copy::copy_2d_tile_s2r(s_tile[k * cols], r_tile);
+    init(s_tile);
+    // print_tile(s_tile);
 
-        // cell::copy::copy_2d_tile_s2r(s_tile, r_tile);
+    for (int k = 0; k < 2; ++k) {
+        // TODO(haruhi): the index operator returns the pointer to the
+        // underlying data, r_tile[0] is a trick to get the pointer to the
+        // first element.
+        copy_2d_tile_s2r(buf, k, SrcLayout{}, r_tile[0], DstLayout{},
+                         ThreadLayout{});
     }
 }
 }  // namespace
@@ -61,25 +66,37 @@ namespace testing {
 TEST(TestShm2Rf, copy_2d_tile_s2r) {
     using Element = cutlass::half_t;
 
+    const int warp_size = 32;
+
+    // To fully utilize ldmatrix, a minimum tile shape of 16 x 16 (in half
+    // precision) is required.
     const int kRows = 16;
     const int kCols = 32;
 
-    // swizzled row major layout for shared memory
-    using Swizzled = tl::SwizzledRowMajor<Element, kRows, kCols, 0>;
-    using SrcLayout = typename Swizzled::SmemLayout;
+    // TODO(haruhi): Test swizzled row major layout for shared memory.
+    // using Swizzled = tl::SwizzledRowMajor<Element, kRows, kCols, 0>;
+    // using SrcLayout = typename Swizzled::SmemLayout;
 
-    using DstLayout = tl::RowMajor<kRows, kCols>;
-    using ThreadLayout = tl::RowMajor<16, 2>;
+    // the layout of a single shared memory tile accessed by 32 threads
+    using SrcLayout = tl::RowMajor<kRows, kCols>;
+
+    // During one execution of ldmatrix by 32 threads in a warp, they can read
+    // 16 x 16 halfs from shared memory. At the destination, each thread's
+    // register file stores a partition with a shape of 1 x 8 tile halfs.
+    using DstLayout = tl::RowMajor<1, 8>;
+
+    // to use ldmatrix, 32 threads forms a 16 x 2 tile,
+    // each tile has a shape of 8 x 1
+    using ThreadLayout = cute::Layout<Shape<_16, _2>, Stride<_16, _8>>;
 
     dim3 dim_grid(1, 1, 1);
-    dim3 dim_block(32, 1, 1);
+    dim3 dim_block(warp_size, 1, 1);
 
     int shm_size = kRows * kCols * sizeof(Element);
 
-    // using S2RCopyTraits =
-    //     traits::S2R2DCopyTraits<Element, SrcLayout, DstLayout, ThreadLayout>;
-    copy_s2r<Element, SrcLayout, DstLayout>
+    copy_s2r<Element, SrcLayout, DstLayout, ThreadLayout>
         <<<dim_grid, dim_block, shm_size>>>(kRows, kCols);
+
     cudaDeviceSynchronize();
 }
 

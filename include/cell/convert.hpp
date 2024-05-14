@@ -25,7 +25,7 @@ struct IndexedTensor_ {
 
     DEVICE const auto operator[](int idx) { return tensor_(_, _, idx); }
 
-   private:
+  private:
     Tensor& tensor_;
 };
 

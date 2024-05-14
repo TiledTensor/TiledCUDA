@@ -11,7 +11,7 @@ using namespace cute;
 template <typename TiledCopy, typename STensor, typename DTensor,
           typename DTensorView>
 struct Shm2RegLoad {
-   public:
+  public:
     DEVICE Shm2RegLoad(TiledCopy& copy, const STensor& src, DTensor& dst,
                        DTensorView& dst_view)
         : tiled_copy_(copy), src_(src), dst_(dst), dst_view_(dst_view) {}
@@ -24,7 +24,7 @@ struct Shm2RegLoad {
 
     DEVICE const auto operator[](int idx) { return dst_(_, _, idx); }
 
-   private:
+  private:
     TiledCopy& tiled_copy_;
     const STensor& src_;
     DTensor& dst_;
