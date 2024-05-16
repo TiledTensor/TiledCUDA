@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cuda_utils.hpp"
+#include "types/common.hpp"
 
 #include <cute/tensor.hpp>
 #include <cutlass/numeric_conversion.h>
@@ -55,50 +56,44 @@ struct R2SCopy2D {
  * @brief (haruhi) a naive implementation to experiment with the interface.
  * Consider better implementations.
  *
- * @tparam src: the source data pointer.
- * @tparam s_layout: the layout of the source data.
- * @tparam dst: the destination data pointer.
- * @tparam d_layout: the layout of the destination data.
- * @tparam t_layout: the layout of the threads.
+ * @tparam shm_ptrs: the shared memory pointers passed to ldmatrix.
+ * @tparam dst: the dst data tile.
  */
-template <typename SrcTile, typename DstTile>
-DEVICE void copy_2d_tile_s2r(const SrcTile& src, DstTile& dst) {
-    // #ifdef DEBUG_
-    //     {
-    //         if (threadIdx.x == 0) {
-    //             half* data =
-    //             reinterpret_cast<half*>(const_cast<Element*>(src)); for (int
-    //             i = 0; i < 16; ++i) {
-    //                 for (int j = 0; j < 16; ++j)
-    //                     printf("%.0f, ", __half2float(data[i * 32 + k * 16 +
-    //                     j]));
-    //                 printf("\n");
-    //             }
-    //             printf("\n");
-    //         }
-    //     }
-    // #endif
+template <typename SrcPtrs, typename DstTile>
+DEVICE void copy_2d_tile_s2r(const SrcPtrs& shm_ptrs, DstTile& dst) {
+#ifdef DEBUG
+    if (threadIdx.x == 0) {
+        // half* data = reinterpret_cast<half*>(const_cast<Element*>(src));
+        // for (int i = 0; i < 16; ++i) {
+        //     for (int j = 0; j < 16; ++j)
+        //         printf("%.0f, ", __half2float(data[i * 32 + k * 16 + j]));
+        //     printf("\n");
+        // }
+        // printf("\n");
+    }
+
+#endif
 
     // const size_t lane_id = threadIdx.x % warpSize;
     // const size_t i = lane_id % 16;
     // const size_t j = lane_id / 16;
+    // const size_t k = 1;
 
-    // // the shared memory address accessed by the current thread
-    // uint32_t smem_addr =
-    //     __cvta_generic_to_shared(src + i * 32 + k * 16 + j * 8);
+    // the shared memory address accessed by the current thread
+    // uint32_t smem_addr = 0;
+    // // __cvta_generic_to_shared(src.data() + i * 32 + k * 16 + j * 8);
 
-    // uint32_t* reg_addr = reinterpret_cast<uint32_t*>(dst);
+    // uint32_t* rptr = reinterpret_cast<uint32_t*>(dst.mutable_data());
 
-    // FIXME(haruhi): ldmatrix has more options to be explored.
-    // the hard-coded implmentation here loads 4 x (8 x 8) numbers in halfs
-    // simultaneously. Check the documents for more usages.
+    // // FIXME(haruhi): ldmatrix has more options to be explored.
+    // // the hard-coded implmentation here loads 4 x (8 x 8) numbers in halfs
+    // // simultaneously. Check the documents for more usages.
+    // //
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#warp-level-matrix-instructions-ldmatrix
     // asm volatile(
-    //         "ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, %3},
-    //         [%4];\n" : "=r"(*reg_addr), "=r"(*(reg_addr + 1)),
-    //         "=r"(*(reg_addr + 2)),
-    //           "=r"(*(reg_addr + 3))
-    //         : "r"(smem_addr));
+    //     "ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, %3}, [%4];\n"
+    //     : "=r"(*rptr), "=r"(*(rptr + 1)), "=r"(*(rptr + 2)), "=r"(*(rptr +
+    //     3)) : "r"(smem_addr));
 
     // #ifdef DEBUG
     //     {
@@ -111,8 +106,7 @@ DEVICE void copy_2d_tile_s2r(const SrcTile& src, DstTile& dst) {
     //                __half2float(data[6]), __half2float(data[7]));
     //     }
     // #endif
-
-}  // namespace tiledcuda::cell::copy
+}
 
 DEVICE void copy_2d_tile_r2s() {}
 

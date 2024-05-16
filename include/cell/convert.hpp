@@ -6,6 +6,7 @@
 
 namespace tiledcuda::cell {
 
+namespace {
 template <typename To_type, typename Engine, typename Layout>
 DEVICE auto convert_type(cute::Tensor<Engine, Layout> const& tensor) {
     using From_type = typename Engine::value_type;
@@ -28,6 +29,7 @@ struct IndexedTensor_ {
   private:
     Tensor& tensor_;
 };
+}  // namespace
 
 // Convert acc_layout from (MMA=4, MMA_M, MMA_N) to
 // ((4, 2), MMA_M, MMA_N / 2) if using m16n8k16, or to (4, MMA_M, MMA_N) if
