@@ -5,6 +5,15 @@
 #include <cute/layout.hpp>
 
 namespace tiledcuda {
+
+/**
+ * @namespace tile_layout
+ *
+ * @brief This namespace provides a set of utilities for defining tile layouts.
+ * since Layout is quite common name in various tensor libraries, we use
+ * tile_layout to avoid potential name conflicts.
+ */
+
 namespace tile_layout {
 
 using namespace cute;
