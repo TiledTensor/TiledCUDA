@@ -2,7 +2,8 @@
 
 namespace tiledcuda {
 
-// @brief: A fixed-length array on the device.
+/// @brief: A fixed-length small array on the device.
+/// usage: store a set of data pointers on device.
 template <typename Element_, const int N_>
 class DevArray {
     using Element = Element_;
@@ -19,4 +20,5 @@ class DevArray {
   private:
     Element* data_[N];
 };
+
 }  // namespace tiledcuda

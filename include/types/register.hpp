@@ -2,43 +2,37 @@
 
 #include "config.hpp"
 #include "types/layout.hpp"
+#include "types/tile_shape.hpp"
 
 namespace tiledcuda {
 
 namespace tl = tile_layout;
 
-namespace {
-// ======================  The Register tile =================================
-// @brief: a fixed length array that stores on a thread's local register file,
-// with length being 16 and element type being the half precision floating
-// numbers.
-typedef struct reg_16 {
-    uint32_t tile[2];  // 2 128-bit registers, can store 16 halfs
-} reg_16;
-// ============================================================================
-}  // namespace
-
-template <typename Element_, typename Layout_>
+template <typename Element_, typename TemporalExec_, typename DataLayout_>
 class RegTile {
   public:
-    using Element = Element_;
-    using Layout = Layout_;  // to keep the behavior consistent with SharedTile
+    using DType = Element_;
+    using TemporalExec = TemporalExec_;
+    using DataLayout = DataLayout_;
 
-    constexpr static int kRows = tl::num_rows<Layout_>;
-    constexpr static int kCols = tl::num_cols<Layout_>;
+    constexpr static int kRows =
+        cell::dim_size<0, DataLayout> * cell::dim_size<0, TemporalExec>;
+    constexpr static int kCols =
+        cell::dim_size<1, DataLayout> * cell::dim_size<1, TemporalExec>;
 
-    DEVICE Element* operator[](int2 idx) { return &data_[idx.x][idx.y]; }
+    DEVICE DType* operator[](int2 idx) { return &data_[idx.x][idx.y]; }
 
-    DEVICE const Element* operator[](int2 idx) const {
+    DEVICE const DType* operator[](int2 idx) const {
         return &data_[idx.x][idx.y];
     }
 
-    DEVICE Element* mutable_data() { return (Element*)data_; }
+    DEVICE DType* mutable_data() { return (DType*)data_; }
 
-    DEVICE const Element* data() const { return (Element*)data_; }
+    DEVICE const DType* data() const { return (DType*)data_; }
 
   private:
-    Element data_[kRows][kCols];  // register tile data
+    DType data_[kRows][kCols];  // register tile data is implemented as an 2D
+                                // array of size kRows x kCols
 };
 
 }  // namespace tiledcuda
