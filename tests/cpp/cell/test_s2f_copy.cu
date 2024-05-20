@@ -48,11 +48,6 @@ __global__ void copy_s2r() {
     init<Element, rows, cols>(buf);
     // print_tile<Element, rows, cols>(buf);
 
-    // TODO(haruhi): The number of iterations in the code below is fully
-    // determined given SrcLayout and DstLayout, that is like a logical
-    // division of the source and destination tiles.
-    // Consider better abstractios to make the concepts more clear.
-
     Shared s_tiles(buf);
     Reg r_tile;
     for (auto i = 0; i < 2; ++i) {

@@ -33,6 +33,33 @@ Fig. Data transfer between shared memory and register file using ldmatrix.
     using Reg = RegTile<Element, TemporalExecReg, ElementaryDataTileReg>;
     ```
 
+    Configure the copy plan according to the figure shown above:
+
+    ```cpp
+    // how many times a spatial CTA tile are executed in time
+    // along the two dimensions
+    using TemporalExecShared = TileShape<2, 2>;
+
+    // configurated by a potential internal tunner
+    // how warps are laied out in a CTA
+    using WarpLayout = TileShape<1, 4>;
+    // how threads are laid out in a single warp.
+    // this configuration is fixed when using ldmatrix.
+    using ThreadLayout = TileShape<16, 2>;
+    // the shape of an elementary data file for a single thread.
+    using ElemDataTile = TileShape<2, 16>;
+
+    using Shared = SharedTile<Element, TemporalExecShared, WarpLayout,
+                              ThreadLayout, ElemDataTile>;
+
+    // for register tile
+    // how many times an atomic instruction are executed in time
+    // along the two dimensions
+    using TemporalExecReg = TileShape<2, 1>;
+    using ElemDataTileReg = TileShape<1, 8>;
+    using Reg = RegTile<Element, TemporalExecReg, ElemDataTileReg>;
+    ```
+
 1. **Issue the copy macro kernel**
 
     ```cpp
