@@ -18,7 +18,13 @@ repos:
     -   id: detect-private-key
         files: (?!.*third_party)^.*$ | (?!.*book)^.*$
     -   id: end-of-file-fixer
+    -   id: check-yaml
+    -   id: check-toml
+    -   id: check-ast
+    -   id: check-executables-have-shebangs
     -   id: check-shebang-scripts-are-executable
+    -   id: detect-private-key
+    -   id: debug-statements
 -   repo: local
     hooks:
     -   id: clang-format-with-version-check

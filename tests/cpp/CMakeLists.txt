@@ -1,10 +1,15 @@
-set(TEST_ROOT ${PROJECT_SOURCE_DIR}/tests/cpp)
-message(STATUS "TEST_ROOT is set to: ${TEST_ROOT}")
-
-include_directories(${TEST_ROOT})
-
 if(WITH_TESTING)
-  cuda_test(test_copy SRCS ${TEST_ROOT}/cell/test_copy.cu)
-  cuda_test(test_gemm SRCS ${TEST_ROOT}/kernels/test_gemm.cu)
-  cuda_test(test_scatter_nd SRCS ${TEST_ROOT}/kernels/test_scatter_nd.cu)
+  include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+  file(
+    GLOB_RECURSE UNIT_TESTS
+    LIST_DIRECTORIES FALSE
+    RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+    "test_*.cu")
+
+  foreach(FILE_PATH ${UNIT_TESTS})
+    string(REGEX REPLACE ".+/(.+)\\..*" "\\1" FILE_NAME ${FILE_PATH})
+    string(REPLACE ".cu" "" TEST_NAME "${FILE_NAME}")
+
+    cuda_test(${TEST_NAME} SRCS "${CMAKE_CURRENT_SOURCE_DIR}/${FILE_PATH}")
+  endforeach()
 endif()

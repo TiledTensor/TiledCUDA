@@ -1,12 +1,14 @@
 #pragma once
 
 #include "cuda_utils.hpp"
+#include "types/common.hpp"
 
 #include <cute/tensor.hpp>
 #include <cutlass/numeric_conversion.h>
 #include <cutlass/numeric_types.h>
 
 namespace tiledcuda::cell::copy {
+
 using namespace cute;
 
 template <typename Element, typename TiledMma_, typename DstLayout>
@@ -15,10 +17,10 @@ struct R2SCopy2D {
     using Dstlayout_ = DstLayout;
     using CopyAtom = Copy_Atom<DefaultCopy, Element>;
 
-   public:
+  public:
     template <typename Engine, typename Layout>
-    __forceinline__ __device__ void copy(
-        cute::Tensor<Engine, Layout> const& acc, Element* dst_data, int tid) {
+    DEVICE void copy(cute::Tensor<Engine, Layout> const& acc, Element* dst_data,
+                     int tid) {
         // FIXME(haruhi): This implementation is specifically designed
         // for tcu WMMA and assumes that the ACC value has a
         // floating-point precision. The code converts the ACC value
@@ -34,10 +36,9 @@ struct R2SCopy2D {
         cute::copy(tiled_copy, src, dst);
     }
 
-   private:
+  private:
     template <typename To_type, typename Engine, typename Layout>
-    __forceinline__ __device__ auto convert_type(
-        cute::Tensor<Engine, Layout> const& tensor) {
+    DEVICE auto convert_type(cute::Tensor<Engine, Layout> const& tensor) {
         using From_type = typename Engine::value_type;
         constexpr int numel = decltype(size(tensor))::value;
         cutlass::NumericArrayConverter<To_type, From_type, numel> convert_op;
@@ -48,5 +49,19 @@ struct R2SCopy2D {
         return make_tensor(make_rmem_ptr<To_type>(&frag), tensor.layout());
     }
 };
+
+/**
+ * @brief (haruhi) a naive implementation to experiment with the interface.
+ * Consider better implementations.
+ *
+ * @tparam shm_ptrs: the shared memory positions access by the current threads.
+ * @tparam dst: the dst data tile.
+ */
+template <typename SrcPtrs, typename DstTile>
+DEVICE void copy_2d_tile_s2r(const SrcPtrs& shm_ptrs, DstTile& dst) {
+    // Not implemented.
+}
+
+DEVICE void copy_2d_tile_r2s() {}
 
 }  // namespace tiledcuda::cell::copy

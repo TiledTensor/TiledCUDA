@@ -50,7 +50,4 @@ DEVICE void copy_2d_tile_s2g(const Element* src_data, Element* dst_data,
             cute::copy(tiled_copy, src(_, i, j), dst(_, i, j));
 }
 
-DEVICE void copy_2d_tile_s2r() {}
-
-DEVICE void copy_2d_tile_r2s() {}
 }  // namespace tiledcuda::cell::copy

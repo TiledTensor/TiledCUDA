@@ -1,12 +1,12 @@
 #include "cell/mod.hpp"
-#include "kernels/cute_gemm.hpp"
-#include "layout.hpp"
+#include "kernels/gemm.hpp"
 
 namespace tiledcuda::kernels {
 
 using namespace tiledcuda::cell;
 using namespace tiledcuda::cell::copy;
 using namespace tiledcuda::cell::compute;
+namespace tl = tiledcuda::tile_layout;
 
 template <typename Element, typename KeTraits>
 __global__ void dyn_cute_gemm_kernel(const Element* dA, const Element* dB,
@@ -36,9 +36,9 @@ __global__ void dyn_cute_gemm_kernel(const Element* dA, const Element* dB,
     Element* sC_ptr = shm;
 
     // declare global to shared memory copy layout.
-    auto load_a_g2s_layout = make_row_major_layout(kTM, kTK, kK);
-    auto load_b_g2s_layout = make_row_major_layout(kTN, kTK, kK);
-    auto store_c_s2g_layout = make_row_major_layout(kTM, kTN, kN);
+    auto load_a_g2s_layout = tl::make_row_major_layout(kTM, kTK, kK);
+    auto load_b_g2s_layout = tl::make_row_major_layout(kTN, kTK, kK);
+    auto store_c_s2g_layout = tl::make_row_major_layout(kTM, kTN, kN);
 
     // declare shared memory to register file copy plan.
     // tcu's wmma instruction prescribes a strict data to thread
@@ -65,8 +65,8 @@ __global__ void dyn_cute_gemm_kernel(const Element* dA, const Element* dB,
             rA.copy(i);  // load A register tile from shared memory
             rB.copy(i);  // load B register tile from shared memory
 
-            gemm(mma, rA[i], rB[i],
-                 acc);  // compute using tcu's wmma instruction
+            // compute using tcu's wmma instruction
+            gemm(mma, rA[i], rB[i], acc);
         }
         __syncthreads();
 

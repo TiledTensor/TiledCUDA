@@ -1,9 +1,12 @@
 #pragma once
 
 #include "cell/traits/base.hpp"
-#include "layout.hpp"
+#include "types/layout.hpp"
 
 namespace tiledcuda::cell::traits {
+
+using namespace cute;
+namespace tl = tiledcuda::tile_layout;
 
 /// @brief Configurations for transfering a single 2D data tile from global
 /// memory to shared memory, which include configurating the layout of data tile
@@ -22,19 +25,19 @@ struct G2S2DCopyTraits : public Base {
     static constexpr int kShmRows = kShmRows_;
     static constexpr int kShmCols = kShmCols_;
 
-    using SrcLayout = RowMajor<kRows, kCols, kCols>;
+    using SrcLayout = tl::RowMajor<kRows, kCols, kCols>;
 
     // To avoid bank conflicts, the shared memory requires a swizzled layout
     static constexpr int kSwizzleMode = kShmCols % 32 ? 1 : 0;
     using Swizzled =
-        SwizzledRowMajor<Element, kShmRows, kShmCols, kSwizzleMode>;
+        tl::SwizzledRowMajor<Element, kShmRows, kShmCols, kSwizzleMode>;
     using DstLayout = typename Swizzled::SmemLayout;
 
     // threads in a thread block are laid out as a 2D tile
     // that has a shape of kThreadsRows x kThreadsCols.
     static constexpr int kThreadsCols = kShmCols / Base::kNumPerAccess;
     static constexpr int kThreadsRows = kThreads / kThreadsCols;
-    using ThreadLayout = RowMajor<kThreadsRows, kThreadsCols, kThreadsCols>;
+    using ThreadLayout = tl::RowMajor<kThreadsRows, kThreadsCols, kThreadsCols>;
 
     using ValueLayout = Layout<Shape<_1, Int<Base::kNumPerAccess>>>;
 
@@ -68,17 +71,17 @@ struct S2G2DCopyTraits : public Base {
 
     static constexpr int kSwizzleMode = kShmCols % 32 ? 1 : 0;
     using Swizzled =
-        SwizzledRowMajor<Element, kShmRows, kShmCols, kSwizzleMode>;
+        tl::SwizzledRowMajor<Element, kShmRows, kShmCols, kSwizzleMode>;
     using SrcLayout = typename Swizzled::SmemLayout;
 
     // To avoid bank conflicts, the shared memory requires a swizzled layout
-    using DstLayout = RowMajor<kRows, kCols, kCols>;
+    using DstLayout = tl::RowMajor<kRows, kCols, kCols>;
 
     // threads in a thread block are laid out as a 2D tile
     // that has a shape of kThreadsRows x kThreadsCols.
     static constexpr int kThreadsCols = kShmCols / Base::kNumPerAccess;
     static constexpr int kThreadsRows = kThreads / kThreadsCols;
-    using ThreadLayout = RowMajor<kThreadsRows, kThreadsCols, kThreadsCols>;
+    using ThreadLayout = tl::RowMajor<kThreadsRows, kThreadsCols, kThreadsCols>;
 
     using ValueLayout = Layout<Shape<_1, Int<Base::kNumPerAccess>>>;
 

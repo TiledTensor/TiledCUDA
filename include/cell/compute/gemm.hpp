@@ -4,9 +4,10 @@
 #include <cute/tensor.hpp>
 
 namespace tiledcuda::cell::compute {
-template <typename TensorA, typename TensorB, typename TensorAcc>
-__forceinline__ __device__ void gemm(const auto& mma, const TensorA& a,
-                                     const TensorB& b, TensorAcc& acc) {
+template <typename TensorA, typename TensorB, typename TensorAcc,
+          typename TiledMma>
+DEVICE void gemm(const TiledMma& mma, const TensorA& a, const TensorB& b,
+                 TensorAcc& acc) {
     cute::gemm(mma, a, b, acc);  // compute
 }
 }  // namespace tiledcuda::cell::compute

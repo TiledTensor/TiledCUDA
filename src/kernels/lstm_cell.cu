@@ -1,14 +1,15 @@
 #include "cell/mod.hpp"
 #include "cuda_info.hpp"
+#include "errors.hpp"
 #include "kernels/lstm_cell.hpp"
-#include "layout.hpp"
-
-#include <glog/logging.h>
+#include "types/layout.hpp"
 
 namespace tiledcuda::kernels {
+
 using namespace tiledcuda::cell;
 using namespace tiledcuda::cell::copy;
 using namespace tiledcuda::cell::compute;
+namespace tl = tiledcuda::tile_layout;
 
 template <typename Element, typename KeTraits>
 __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
@@ -17,7 +18,6 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
     extern __shared__ __align__(sizeof(double)) unsigned char shared_buf[];
     auto* shm = reinterpret_cast<Element*>(shared_buf);
 
-    // const int kM = m;
     const int kN = n;
     const int kK = k;
 
@@ -61,11 +61,11 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
     auto acc1 = get_acc<kTM, kTN>(mma);
     auto acc2 = get_acc<kTM, kTN>(mma);
 
-    auto load_a_g2s_layout = make_row_major_layout(kTM, kTK, kK);
-    auto load_b_g2s_layout = make_row_major_layout(kTN, kTK, kK);
-    auto load_c_g2s_layout = make_row_major_layout(kTM, kTK, kK);
-    auto load_d_g2s_layout = make_row_major_layout(kTN, kTK, kK);
-    auto store_e_s2g_layout = make_row_major_layout(kTM, kTN, kN);
+    auto load_a_g2s_layout = tl::make_row_major_layout(kTM, kTK, kK);
+    auto load_b_g2s_layout = tl::make_row_major_layout(kTN, kTK, kK);
+    auto load_c_g2s_layout = tl::make_row_major_layout(kTM, kTK, kK);
+    auto load_d_g2s_layout = tl::make_row_major_layout(kTN, kTK, kK);
+    auto store_e_s2g_layout = tl::make_row_major_layout(kTM, kTN, kN);
 
     typename KeTraits::StoreE_R2S sts;  // declare register to shared store
 
@@ -157,7 +157,6 @@ void lstm_gate(const Element* w, const Element* x, const Element* u,
     // Whole GEMM shape
     static const int kM = m;
     static const int kN = n;
-    // static const int kK = k;
 
     // CTA GEMM shape
     static const int kTM = dim_size<0, CtaTileShape>;
@@ -280,8 +279,7 @@ void custom_lstm_cell_op(const torch::Tensor& w, const torch::Tensor& x,
             reinterpret_cast<cutlass::half_t*>(c1.mutable_data_ptr()),
             reinterpret_cast<cutlass::half_t*>(h1.mutable_data_ptr()), m, n, k);
     } else {
-        // Unsupported data type
-        LOG(FATAL) << "Unsupported data type";
+        throw NotImplementedException("Unsupported data type.");
     }
 }
 }  // namespace tiledcuda::kernels

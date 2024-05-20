@@ -11,22 +11,20 @@ using namespace cute;
 template <typename TiledCopy, typename STensor, typename DTensor,
           typename DTensorView>
 struct Shm2RegLoad {
-   public:
-    __forceinline__ __device__ Shm2RegLoad(TiledCopy& copy, const STensor& src,
-                                           DTensor& dst, DTensorView& dst_view)
+  public:
+    DEVICE Shm2RegLoad(TiledCopy& copy, const STensor& src, DTensor& dst,
+                       DTensorView& dst_view)
         : tiled_copy_(copy), src_(src), dst_(dst), dst_view_(dst_view) {}
 
-    __forceinline__ __device__ void copy(int pos) {
+    DEVICE void copy(int pos) {
         cute::copy(tiled_copy_, src_(_, _, pos), dst_view_(_, _, pos));
     }
 
-    __forceinline__ __device__ int get_iters() { return size<2>(dst_); }
+    DEVICE int get_iters() { return size<2>(dst_); }
 
-    __forceinline__ __device__ const auto operator[](int idx) {
-        return dst_(_, _, idx);
-    }
+    DEVICE const auto operator[](int idx) { return dst_(_, _, idx); }
 
-   private:
+  private:
     TiledCopy& tiled_copy_;
     const STensor& src_;
     DTensor& dst_;
@@ -34,10 +32,9 @@ struct Shm2RegLoad {
 };
 
 template <typename Element, typename Layout, typename TiledMma>
-__forceinline__ __device__ auto make_s2rA(const Element* data, int tid,
-                                          const Layout& layout,
-                                          const TiledMma& tiled_mma) {
-    auto tensor = make_tensor(make_smem_ptr(data), layout);
+DEVICE auto make_s2rA(const Element* data, int tid, const Layout& layout,
+                      const TiledMma& tiled_mma) {
+    auto tensor = cute::make_tensor(make_smem_ptr(data), layout);
 
     using SmemLoadAtom = Copy_Atom<SM75_U32x4_LDSM_N, Element>;
     auto tiled_copy = make_tiled_copy_A(SmemLoadAtom{}, tiled_mma);
@@ -57,9 +54,8 @@ __forceinline__ __device__ auto make_s2rA(const Element* data, int tid,
 // FIXIME(haruhi): the current implementation is for fast experiment,
 // it is coupled shared memory layout with the register layout
 template <typename Element, typename Layout, typename TiledMma>
-__forceinline__ __device__ auto make_s2rB(const Element* data, int tid,
-                                          const Layout& layout,
-                                          const TiledMma& tiled_mma) {
+DEVICE auto make_s2rB(const Element* data, int tid, const Layout& layout,
+                      const TiledMma& tiled_mma) {
     using SmemLoadAtom = Copy_Atom<SM75_U32x4_LDSM_N, Element>;
     auto tiled_copy = make_tiled_copy_B(SmemLoadAtom{}, tiled_mma);
     auto thrd_copy = tiled_copy.get_thread_slice(tid);

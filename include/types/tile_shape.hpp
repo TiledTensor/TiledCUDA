@@ -3,6 +3,7 @@
 #include <cute/int_tuple.hpp>
 
 namespace tiledcuda::cell {
+
 template <size_t... T>
 using TileShape = cute::tuple<std::integral_constant<size_t, T>...>;
 
