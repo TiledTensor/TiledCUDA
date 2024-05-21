@@ -36,27 +36,38 @@ Fig. Data transfer between shared memory and register file using ldmatrix.
     Configure the copy plan according to the figure shown above:
 
     ```cpp
+    /* ====== Configurated by external users ====== */
+    /*          for shared memory tile              */
     // how many times a spatial CTA tile are executed in time
     // along the two dimensions
     using TemporalExecShared = TileShape<2, 2>;
 
-    // configurated by a potential internal tunner
-    // how warps are laied out in a CTA
-    using WarpLayout = TileShape<1, 4>;
-    // how threads are laid out in a single warp.
-    // this configuration is fixed when using ldmatrix.
-    using ThreadLayout = TileShape<16, 2>;
-    // the shape of an elementary data file for a single thread.
-    using ElemDataTile = TileShape<2, 16>;
-
-    using Shared = SharedTile<Element, TemporalExecShared, WarpLayout,
-                              ThreadLayout, ElemDataTile>;
-
-    // for register tile
+    /*          for register tile                   */
     // how many times an atomic instruction are executed in time
     // along the two dimensions
     using TemporalExecReg = TileShape<2, 1>;
+
+    /* ====== Configurated by a potential internal tunner ======
+     * The shared memory tile access is made up of elementary data tile
+     * accesses, each of which is performed by a single thread. The following
+     * configurations describe how the elementary data tiles combine to form a
+     * shared memory tile data tile. */
+
+    // how warps are laied out in a CTA
+    using WarpLayout = TileShape<1, 4>;
+    // how threads are laid out in a single warp.
+    using ThreadLayout = TileShape<16, 2>;  // fixed when using ldmatrix
+    // the shape of an elementary data tile for a single thread.
+    using ElemDataTile = TileShape<2, 16>;
+
+    // shape of the accessed data by executing the atomic instruction for a
+    // single time.
     using ElemDataTileReg = TileShape<1, 8>;
+
+    // the copy plan for accessing shared memory
+    using Shared = SharedTile<Element, TemporalExecShared, WarpLayout,
+                              ThreadLayout, ElemDataTile>;
+    // the copy plan for accessing register file
     using Reg = RegTile<Element, TemporalExecReg, ElemDataTileReg>;
     ```
 
@@ -67,9 +78,9 @@ Fig. Data transfer between shared memory and register file using ldmatrix.
     extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
     auto* buf = reinterpret_cast<Element*>(buf_);
 
-    // descriptor for shared memory decomposition
+    // copy plan for accessing shared memory
     Shared s_tiles(buf);
-    // descriptor for register tile
+    // descriptor for a register tile
     Reg r_tile;
     // temporal execution of the macro kernel
     for (auto i = 0; i < 2; ++i) {

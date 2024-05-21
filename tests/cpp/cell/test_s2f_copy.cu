@@ -67,21 +67,24 @@ TEST(TestShm2Rf, copy_2d_tile_s2r) {
     // using Swizzled = tl::SwizzledRowMajor<Element, kRows, kCols, 0>;
     // using SrcLayout = typename Swizzled::SmemLayout;
 
+    // The shared memory tile access is made up of elementary data tile
+    // accesses, each of which is performed by a single thread. The following
+    // configurations describe how the elementary data tiles combine to form a
+    // shared memory tile data tile.
     using TemporalExecShared = TileShape<2, 2>;
-    using TemporalExecReg = TileShape<2, 1>;
-
-    // ======== configurated by internal tunner =========
     // how warps are laied out in a CTA
     using WarpLayout = TileShape<1, 4>;
     // how threads are laid out in a single warp.
-    // this configuration is fixed when using ldmatrix.
-    using ThreadLayout = TileShape<16, 2>;
-    // the shape of an elementary data file for a single thread.
+    using ThreadLayout = TileShape<16, 2>;  // fixed when using ldmatrix.
+    // the shape of an elementary data tile accessed by a single thread.
     using ElemDataTile = TileShape<2, 16>;
 
-    // for register tile
-    using ElemDataTileReg = TileShape<1, 8>;
+    // configuration for register tile
+    using TemporalExecReg = TileShape<2, 1>;
+    // shape of the accessed data by executing the atomic instruction
+    using ElemDataTileReg = TileShape<1, 8>;  // fixed when using ldmatrix
 
+    // the final copy plan
     using Shared = SharedTile<Element, TemporalExecShared, WarpLayout,
                               ThreadLayout, ElemDataTile>;
     using Reg = RegTile<Element, TemporalExecReg, ElemDataTileReg>;
