@@ -3,7 +3,7 @@
 #include "types/common.hpp"
 #include "types/tile_shape.hpp"
 
-namespace tiledcuda {
+namespace tiledcuda::cell {
 
 template <typename Element_, typename TemporalExec_, typename WarpLayout_,
           typename ThreadLayout_, typename DataLayout_>
@@ -15,16 +15,17 @@ class SharedTile {
     using ThreadLayout = ThreadLayout_;
     using DataLayout = DataLayout_;
 
-    constexpr static int kThreads = cell::get_numel<WarpLayout> * 32;
+    constexpr static int kThreads = get_numel<WarpLayout> * 32;
 
     constexpr static int kRows =
-        cell::dim_size<0, DataLayout> * cell::dim_size<0, ThreadLayout> *
-        cell::dim_size<0, WarpLayout> * cell::dim_size<0, TemporalExec>;
+        dim_size<0, DataLayout> * dim_size<0, ThreadLayout> *
+        dim_size<0, WarpLayout> * dim_size<0, TemporalExec>;
     constexpr static int kCols =
-        cell::dim_size<1, DataLayout> * cell::dim_size<1, ThreadLayout> *
-        cell::dim_size<1, WarpLayout> * cell::dim_size<1, TemporalExec>;
+        dim_size<1, DataLayout> * dim_size<1, ThreadLayout> *
+        dim_size<1, WarpLayout> * dim_size<1, TemporalExec>;
+    constexpr static int kNumel = kRows * kCols;
 
-    static constexpr int kElemPerThread = cell::get_numel<DataLayout>;
+    static constexpr int kElemPerThread = get_numel<DataLayout>;
     using ShmPtr = DevArray<DType, kElemPerThread>;
 
     // ctor
@@ -53,4 +54,4 @@ class SharedTile {
     size_t shm_ptrs_count_;
 };
 
-}  // namespace tiledcuda
+}  // namespace tiledcuda::cell

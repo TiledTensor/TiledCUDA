@@ -1,4 +1,4 @@
-#include "cell/copy/static_copy.hpp"
+#include "cell/copy/mod.hpp"
 #include "common/test_utils.hpp"
 #include "types/types.hpp"
 
@@ -8,11 +8,12 @@ namespace tiledcuda {
 
 using namespace cell;
 using namespace cute;
-
 namespace tl = tile_layout;
 
+namespace testing {
+
 namespace {
-/// utility functions
+/// utility function
 template <typename Element, const int rows, const int cols>
 __device__ void init(Element* data) {
     if (threadIdx.x) return;
@@ -24,7 +25,7 @@ __device__ void init(Element* data) {
     }
 }
 
-/// utility functions
+/// utility function
 template <typename Element, const int rows, const int cols>
 __device__ void print_tile(const Element* data) {
     if (threadIdx.x) return;
@@ -40,12 +41,11 @@ __device__ void print_tile(const Element* data) {
 }
 
 /// unittest for copy_s2r
-template <typename Element, typename Shared, typename Reg, const int rows,
-          const int cols>
+template <typename Element, typename Shared, typename Reg>
 __global__ void copy_s2r() {
     extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
     auto* buf = reinterpret_cast<Element*>(buf_);
-    init<Element, rows, cols>(buf);
+    init<Element, Shared::kRows, Shared::kCols>(buf);
     // print_tile<Element, rows, cols>(buf);
 
     Shared s_tiles(buf);
@@ -59,7 +59,6 @@ __global__ void copy_s2r() {
 
 }  // namespace
 
-namespace testing {
 TEST(TestShm2Rf, copy_2d_tile_s2r) {
     using Element = cutlass::half_t;
 
@@ -72,8 +71,7 @@ TEST(TestShm2Rf, copy_2d_tile_s2r) {
     // configurations describe how the elementary data tiles combine to form a
     // shared memory tile data tile.
     using TemporalExecShared = TileShape<2, 2>;
-    // how warps are laied out in a CTA
-    using WarpLayout = TileShape<1, 4>;
+    using WarpLayout = TileShape<1, 4>;  // how warps are laied out in a CTA
     // how threads are laid out in a single warp.
     using ThreadLayout = TileShape<16, 2>;  // fixed when using ldmatrix.
     // the shape of an elementary data tile accessed by a single thread.
@@ -89,19 +87,14 @@ TEST(TestShm2Rf, copy_2d_tile_s2r) {
                               ThreadLayout, ElemDataTile>;
     using Reg = RegTile<Element, TemporalExecReg, ElemDataTileReg>;
 
-    const int kRows = Shared::kRows;
-    const int kCols = Shared::kCols;
     const int kThreads = Shared::kThreads;
-
-    LOG(INFO) << "kRows: " << kRows << ", kCols: " << kCols
-              << "; kThreads: " << kThreads;
+    LOG(INFO) << "kThreads: " << kThreads;
 
     dim3 dim_grid(1, 1, 1);
     dim3 dim_block(kThreads, 1, 1);
 
-    int shm_size = kRows * kCols * sizeof(Element);
-    copy_s2r<Element, Shared, Reg, kRows, kCols>
-        <<<dim_grid, dim_block, shm_size>>>();
+    int shm_size = Shared::kNumel * sizeof(Element);
+    copy_s2r<Element, Shared, Reg><<<dim_grid, dim_block, shm_size>>>();
 
     cudaDeviceSynchronize();
 }

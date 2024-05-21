@@ -4,7 +4,7 @@
 #include "types/layout.hpp"
 #include "types/tile_shape.hpp"
 
-namespace tiledcuda {
+namespace tiledcuda::cell {
 
 namespace tl = tile_layout;
 
@@ -35,4 +35,4 @@ class RegTile {
                                 // array of size kRows x kCols
 };
 
-}  // namespace tiledcuda
+}  // namespace tiledcuda::cell

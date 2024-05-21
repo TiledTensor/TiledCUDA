@@ -6,7 +6,7 @@
 namespace tiledcuda::cell::traits {
 
 using namespace cute;
-namespace tl = tiledcuda::tile_layout;
+namespace tl = tiledcuda::cell::tile_layout;
 
 /// @brief Configurations for transfering a single 2D data tile from global
 /// memory to shared memory, which include configurating the layout of data tile

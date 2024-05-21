@@ -1,6 +1,6 @@
 #pragma once
 
-namespace tiledcuda {
+namespace tiledcuda::cell {
 
 /// @brief: A fixed-length small array on the device.
 /// usage: store a set of data pointers on device.
@@ -21,4 +21,4 @@ class DevArray {
     Element* data_[N];
 };
 
-}  // namespace tiledcuda
+}  // namespace tiledcuda::cell
