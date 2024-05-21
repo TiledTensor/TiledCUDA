@@ -4,6 +4,8 @@
 
 namespace tiledcuda::cell::traits {
 
+/// @brief Architecture-specific magic numbers.
+/// @tparam Element
 template <typename Element>
 struct TraitsBase {
     static constexpr int kAccessInBits = 128;  // 128 bits

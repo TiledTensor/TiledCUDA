@@ -19,6 +19,6 @@ set_target_properties(
 target_compile_options(
   ${TARGET} PUBLIC $<$<COMPILE_LANGUAGE:CUDA>: -Werror,-Wall -rdc=true
                    -std=c++17 -fconcepts -fpermissive>)
-target_compile_features(${TARGET} PUBLIC cxx_std_17 cuda_std_17)
+target_compile_features(${TARGET} PUBLIC cxx_std_20 cuda_std_17)
 
 target_link_libraries(${TARGET} "${TORCH_LIBRARIES}" glog::glog)

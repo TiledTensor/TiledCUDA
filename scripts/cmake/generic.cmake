@@ -1,7 +1,7 @@
 set(CMAKE_BUILD_TYPE Release)
 
 set(CMAKE_CXX_STANDARD
-    17
+    20
     CACHE STRING "The C++ standard whoese features are requested." FORCE)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
