@@ -9,7 +9,8 @@ namespace tiledcuda::kernels {
 using namespace tiledcuda::cell;
 using namespace tiledcuda::cell::copy;
 using namespace tiledcuda::cell::compute;
-namespace tl = tiledcuda::tile_layout;
+
+namespace tl = tiledcuda::cell::tile_layout;
 
 template <typename Element, typename KeTraits>
 __global__ void dyn_lstm_gate(const Element* ws, const Element* us,

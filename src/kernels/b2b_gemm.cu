@@ -7,7 +7,7 @@ using namespace tiledcuda::cell;
 using namespace tiledcuda::cell::copy;
 using namespace tiledcuda::cell::compute;
 
-namespace tl = tiledcuda::tile_layout;
+namespace tl = tiledcuda::cell::tile_layout;
 
 // D = A @ B @ C
 template <typename Element, typename KeTraits>

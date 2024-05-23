@@ -4,7 +4,7 @@
 
 #include <cute/layout.hpp>
 
-namespace tiledcuda {
+namespace tiledcuda::cell {
 
 /**
  * @namespace tile_layout
@@ -91,4 +91,4 @@ struct SwizzledRowMajor<cutlass::half_t, kRows, kCols, 1> {
 };
 
 }  // namespace tile_layout
-}  // namespace tiledcuda
+}  // namespace tiledcuda::cell

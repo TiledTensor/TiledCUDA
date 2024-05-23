@@ -6,7 +6,8 @@ namespace tiledcuda::kernels {
 using namespace tiledcuda::cell;
 using namespace tiledcuda::cell::copy;
 using namespace tiledcuda::cell::compute;
-namespace tl = tiledcuda::tile_layout;
+
+namespace tl = tiledcuda::cell::tile_layout;
 
 template <typename Element, typename KeTraits>
 __global__ void dyn_cute_gemm_kernel(const Element* dA, const Element* dB,
