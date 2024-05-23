@@ -121,7 +121,8 @@ class SharedTile : public Base {
         int warp_row = warp_id / dim_size<1, WarpLayout>;
         int warp_col = warp_id % dim_size<1, WarpLayout>;
 
-        int row_stride = stride * dim_size<0, ThreadLayout>;
+        int row_stride =
+            stride * dim_size<0, ThreadLayout> * dim_size<0, WarpLayout>;
         col_stride = Base::kNumPerAccess * dim_size<1, ThreadLayout>;
         offset = warp_row * row_stride + warp_col * col_stride;
         data += offset;  // advance pointer
@@ -134,14 +135,14 @@ class SharedTile : public Base {
         // in a warp cooperative instruction, the threads are
         // laid out in a [2, 2] tile, and each tile has a shape of [8, 1].
         int n = lane_id / 8;
-        int lane_row = lane_id - n * 8;
+        int lane_row = int(n / 2) * 8 + lane_id - n * 8;
         int lane_col = n % 2;
-        col_stride = Base::kNumPerAccess;
-        offset = lane_row * stride + lane_col * col_stride;
+        col_stride = Base::kNumPerAccess / 8 / sizeof(DType);
+        offset = lane_row * kCols + lane_col * col_stride;
         data += offset;  // advance pointer
 
         row_stride =
-            dim_size<0, ThreadLayout> * dim_size<0, WarpLayout> * stride;
+            dim_size<0, ThreadLayout> * dim_size<0, WarpLayout> * kCols;
         col_stride = Base::kNumPerAccess * dim_size<1, ThreadLayout> *
                      dim_size<1, WarpLayout>;
         int sc0 = dim_size<0, ElemTileLayout>;

@@ -60,14 +60,14 @@ struct R2SCopy2D {
 template <typename SrcPtrs, typename DstTile>
 DEVICE void copy_2d_tile_s2r(SrcPtrs& pos, DstTile& dst) {
     static_assert(SrcPtrs::kSize == DstTile::kExecCount,
-                  "The data tile a single thread load from shared memory to "
-                  "its local register should have a equal shape.");
+                  "The data tile that a single thread loads from shared memory "
+                  "to its local register should have a equal shape.");
 
     uint32_t smem_addr;
     // cast to pointer pointing to 128-bit register array
     uint32_t* reg = reinterpret_cast<uint32_t*>(dst.mutable_data());
 
-    // issue the atomic memory access instruction in a temporal fashion
+    // issue the atomic memory access instruction
     for (int i = 0; i < SrcPtrs::kSize; ++i) {
         smem_addr = __cvta_generic_to_shared(pos[i]);
 
@@ -76,16 +76,18 @@ DEVICE void copy_2d_tile_s2r(SrcPtrs& pos, DstTile& dst) {
             : "=r"(*(reg)), "=r"(*(reg + 1)), "=r"(*(reg + 2)), "=r"(*(reg + 3))
             : "r"(smem_addr));
 
-        if (threadIdx.x == 0) {
+#ifdef DEBUG
+        if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0) {
             half* r = (half*)(reg);
-            printf("[%d]: %.0f, %.0f, %.0f, %.0f, %.0f, %.0f, %.0f, % .0f\n",
-                   threadIdx.x, __half2float(r[0]), __half2float(r[1]),
+            printf("[%d-%d]: %.0f, %.0f, %.0f, %.0f, %.0f, %.0f, %.0f, % .0f\n",
+                   threadIdx.x, i, __half2float(r[0]), __half2float(r[1]),
                    __half2float(r[2]), __half2float(r[3]), __half2float(r[4]),
                    __half2float(r[5]), __half2float(r[6]), __half2float(r[7]));
         }
+#endif
 
         // The magic number 4 here is computed as follows:
-        // Base::kNumPerAccess / 8 / sizeof(uint32_t);
+        // Base::kAccessInBits / 8 / sizeof(uint32_t);
         // each thread access 128-bit data that equals to 4 uint32_t elements.
         reg += 4;  // advance pointer
     }

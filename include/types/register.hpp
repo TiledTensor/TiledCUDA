@@ -36,14 +36,7 @@ class RegTile : public Base {
     constexpr static int kElemInsNumel = get_numel<ElemTileLayout>;
     constexpr static int kNumel = kRows * kCols;
 
-    DEVICE RegTile() {
-        // memset((void*)data_, 0, sizeof(data_));
-        int count = 0;
-        for (int i = 0; i < kRows; i++)
-            for (int j = 0; j < kCols; j++) {
-                data_[i][j] = static_cast<DType>(++count);
-            }
-    }
+    DEVICE RegTile() { memset((void*)data_, 0, sizeof(data_)); }
 
     DEVICE DType* operator[](int2 idx) { return &data_[idx.x][idx.y]; }
 

@@ -53,9 +53,7 @@ __global__ void copy_s2r() {
     for (auto i = 0; i < Shared::sc0; ++i) {
         for (auto j = 0; j < Shared::sc1; ++j) {
             copy::copy_2d_tile_s2r(s_tiles[make_int2(i, j)], r_tile);
-            break;
         }
-        break;
     }
 }
 

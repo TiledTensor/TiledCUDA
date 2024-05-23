@@ -19,13 +19,6 @@ Generalizing to non-tensor core instructions is not a priority at the moment.
 
 ## Interfaces
 
-At a given memory level, we describe a data tile as having two stages: first, we compose a spatial tile, and then we enlarge it in a temporal fashion. To describe the tile, we configure the shape of each stage based on the desired memory layout.
-
-|Stage|Shared Memory|Register|
-|:--|:--|:--|
-|**Spatial**<br>**Tile**|The data tile accessed by executing the `copy_2d_tile_s2r` instruction once.|The data tile accessed by executing the atomic memory access instruction once.|
-|**Temporal**<br>**Tile**|The data tile accessed by executing a spatial shared memory tile multiple times using nested for loops.|The data tile accessed by executing a spatial register memory tile multiple times using nested for loops.|
-
 <p align="center">
 <img src="figures/data_transfer_between_shared_and_register.png" width=80%><br>
 Fig 1. Data transfer between shared memory and register file using ldmatrix.
