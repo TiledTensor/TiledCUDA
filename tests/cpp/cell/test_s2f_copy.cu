@@ -36,8 +36,7 @@ __device__ void print_tile(const Element* data) {
     printf("\n");
 }
 
-#define DEBUG_
-/// unittest for copy_s2r
+// unittest for copy_s2r
 template <typename Element, typename Shared, typename Reg>
 __global__ void copy_s2r() {
     extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
@@ -56,7 +55,6 @@ __global__ void copy_s2r() {
         }
     }
 }
-
 }  // namespace
 
 TEST(TestShm2Rf, copy_2d_tile_s2r) {
