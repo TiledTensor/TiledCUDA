@@ -142,8 +142,8 @@ void custom_batched_gemm_op(const torch::Tensor& a, const torch::Tensor& b,
                             int64_t batch_count) {
     using InstructionShape = cell::TileShape<16, 8, 16>;
     using ValueMnk = cell::TileShape<1, 2, 1>;
-    using WarpArrangement = cell::TileShape<1, 1, 1>;
-    using CtaTileShape = cell::TileShape<16, 32, 32>;
+    using WarpArrangement = cell::TileShape<2, 2, 1>;
+    using CtaTileShape = cell::TileShape<32, 32, 32>;
 
     auto dtype = a.dtype();
 

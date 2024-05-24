@@ -77,11 +77,12 @@ struct DynBack2BackGemmTraits : public Base {
     // instruction which requires the TileMMA configuration to be
     // fixed as follows. Make it able to be tuned by policy in
     // future implementation.
-
     using TiledMma =
         TiledMMA<MMA_Atom<SM80_16x8x16_F32F16F16F32_TN>,
-                 Layout<Shape<Int<kWarpPerRow>, Int<kWarpPerCol>, _1>>,
-                 Layout<Shape<_1, _2, _1>>>;
+                 Layout<Shape<_1, _2, _1>>,
+                 Tile<Int<16 * kWarpPerRow>, Int<32 * kWarpPerCol>, _16>>;
+
+    static constexpr int kThreads2 = size(TiledMma{});
 
     using SmemLayoutD =
         decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTM>, Int<kTP>>{}));

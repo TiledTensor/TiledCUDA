@@ -260,7 +260,7 @@ void custom_lstm_cell_op(const torch::Tensor& w, const torch::Tensor& x,
                          int64_t hidden_size) {
     using InstructionShape = cell::TileShape<16, 8, 16>;
     using ValueMnk = cell::TileShape<1, 2, 1>;
-    using WarpArrangement = cell::TileShape<1, 1, 1>;
+    using WarpArrangement = cell::TileShape<1, 2, 1>;
     using CtaTileShape = cell::TileShape<16, 32, 32>;
 
     auto dtype = w.dtype();

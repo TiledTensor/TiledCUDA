@@ -127,6 +127,9 @@ void cute_back2back_gemm(const Element* d_a, const Element* d_b,
     using KeTraits =
         cell::traits::DynBack2BackGemmTraits<Element, CtaTileShape, WarpShape>;
 
+    std::cout << "kThreads = " << KeTraits::kThreads
+              << ", kThreads2 = " << KeTraits::kThreads2 << std::endl;
+
     int shm_input = (kTM * kTK + kTK * kTN + kTN * kTP);
     int shm_output = kTM * kTP;
     int shm_size = shm_input < shm_output ? shm_output * sizeof(Element)

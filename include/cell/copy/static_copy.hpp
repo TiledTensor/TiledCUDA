@@ -55,7 +55,7 @@ namespace detail {
 enum class CopyInst {
     Ldmatrix = 0,  // ldmatrix for loading data from shared memory to register.
     Stmatrix = 1,
-    Lds32 = 2
+    LDSM32 = 2
 };
 
 // functor to copy data from shared memory to register file.

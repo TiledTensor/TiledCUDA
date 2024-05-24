@@ -32,7 +32,9 @@ struct DynGemmTraits : public Base {
     static constexpr int kThreadsPerCol = CeilDiv<kTK, Base::kNumPerAccess>;
     static constexpr int kThreadsPerRow = CeilDiv<kThreads, kThreadsPerCol>;
 
-    using SmemLayoutAtom = cute::Layout<Shape<_8, _32>, Stride<_32, _1>>;
+    using SmemLayoutAtom = decltype(composition(
+        Swizzle<2, 3, 3>{}, cute::Layout<Shape<_8, _32>, Stride<_32, _1>>{}));
+
     using SmemLayoutA =
         decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTM>, Int<kTK>>{}));
     using SmemLayoutB =
@@ -57,11 +59,10 @@ struct DynGemmTraits : public Base {
     // instruction which requires the TileMMA configuration to be
     // fixed as follows. Make it able to be tuned by policy in
     // future implementation.
-
     using TiledMma =
         TiledMMA<MMA_Atom<SM80_16x8x16_F32F16F16F32_TN>,
-                 Layout<Shape<Int<kWarpPerRow>, Int<kWarpPerCol>, _1>>,
-                 Layout<Shape<_1, _2, _1>>>;
+                 Layout<Shape<_1, _2, _1>>,
+                 Tile<Int<16 * kWarpPerRow>, Int<16 * kWarpPerCol>, _16>>;
 
     using SmemLayoutC =
         decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTM>, Int<kTN>>{}));

@@ -64,10 +64,10 @@ struct DynLstmGateTraits : public Base {
     // future implementation.
     using TiledMma =
         TiledMMA<MMA_Atom<SM80_16x8x16_F32F16F16F32_TN>,
-                 Layout<Shape<Int<kWarpPerRow>, Int<kWarpPerCol>, _1>>,
-                 Layout<Shape<_1, _2, _1>>>;
-    using SmemLoadAtom = Copy_Atom<SM75_U32x4_LDSM_N, Element>;
+                 Layout<Shape<_1, _2, _1>>,
+                 Tile<Int<16 * kWarpPerRow>, Int<16 * kWarpPerCol>, _16>>;
 
+    using SmemLoadAtom = Copy_Atom<SM75_U32x4_LDSM_N, Element>;
     using SmemLayoutE =
         decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTM>, Int<kTN>>{}));
 
