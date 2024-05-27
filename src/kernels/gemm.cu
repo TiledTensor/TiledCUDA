@@ -83,8 +83,7 @@ __global__ void dyn_cute_gemm_kernel(const Element* dA, const Element* dB,
                      tid);  // store shared memory tile to global memory
 }
 
-template <typename Element, typename InstructionShape, typename ValueMnk,
-          typename WarpArrangement, typename CtaTileShape>
+template <typename Element, typename CtaTileShape>
 void cute_gemm(const Element* a, const Element* b, Element* c, int m, int n,
                int k) {
     // CTA GEMM shape
@@ -92,18 +91,9 @@ void cute_gemm(const Element* a, const Element* b, Element* c, int m, int n,
     static const int kTN = dim_size<1, CtaTileShape>;
     static const int kTK = dim_size<2, CtaTileShape>;
 
-    static_assert(kTM % dim_size<0, WarpArrangement> == 0,
-                  "the M dimension of the CTA tile should be "
-                  "divisible by the "
-                  "number of warps along that that dimension.");
-    static_assert(kTN % dim_size<1, WarpArrangement> == 0,
-                  "the N dimension of the CTA tile should be "
-                  "divisible by the "
-                  "number of warps along that that dimension.");
+    using GemmTraits = traits::DynGemmTraits<Element, CtaTileShape>;
 
-    using GemmTraits =
-        traits::DynGemmTraits<Element, InstructionShape, ValueMnk,
-                              WarpArrangement, CtaTileShape>;
+    std::cout << "kThreads = " << GemmTraits::kThreads << std::endl;
 
     static constexpr int smem_size =
         std::max(kTK * (kTN + kTM), kTM * kTN) * sizeof(Element);
@@ -131,17 +121,14 @@ void cute_gemm(const Element* a, const Element* b, Element* c, int m, int n,
 
 void custom_gemm_op(const torch::Tensor& a, const torch::Tensor& b,
                     torch::Tensor& c, int64_t m, int64_t n, int64_t k) {
-    using InstructionShape = cell::TileShape<16, 8, 16>;
-    using ValueMnk = cell::TileShape<1, 2, 1>;
-    using WarpArrangement = cell::TileShape<1, 2, 1>;
-    using CtaTileShape = cell::TileShape<16, 32, 32>;
+    // shared memory tile shape
+    using CtaTileShape = cell::TileShape<64, 128, 64>;
 
     auto dtype = a.dtype();
     if (dtype == torch::kFloat32) {
         // TODO: Add support for fp32.
     } else if (dtype == torch::kHalf) {
-        cute_gemm<cutlass::half_t, InstructionShape, ValueMnk, WarpArrangement,
-                  CtaTileShape>(
+        cute_gemm<cutlass::half_t, CtaTileShape>(
             reinterpret_cast<const cutlass::half_t*>(a.const_data_ptr()),
             reinterpret_cast<const cutlass::half_t*>(b.const_data_ptr()),
             reinterpret_cast<cutlass::half_t*>(c.mutable_data_ptr()), m, n, k);

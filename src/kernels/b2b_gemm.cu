@@ -115,7 +115,7 @@ __global__ void dyn_back2back_gemm(const Element* d_a, const Element* d_b,
                      store_d_s2g_layout, tiled_copy, tid);
 }
 
-template <typename Element, typename CtaTileShape, typename WarpShape>
+template <typename Element, typename CtaTileShape>
 void cute_back2back_gemm(const Element* d_a, const Element* d_b,
                          const Element* d_c, Element* d_d, int m, int n, int k,
                          int p) {
@@ -125,10 +125,9 @@ void cute_back2back_gemm(const Element* d_a, const Element* d_b,
     static const int kTP = dim_size<3, CtaTileShape>;
 
     using KeTraits =
-        cell::traits::DynBack2BackGemmTraits<Element, CtaTileShape, WarpShape>;
+        cell::traits::DynBack2BackGemmTraits<Element, CtaTileShape>;
 
-    std::cout << "kThreads = " << KeTraits::kThreads
-              << ", kThreads2 = " << KeTraits::kThreads2 << std::endl;
+    std::cout << "kThreads = " << KeTraits::kThreads << std::endl;
 
     int shm_input = (kTM * kTK + kTK * kTN + kTN * kTP);
     int shm_output = kTM * kTP;
@@ -152,7 +151,6 @@ void cute_back2back_gemm(const Element* d_a, const Element* d_b,
 void custom_back2back_op(const torch::Tensor& a, const torch::Tensor& b,
                          const torch::Tensor& c, torch::Tensor& d, int64_t m,
                          int64_t n, int64_t k, int64_t p) {
-    using WarpShape = cell::TileShape<2, 1>;
     using CtaTileShape = cell::TileShape<32, 32, 32, 32>;
 
     auto dtype = a.dtype();
@@ -168,8 +166,8 @@ void custom_back2back_op(const torch::Tensor& a, const torch::Tensor& b,
         cutlass::half_t* d_ptr =
             reinterpret_cast<cutlass::half_t*>(d.mutable_data_ptr());
 
-        cute_back2back_gemm<cutlass::half_t, CtaTileShape, WarpShape>(
-            a_ptr, b_ptr, c_ptr, d_ptr, m, n, k, p);
+        cute_back2back_gemm<cutlass::half_t, CtaTileShape>(a_ptr, b_ptr, c_ptr,
+                                                           d_ptr, m, n, k, p);
     }
 }
 }  // namespace tiledcuda::kernels

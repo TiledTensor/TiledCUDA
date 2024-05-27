@@ -13,8 +13,10 @@
 namespace tiledcuda::cell::traits {
 
 using namespace cute;
+namespace tl = tiledcuda::cell::tile_layout;
 
-template <typename Element_, typename CtaTileShape, typename WarpShape,
+template <typename Element_, typename CtaTileShape,
+          typename WarpShape = tiledcuda::cell::TileShape<2, 1>,
           typename Base = TraitsBase<Element_>>
 struct DynBack2BackGemmTraits : public Base {
     using Element = Element_;
@@ -32,14 +34,21 @@ struct DynBack2BackGemmTraits : public Base {
     static_assert(kWarpPerCol == 1,
                   "The B2B GEMM requires a single warp along CTA tile.");
 
-    static constexpr int kThreads = kWarpPerRow * kWarpPerCol * 32;
+    // TODO(haruhi): The current implementation uses ldmatrix.x4
+    // instruction which requires the TileMMA configuration to be
+    // fixed as follows. Make it able to be tuned by policy in
+    // future implementation.
+    using TiledMma = TiledMMA<MMA_Atom<SM80_16x8x16_F32F16F16F32_TN>,
+                              Layout<Shape<_1, _2, _1>>,
+                              Tile<Int<8 * kWarpPerRow>, Int<32>, _16>>;
+    static constexpr int kThreads = size(TiledMma{});
+    static_assert(kThreads == kWarpPerRow * kWarpPerCol * 32);
 
     static constexpr int kNumPerAccess = Base::kNumPerAccess;
     static constexpr int kThreadsPerCol = CeilDiv<kTK, Base::kNumPerAccess>;
     static constexpr int kThreadsPerRow = CeilDiv<kThreads, kThreadsPerCol>;
 
     static constexpr int kSwizzle = (kTK == 32 ? 2 : 3);
-
     using SmemLayoutAtom = decltype(composition(
         Swizzle<kSwizzle, 3, 3>{},
         Layout<Shape<_8, Int<kTK>>, Stride<Int<kTK>, _1>>{}));
@@ -58,11 +67,6 @@ struct DynBack2BackGemmTraits : public Base {
     using SmemLayoutC =
         decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTP>, Int<kTN>>{}));
 
-    using ThreadShape = TileShape<kThreadsPerRow, kThreadsPerCol>;
-
-    using ThreadLayout = Layout<Shape<Int<kThreadsPerRow>, Int<kThreadsPerCol>>,
-                                Stride<Int<kThreadsPerCol>, _1>>;
-
     static const bool enable_cp_async = false;  // change this flag
     using CopyInst = std::conditional_t<
         enable_cp_async,
@@ -70,23 +74,11 @@ struct DynBack2BackGemmTraits : public Base {
         Copy_Atom<DefaultCopy, Element>>;
 
     using TiledCopy = decltype(make_tiled_copy(
-        CopyInst{}, ThreadLayout{},
+        CopyInst{}, tl::RowMajor<kThreadsPerRow, kThreadsPerCol>{},
         Layout<Shape<_1, Int<Base::kNumPerAccess>>>{}));
-
-    // TODO(haruhi): The current implementation uses ldmatrix.x4
-    // instruction which requires the TileMMA configuration to be
-    // fixed as follows. Make it able to be tuned by policy in
-    // future implementation.
-    using TiledMma =
-        TiledMMA<MMA_Atom<SM80_16x8x16_F32F16F16F32_TN>,
-                 Layout<Shape<_1, _2, _1>>,
-                 Tile<Int<16 * kWarpPerRow>, Int<32 * kWarpPerCol>, _16>>;
-
-    static constexpr int kThreads2 = size(TiledMma{});
 
     using SmemLayoutD =
         decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTM>, Int<kTP>>{}));
-
     using StoreD_R2S = cell::copy::R2SCopy2D<Element, TiledMma, SmemLayoutD>;
 };
 }  // namespace tiledcuda::cell::traits

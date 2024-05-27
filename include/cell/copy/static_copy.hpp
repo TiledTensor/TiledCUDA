@@ -68,8 +68,6 @@ struct CopyShared2Reg {
 template <typename SrcPtrs, typename DstTile>
 struct CopyShared2Reg<SrcPtrs, DstTile, CopyInst::Ldmatrix> {
     DEVICE void operator()(SrcPtrs& pos, DstTile& dst) {
-        // copy_2d_tile_s2r(pos, dst);
-
         static_assert(
             SrcPtrs::kSize == DstTile::kExecCount,
             "The data tile that a single thread loads from shared memory "

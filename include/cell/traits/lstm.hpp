@@ -12,9 +12,10 @@
 namespace tiledcuda::cell::traits {
 
 using namespace cute;
+namespace tl = tiledcuda::cell::tile_layout;
 
-template <typename Element_, typename InstructionShape, typename ValueMnk,
-          typename WarpArrangement, typename CtaTileShape,
+template <typename Element_, typename CtaTileShape,
+          typename WarpArrangement = tiledcuda::cell::TileShape<1, 2>,
           typename Base = TraitsBase<Element_>>
 struct DynLstmGateTraits : public Base {
     using Element = Element_;
@@ -25,38 +26,15 @@ struct DynLstmGateTraits : public Base {
 
     static constexpr int kWarpPerRow = dim_size<0, WarpArrangement>;
     static constexpr int kWarpPerCol = dim_size<1, WarpArrangement>;
-    static constexpr int kThreads = kWarpPerRow * kWarpPerCol * 32;
 
-    static constexpr int kNumPerAccess = Base::kNumPerAccess;
-
-    static constexpr int kThreadsPerCol = CeilDiv<kTK, Base::kNumPerAccess>;
-    static constexpr int kThreadsPerRow = CeilDiv<kThreads, kThreadsPerCol>;
-
-    using SmemLayoutAtom = cute::Layout<Shape<_8, _32>, Stride<_32, _1>>;
-    using SmemLayoutA =
-        decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTM>, Int<kTK>>{}));
-    using SmemLayoutB =
-        decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTN>, Int<kTK>>{}));
-    using SmemLayoutC =
-        decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTM>, Int<kTK>>{}));
-    using SmemLayoutD =
-        decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTN>, Int<kTK>>{}));
-
-    using ThreadShape = TileShape<kThreadsPerRow, kThreadsPerCol>;
-
-    using ThreadLayout = Layout<Shape<Int<kThreadsPerRow>, Int<kThreadsPerCol>>,
-                                Stride<Int<kThreadsPerCol>, _1>>;
-
-    // change this flag to enable async copy
-    static const bool enable_cp_async = false;
-    using CopyInst = std::conditional_t<
-        enable_cp_async,
-        Copy_Atom<SM80_CP_ASYNC_CACHEGLOBAL<cute::uint128_t>, Element>,
-        Copy_Atom<DefaultCopy, Element>>;
-
-    using TiledCopy = decltype(make_tiled_copy(
-        CopyInst{}, ThreadLayout{},
-        Layout<Shape<_1, Int<Base::kNumPerAccess>>>{}));
+    static_assert(kTM % dim_size<0, WarpArrangement> == 0,
+                  "the M dimension of the CTA tile should be "
+                  "divisible by the "
+                  "number of warps along that that dimension.");
+    static_assert(kTN % dim_size<1, WarpArrangement> == 0,
+                  "the N dimension of the CTA tile should be "
+                  "divisible by the "
+                  "number of warps along that that dimension.");
 
     // TODO(haruhi): The current implementation uses ldmatrix.x4
     // instruction which requires the TileMMA configuration to be
@@ -66,11 +44,38 @@ struct DynLstmGateTraits : public Base {
         TiledMMA<MMA_Atom<SM80_16x8x16_F32F16F16F32_TN>,
                  Layout<Shape<_1, _2, _1>>,
                  Tile<Int<16 * kWarpPerRow>, Int<16 * kWarpPerCol>, _16>>;
+    static constexpr int kThreads = size(TiledMma{});
+    static_assert(kThreads == kWarpPerRow * kWarpPerCol * 32);
 
-    using SmemLoadAtom = Copy_Atom<SM75_U32x4_LDSM_N, Element>;
+    static constexpr int kNumPerAccess = Base::kNumPerAccess;
+    static constexpr int kThreadsPerCol = CeilDiv<kTK, Base::kNumPerAccess>;
+    static constexpr int kThreadsPerRow = CeilDiv<kThreads, kThreadsPerCol>;
+
+    using SmemLayoutAtom = decltype(composition(
+        Swizzle<2, 3, 3>{}, tl::RowMajor<8, 4 * kNumPerAccess>{}));
+
+    using SmemLayoutA =
+        decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTM>, Int<kTK>>{}));
+    using SmemLayoutB =
+        decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTN>, Int<kTK>>{}));
+    using SmemLayoutC =
+        decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTM>, Int<kTK>>{}));
+    using SmemLayoutD =
+        decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTN>, Int<kTK>>{}));
+
+    // change this flag to enable async copy
+    static const bool enable_cp_async = false;
+    using CopyInst = std::conditional_t<
+        enable_cp_async,
+        Copy_Atom<SM80_CP_ASYNC_CACHEGLOBAL<cute::uint128_t>, Element>,
+        Copy_Atom<DefaultCopy, Element>>;
+
+    using TiledCopy = decltype(make_tiled_copy(
+        CopyInst{}, tl::RowMajor<kThreadsPerRow, kThreadsPerCol>{},
+        Layout<Shape<_1, Int<Base::kNumPerAccess>>>{}));
+
     using SmemLayoutE =
         decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTM>, Int<kTN>>{}));
-
     using StoreE_R2S = cell::copy::R2SCopy2D<Element, TiledMma, SmemLayoutE>;
 };
 
