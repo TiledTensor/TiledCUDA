@@ -78,9 +78,9 @@ __global__ void dyn_cute_gemm_kernel(const Element* dA, const Element* dB,
     sC.copy(acc, shm, tid);  // store register tile to shared memory
     __syncthreads();
 
+    // store shared memory tile to global memory
     copy_2d_tile_s2g(sC_ptr, gC_ptr, typename KeTraits::SmemLayoutC{},
-                     store_c_s2g_layout, tiled_copy,
-                     tid);  // store shared memory tile to global memory
+                     store_c_s2g_layout, tiled_copy, tid);
 }
 
 template <typename Element, typename CtaTileShape>
@@ -92,8 +92,6 @@ void cute_gemm(const Element* a, const Element* b, Element* c, int m, int n,
     static const int kTK = dim_size<2, CtaTileShape>;
 
     using GemmTraits = traits::DynGemmTraits<Element, CtaTileShape>;
-
-    std::cout << "kThreads = " << GemmTraits::kThreads << std::endl;
 
     static constexpr int smem_size =
         std::max(kTK * (kTN + kTM), kTM * kTN) * sizeof(Element);

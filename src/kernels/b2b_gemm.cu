@@ -65,12 +65,10 @@ __global__ void dyn_back2back_gemm(const Element* d_a, const Element* d_b,
         gA_ptr = A;                      // A tile is repeated loaded
         gB_ptr = B + n * kK;
         for (int k = 0; k < kK; k += kTK) {  // iterate over K
-
             copy_2d_tile_g2s(gA_ptr, sA_ptr, load_a_g2s_layout,
                              typename KeTraits::SmemLayoutA{}, tiled_copy, tid);
             copy_2d_tile_g2s(gB_ptr, sB_ptr, load_b_g2s_layout,
                              typename KeTraits::SmemLayoutB{}, tiled_copy, tid);
-
             __copy_async();
             __syncthreads();
 
@@ -86,8 +84,8 @@ __global__ void dyn_back2back_gemm(const Element* d_a, const Element* d_b,
             gB_ptr += kTK;
         }
         // The output type of the first tensor core matrix multiplication is
-        // float32. However, before the second GEMM operation, the output needs
-        // to be converted to half precision.
+        // float32. However, before the second GEMM operation, the output
+        // needs to be converted to half precision.
         auto acc_half = convert_type<Element>(acc1);
         auto rA2 = convert_layout<KeTraits::TiledMma>(acc_half);
 
@@ -126,8 +124,6 @@ void cute_back2back_gemm(const Element* d_a, const Element* d_b,
 
     using KeTraits =
         cell::traits::DynBack2BackGemmTraits<Element, CtaTileShape>;
-
-    std::cout << "kThreads = " << KeTraits::kThreads << std::endl;
 
     int shm_input = (kTM * kTK + kTK * kTN + kTN * kTP);
     int shm_output = kTM * kTP;

@@ -16,7 +16,7 @@ using namespace cute;
 namespace tl = tiledcuda::cell::tile_layout;
 
 template <typename Element_, typename CtaTileShape,
-          typename WarpShape = tiledcuda::cell::TileShape<2, 1>,
+          typename WarpShape = tiledcuda::cell::TileShape<1, 1>,
           typename Base = TraitsBase<Element_>>
 struct DynBack2BackGemmTraits : public Base {
     using Element = Element_;
@@ -39,8 +39,8 @@ struct DynBack2BackGemmTraits : public Base {
     // fixed as follows. Make it able to be tuned by policy in
     // future implementation.
     using TiledMma = TiledMMA<MMA_Atom<SM80_16x8x16_F32F16F16F32_TN>,
-                              Layout<Shape<_1, _2, _1>>,
-                              Tile<Int<8 * kWarpPerRow>, Int<32>, _16>>;
+                              Layout<Shape<_1, _1, _1>>,
+                              Tile<Int<32 * kWarpPerRow>, _16, _32>>;
     static constexpr int kThreads = size(TiledMma{});
     static_assert(kThreads == kWarpPerRow * kWarpPerCol * 32);
 
@@ -62,8 +62,7 @@ struct DynBack2BackGemmTraits : public Base {
     using SmemLayoutB =
         decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTN>, Int<kTK>>{}));
     // a [kTN, kTP] matrix in column major fashion,
-    // can be interpreted as a [kTP, kTN] matrix in row major
-    // fashion.
+    // can be interpreted as a [kTP, kTN] matrix in row major fashion.
     using SmemLayoutC =
         decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTP>, Int<kTN>>{}));
 

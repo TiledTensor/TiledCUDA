@@ -11,7 +11,7 @@ class TestGemm(unittest.TestCase):
     def setUp(self):
         torch.manual_seed(1234)
 
-    def test_gemm1(self):
+    def test_gemm(self):
 
         a = torch.randn(256, 256, device='cuda')
         b = torch.randn(256, 256, device='cuda')
