@@ -135,7 +135,7 @@ class SharedTile : public Base {
         // in a warp cooperative instruction, the threads are
         // laid out in a [2, 2] tile, and each tile has a shape of [8, 1].
         int n = lane_id / 8;
-        int lane_row = int(n / 2) * 8 + lane_id - n * 8;
+        int lane_row = n / 2 * 8 + lane_id - n * 8;
         int lane_col = n % 2;
         col_stride = Base::kNumPerAccess / 8 / sizeof(DType);
         offset = lane_row * kCols + lane_col * col_stride;

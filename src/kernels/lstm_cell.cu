@@ -150,8 +150,7 @@ __global__ void lstm_element_wise(const Element* i, const Element* f,
     }
 }
 
-template <typename Element, typename InstructionShape, typename ValueMnk,
-          typename WarpArrangement, typename CtaTileShape>
+template <typename Element, typename CtaTileShape>
 void lstm_gate(const Element* w, const Element* x, const Element* u,
                const Element* h, Element* t, const int m, const int n,
                const int k) {
@@ -164,18 +163,7 @@ void lstm_gate(const Element* w, const Element* x, const Element* u,
     static const int kTN = dim_size<1, CtaTileShape>;
     static const int kTK = dim_size<2, CtaTileShape>;
 
-    static_assert(kTM % dim_size<0, WarpArrangement> == 0,
-                  "the M dimension of the CTA tile should be "
-                  "divisible by the "
-                  "number of warps along that that dimension.");
-    static_assert(kTN % dim_size<1, WarpArrangement> == 0,
-                  "the N dimension of the CTA tile should be "
-                  "divisible by the "
-                  "number of warps along that that dimension.");
-
-    using KeTraits =
-        traits::DynLstmGateTraits<Element, InstructionShape, ValueMnk,
-                                  WarpArrangement, CtaTileShape>;
+    using KeTraits = traits::DynLstmGateTraits<Element, CtaTileShape>;
 
     static constexpr int smem_size =
         std::max(kTK * (kTN + kTM) * 2, kTM * kTN) * sizeof(Element);
@@ -205,8 +193,7 @@ void lstm_gate(const Element* w, const Element* x, const Element* u,
     lstm_gate<<<gridDim, blockDim, smem_size>>>(w, u, x, h, t, m, n, k);
 }
 
-template <typename Element, typename InstructionShape, typename ValueMnk,
-          typename WarpArrangement, typename CtaTileShape>
+template <typename Element, typename CtaTileShape>
 void lstm_cell(const Element* w, const Element* x, const Element* u,
                const Element* c, const Element* h, Element* c_out,
                Element* h_out, int m, int n, int k) {
@@ -220,8 +207,7 @@ void lstm_cell(const Element* w, const Element* x, const Element* u,
     Element* t;
     CudaCheck(cudaMalloc(&t, m * n * sizeof(Element)));
 
-    lstm_gate<Element, InstructionShape, ValueMnk, WarpArrangement,
-              CtaTileShape>(w, x, u, h, t, m, n, k);
+    lstm_gate<Element, CtaTileShape>(w, x, u, h, t, m, n, k);
 
     const Element* i = t;
     const Element* f = t + M * N;
@@ -258,9 +244,6 @@ void custom_lstm_cell_op(const torch::Tensor& w, const torch::Tensor& x,
                          const torch::Tensor& h0, torch::Tensor& c1,
                          torch::Tensor& h1, int64_t batch_size,
                          int64_t hidden_size) {
-    using InstructionShape = cell::TileShape<16, 8, 16>;
-    using ValueMnk = cell::TileShape<1, 2, 1>;
-    using WarpArrangement = cell::TileShape<1, 1, 1>;
     using CtaTileShape = cell::TileShape<16, 32, 32>;
 
     auto dtype = w.dtype();
@@ -270,8 +253,7 @@ void custom_lstm_cell_op(const torch::Tensor& w, const torch::Tensor& x,
     int k = hidden_size;
 
     if (dtype == torch::kHalf) {
-        lstm_cell<cutlass::half_t, InstructionShape, ValueMnk, WarpArrangement,
-                  CtaTileShape>(
+        lstm_cell<cutlass::half_t, CtaTileShape>(
             reinterpret_cast<const cutlass::half_t*>(w.const_data_ptr()),
             reinterpret_cast<const cutlass::half_t*>(x.const_data_ptr()),
             reinterpret_cast<const cutlass::half_t*>(u.const_data_ptr()),
