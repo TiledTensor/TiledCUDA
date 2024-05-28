@@ -42,21 +42,19 @@ __global__ void dyn_back2back_gemm(const Element* d_a, const Element* d_b,
     Element* sC_ptr = shm + kTM * kTK + kTK * kTN;
     Element* sD_ptr = shm;
 
-    int tid = threadIdx.x;
-
     auto load_a_g2s_layout = tl::make_row_major_layout(kTM, kTK, kK);
     auto load_b_g2s_layout = tl::make_row_major_layout(kTN, kTK, kK);
     auto load_c_g2s_layout = tl::make_row_major_layout(kTP, kTN, kN);
     auto store_d_s2g_layout = tl::make_row_major_layout(kTM, kTP, kP);
 
     typename KeTraits::TiledMma mma;  // for shared memory to register copy
-    typename KeTraits::TiledCopy tiled_copy;
+    typename KeTraits::TiledCopyG2S tiled_copy;
 
-    auto rA = make_s2rA(sA_ptr, tid, typename KeTraits::SmemLayoutA{}, mma);
-    auto rB = make_s2rB(sB_ptr, tid, typename KeTraits::SmemLayoutB{}, mma);
+    auto rA = make_s2rA(sA_ptr, typename KeTraits::SmemLayoutA{}, mma);
+    auto rB = make_s2rB(sB_ptr, typename KeTraits::SmemLayoutB{}, mma);
     auto acc1 = get_acc<kTM, kTN>(mma);  // accumulator for the 1st gemm
 
-    auto rC = make_s2rB(sC_ptr, tid, typename KeTraits::SmemLayoutC{}, mma);
+    auto rC = make_s2rB(sC_ptr, typename KeTraits::SmemLayoutC{}, mma);
     auto acc2 = get_acc<kTM, kTP>(mma);  // accumulator for the 2nd gemm
 
     typename KeTraits::StoreD_R2S sD;  // declare register to shared store plan
@@ -66,9 +64,9 @@ __global__ void dyn_back2back_gemm(const Element* d_a, const Element* d_b,
         gB_ptr = B + n * kK;
         for (int k = 0; k < kK; k += kTK) {  // iterate over K
             copy_2d_tile_g2s(gA_ptr, sA_ptr, load_a_g2s_layout,
-                             typename KeTraits::SmemLayoutA{}, tiled_copy, tid);
+                             typename KeTraits::SmemLayoutA{}, tiled_copy);
             copy_2d_tile_g2s(gB_ptr, sB_ptr, load_b_g2s_layout,
-                             typename KeTraits::SmemLayoutB{}, tiled_copy, tid);
+                             typename KeTraits::SmemLayoutB{}, tiled_copy);
             __copy_async();
             __syncthreads();
 
@@ -91,7 +89,8 @@ __global__ void dyn_back2back_gemm(const Element* d_a, const Element* d_b,
 
         // load C tile from global to shared memory
         copy_2d_tile_g2s(gC_ptr, sC_ptr, load_c_g2s_layout,
-                         typename KeTraits::SmemLayoutC{}, tiled_copy, tid);
+                         typename KeTraits::SmemLayoutC{},
+                         typename KeTraits::TiledCopyS2G{});
         __copy_async();
         __syncthreads();
 
@@ -107,10 +106,10 @@ __global__ void dyn_back2back_gemm(const Element* d_a, const Element* d_b,
     }
 
     // store register tile to shared memory
-    sD.copy(acc2, shm, tid);
+    sD.copy(acc2, shm);
     __syncthreads();
     copy_2d_tile_s2g(sD_ptr, gD_ptr, typename KeTraits::SmemLayoutD{},
-                     store_d_s2g_layout, tiled_copy, tid);
+                     store_d_s2g_layout, typename KeTraits::TiledCopyS2G{});
 }
 
 template <typename Element, typename CtaTileShape>

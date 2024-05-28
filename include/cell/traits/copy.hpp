@@ -41,7 +41,7 @@ struct G2S2DCopyTraits : public Base {
 
     using ValueLayout = Layout<Shape<_1, Int<Base::kNumPerAccess>>>;
 
-#if defined(CUTE_ARCH_CP_ASYNC_SM80_ENABLED)
+#ifdef CP_ASYNC_SM80_ENABLED
     using CopyInst =
         Copy_Atom<SM80_CP_ASYNC_CACHEGLOBAL<cute::uint128_t>, Element>;
 #else

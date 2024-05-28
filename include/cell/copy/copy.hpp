@@ -32,8 +32,10 @@ struct Shm2RegLoad {
 };
 
 template <typename Element, typename Layout, typename TiledMma>
-DEVICE auto make_s2rA(const Element* data, int tid, const Layout& layout,
+DEVICE auto make_s2rA(const Element* data, const Layout& layout,
                       const TiledMma& tiled_mma) {
+    int tid = threadIdx.x;
+
     auto tensor = cute::make_tensor(make_smem_ptr(data), layout);
 
     using SmemLoadAtom = Copy_Atom<SM75_U32x4_LDSM_N, Element>;
@@ -54,8 +56,10 @@ DEVICE auto make_s2rA(const Element* data, int tid, const Layout& layout,
 // FIXIME(haruhi): the current implementation is for fast experiment,
 // it is coupled shared memory layout with the register layout
 template <typename Element, typename Layout, typename TiledMma>
-DEVICE auto make_s2rB(const Element* data, int tid, const Layout& layout,
+DEVICE auto make_s2rB(const Element* data, const Layout& layout,
                       const TiledMma& tiled_mma) {
+    int tid = threadIdx.x;
+
     using SmemLoadAtom = Copy_Atom<SM75_U32x4_LDSM_N, Element>;
     auto tiled_copy = make_tiled_copy_B(SmemLoadAtom{}, tiled_mma);
     auto thrd_copy = tiled_copy.get_thread_slice(tid);

@@ -38,12 +38,14 @@ static constexpr size_t num_cols = cute::size<1>(Layout_{});
 
 HOST_DEVICE auto make_row_major_layout(const int row, const int col,
                                        const int stride) {
-    return cute::make_layout(make_shape(row, col), make_stride(stride, 1));
+    return cute::make_layout(make_shape(row, col),
+                             make_stride(stride, Int<1>{}));
 }
 
 HOST_DEVICE auto make_col_major_layout(const int row, const int col,
                                        const int stride) {
-    return cute::make_layout(make_shape(row, col), make_stride(1, stride));
+    return cute::make_layout(make_shape(row, col),
+                             make_stride(Int<1>{}, stride));
 }
 
 // CuTe's swizzle functions, swizzle(B, M, S), permute elements in a
