@@ -13,7 +13,9 @@ template <typename Element, typename SrcLayout, typename DstLayout,
           typename TiledCopy>
 DEVICE void copy_2d_tile_g2s(const Element* src_data, Element* dst_data,
                              SrcLayout src_layout, DstLayout dst_layout,
-                             TiledCopy tiled_copy, int tid) {
+                             TiledCopy tiled_copy) {
+    int tid = threadIdx.x;
+
     auto gtile = make_tensor(make_gmem_ptr(src_data), src_layout);
     auto stile = make_tensor(make_smem_ptr(dst_data), dst_layout);
 
@@ -34,7 +36,9 @@ template <typename Element, typename SrcLayout, typename DstLayout,
           typename TiledCopy>
 DEVICE void copy_2d_tile_s2g(const Element* src_data, Element* dst_data,
                              SrcLayout src_layout, DstLayout dst_layout,
-                             TiledCopy tiled_copy, int tid) {
+                             TiledCopy tiled_copy) {
+    int tid = threadIdx.x;
+
     auto stile = make_tensor(make_smem_ptr(src_data), src_layout);
     auto gtile = make_tensor(make_gmem_ptr(dst_data), dst_layout);
 

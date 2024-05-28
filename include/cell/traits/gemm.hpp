@@ -68,7 +68,7 @@ struct DynGemmTraits : public Base {
         Layout<Shape<_1, Int<Base::kNumPerAccess>>>{}));
 
     // copy from shared memory to global memory dose not have cp.async support,
-    // another `TiledCopy` has to be declared that use `DefaultCopy` as the
+    // another `TiledCopy` has to be declared and uses `DefaultCopy` as the
     // `CopyAtom`.
     using TiledCopyS2G = decltype(make_tiled_copy(
         Copy_Atom<DefaultCopy, Element>{},
@@ -78,4 +78,5 @@ struct DynGemmTraits : public Base {
         decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTM>, Int<kTN>>{}));
     using StoreC_R2S = cell::copy::R2SCopy2D<Element, TiledMma, SmemLayoutC>;
 };
+
 }  // namespace tiledcuda::cell::traits

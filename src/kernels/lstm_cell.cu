@@ -27,8 +27,6 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
     const int kTN = KeTraits::kTN;
     const int kTK = KeTraits::kTK;
 
-    int tid = threadIdx.x;
-
     // Advance to the global data tile to the current CTA.
     Element* gxs_ptr = const_cast<Element*>(xs) + blockIdx.y * kK * kTN;
     Element* ghs_ptr = const_cast<Element*>(hs) + blockIdx.y * kK * kTN;
@@ -54,10 +52,10 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
     typename KeTraits::TiledMma mma;
     typename KeTraits::TiledCopyG2S tiled_copy;
 
-    auto rws = make_s2rA(sws_ptr, tid, typename KeTraits::SmemLayoutA{}, mma);
-    auto rxs = make_s2rB(sxs_ptr, tid, typename KeTraits::SmemLayoutB{}, mma);
-    auto rus = make_s2rA(sus_ptr, tid, typename KeTraits::SmemLayoutC{}, mma);
-    auto rhs = make_s2rB(shs_ptr, tid, typename KeTraits::SmemLayoutD{}, mma);
+    auto rws = make_s2rA(sws_ptr, typename KeTraits::SmemLayoutA{}, mma);
+    auto rxs = make_s2rB(sxs_ptr, typename KeTraits::SmemLayoutB{}, mma);
+    auto rus = make_s2rA(sus_ptr, typename KeTraits::SmemLayoutC{}, mma);
+    auto rhs = make_s2rB(shs_ptr, typename KeTraits::SmemLayoutD{}, mma);
 
     auto acc1 = get_acc<kTM, kTN>(mma);
     auto acc2 = get_acc<kTM, kTN>(mma);
@@ -73,13 +71,13 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
     for (int k = 0; k < kK; k += kTK) {
         // TODO: Load data from global memory to shared memory
         copy_2d_tile_g2s(gws_ptr, sws_ptr, load_a_g2s_layout,
-                         typename KeTraits::SmemLayoutA{}, tiled_copy, tid);
+                         typename KeTraits::SmemLayoutA{}, tiled_copy);
         copy_2d_tile_g2s(gxs_ptr, sxs_ptr, load_b_g2s_layout,
-                         typename KeTraits::SmemLayoutB{}, tiled_copy, tid);
+                         typename KeTraits::SmemLayoutB{}, tiled_copy);
         copy_2d_tile_g2s(gus_ptr, sus_ptr, load_c_g2s_layout,
-                         typename KeTraits::SmemLayoutC{}, tiled_copy, tid);
+                         typename KeTraits::SmemLayoutC{}, tiled_copy);
         copy_2d_tile_g2s(ghs_ptr, shs_ptr, load_d_g2s_layout,
-                         typename KeTraits::SmemLayoutD{}, tiled_copy, tid);
+                         typename KeTraits::SmemLayoutD{}, tiled_copy);
 
         __copy_async();
         __syncthreads();
@@ -112,16 +110,14 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
     } else {
         cute_tanh(acc2);
     }
-
     __syncthreads();
 
-    sts.copy(acc2, shm, tid);
+    sts.copy(acc2, shm);
 
     __syncthreads();
 
     copy_2d_tile_s2g(sts_ptr, gts_ptr, typename KeTraits::SmemLayoutE{},
-                     store_e_s2g_layout, typename KeTraits::TiledCopyS2G{},
-                     tid);
+                     store_e_s2g_layout, typename KeTraits::TiledCopyS2G{});
 }
 
 template <typename Element>
@@ -129,9 +125,7 @@ __global__ void lstm_element_wise(const Element* i, const Element* f,
                                   const Element* o, const Element* c_candidate,
                                   const Element* c, Element* c_out,
                                   Element* h_out, int block_size, int size) {
-    int tid = threadIdx.x;
-
-    int index = blockIdx.x * block_size + tid;
+    int index = blockIdx.x * block_size + threadIdx.x;
 
     if (index < size) {
         // TODO: Loading data into shared memory and computing, versus

@@ -28,8 +28,6 @@ __global__ void dyn_cute_batched_gemm_kernel(const Element* dA,
     const int kTN = KeTraits::kTN;
     const int kTK = KeTraits::kTK;
 
-    int tid = threadIdx.x;
-
     // Advance to the global data tile to the current CTA.
     Element* gA_ptr =
         const_cast<Element*>(dA) + blockIdx.x * kK * kTM + blockIdx.z * kK * kM;
@@ -53,19 +51,20 @@ __global__ void dyn_cute_batched_gemm_kernel(const Element* dA,
     // mapping, in the current implementation, the shm-2-reg copy
     // plan is related to mma.
     typename KeTraits::TiledMma mma;
-    typename KeTraits::TiledCopyG2S tiled_copy;
 
-    auto rA = make_s2rA(sA_ptr, tid, typename KeTraits::SmemLayoutA{}, mma);
-    auto rB = make_s2rB(sB_ptr, tid, typename KeTraits::SmemLayoutB{}, mma);
+    auto rA = make_s2rA(sA_ptr, typename KeTraits::SmemLayoutA{}, mma);
+    auto rB = make_s2rB(sB_ptr, typename KeTraits::SmemLayoutB{}, mma);
     auto acc = get_acc<kTM, kTN>(mma);
 
     typename KeTraits::StoreC_R2S sC;  // declare register to shared store plan
 
     for (int k = 0; k < kK; k += kTK) {  // iterator over K
         copy_2d_tile_g2s(gA_ptr, sA_ptr, load_a_g2s_layout,
-                         typename KeTraits::SmemLayoutA{}, tiled_copy, tid);
+                         typename KeTraits::SmemLayoutA{},
+                         typename KeTraits::TiledCopyG2S{});
         copy_2d_tile_g2s(gB_ptr, sB_ptr, load_b_g2s_layout,
-                         typename KeTraits::SmemLayoutB{}, tiled_copy, tid);
+                         typename KeTraits::SmemLayoutB{},
+                         typename KeTraits::TiledCopyG2S{});
         __copy_async();
         __syncthreads();
 
@@ -82,13 +81,12 @@ __global__ void dyn_cute_batched_gemm_kernel(const Element* dA,
         gB_ptr += kTK;
     }
 
-    sC.copy(acc, shm, tid);  // store register tile to shared memory
+    sC.copy(acc, shm);  // store register tile to shared memory
     __syncthreads();
 
     // store shared memory tile to global memory
     copy_2d_tile_s2g(sC_ptr, gC_ptr, typename KeTraits::SmemLayoutC{},
-                     store_c_s2g_layout, typename KeTraits::TiledCopyS2G{},
-                     tid);
+                     store_c_s2g_layout, typename KeTraits::TiledCopyS2G{});
 }
 
 template <typename Element, typename CtaTileShape>

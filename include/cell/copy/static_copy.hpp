@@ -19,8 +19,10 @@ struct R2SCopy2D {
 
   public:
     template <typename Engine, typename Layout>
-    DEVICE void copy(cute::Tensor<Engine, Layout> const& acc, Element* dst_data,
-                     int tid) {
+    DEVICE void copy(cute::Tensor<Engine, Layout> const& acc,
+                     Element* dst_data) {
+        int tid = threadIdx.x;
+
         // FIXME(haruhi): This implementation is specifically designed
         // for tcu WMMA and assumes that the ACC value has a
         // floating-point precision. The code converts the ACC value

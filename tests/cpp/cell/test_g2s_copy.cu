@@ -15,19 +15,17 @@ __global__ void copy_g2s(const Element* src, Element* trg) {
     extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
     auto* buf = reinterpret_cast<Element*>(buf_);
 
-    int tid = threadIdx.x;
-
     // transfer a 2D data tile from global memory to shared memory.
     cell::copy::copy_2d_tile_g2s(src, buf, typename G2STraits::SrcLayout{},
                                  typename G2STraits::DstLayout{},
-                                 typename G2STraits::TiledCopy{}, tid);
+                                 typename G2STraits::TiledCopy{});
     cell::__copy_async();
     __syncthreads();
 
     // transfer a 2D data tile from shared memory to global memory.
     cell::copy::copy_2d_tile_s2g(buf, trg, typename S2GTraits::SrcLayout{},
                                  typename S2GTraits::DstLayout{},
-                                 typename S2GTraits::TiledCopy{}, tid);
+                                 typename S2GTraits::TiledCopy{});
     cell::__copy_async();
     __syncthreads();
 }
