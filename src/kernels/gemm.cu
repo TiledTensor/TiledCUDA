@@ -46,7 +46,7 @@ __global__ void dyn_cute_gemm_kernel(const Element* dA, const Element* dB,
     // mapping, in the current implementation, the shm-2-reg copy
     // plan is related to mma.
     typename KeTraits::TiledMma mma;
-    typename KeTraits::TiledCopy tiled_copy;
+    typename KeTraits::TiledCopyG2S tiled_copy;
 
     auto rA = make_s2rA(sA_ptr, tid, typename KeTraits::SmemLayoutA{}, mma);
     auto rB = make_s2rB(sB_ptr, tid, typename KeTraits::SmemLayoutB{}, mma);
@@ -80,7 +80,8 @@ __global__ void dyn_cute_gemm_kernel(const Element* dA, const Element* dB,
 
     // store shared memory tile to global memory
     copy_2d_tile_s2g(sC_ptr, gC_ptr, typename KeTraits::SmemLayoutC{},
-                     store_c_s2g_layout, tiled_copy, tid);
+                     store_c_s2g_layout, typename KeTraits::TiledCopyS2G{},
+                     tid);
 }
 
 template <typename Element, typename CtaTileShape>

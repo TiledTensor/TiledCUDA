@@ -52,7 +52,7 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
     // mapping, in the current implementation, the shm-2-reg copy
     // plan is related to mma.
     typename KeTraits::TiledMma mma;
-    typename KeTraits::TiledCopy tiled_copy;
+    typename KeTraits::TiledCopyG2S tiled_copy;
 
     auto rws = make_s2rA(sws_ptr, tid, typename KeTraits::SmemLayoutA{}, mma);
     auto rxs = make_s2rB(sxs_ptr, tid, typename KeTraits::SmemLayoutB{}, mma);
@@ -120,7 +120,8 @@ __global__ void dyn_lstm_gate(const Element* ws, const Element* us,
     __syncthreads();
 
     copy_2d_tile_s2g(sts_ptr, gts_ptr, typename KeTraits::SmemLayoutE{},
-                     store_e_s2g_layout, tiled_copy, tid);
+                     store_e_s2g_layout, typename KeTraits::TiledCopyS2G{},
+                     tid);
 }
 
 template <typename Element>

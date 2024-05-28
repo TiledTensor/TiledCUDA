@@ -11,5 +11,5 @@
 #endif
 
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800))
-#define CUTE_ARCH_CP_ASYNC_SM80_ENABLED
+#define CP_ASYNC_SM80_ENABLED
 #endif

@@ -57,15 +57,23 @@ struct DynGemmTraits : public Base {
     using SmemLayoutB =
         decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTN>, Int<kTK>>{}));
 
-    static const bool enable_cp_async = false;  // change this flag
-    using CopyInst = std::conditional_t<
-        enable_cp_async,
-        Copy_Atom<SM80_CP_ASYNC_CACHEGLOBAL<cute::uint128_t>, Element>,
-        Copy_Atom<DefaultCopy, Element>>;
-    using TiledCopy = decltype(make_tiled_copy(
-        CopyInst{}, tl::RowMajor<kThreadsPerRow, kThreadsPerCol>{},
+#ifdef CP_ASYNC_SM80_ENABLED
+    using CopyInstG2S =
+        Copy_Atom<SM80_CP_ASYNC_CACHEGLOBAL<cute::uint128_t>, Element>;
+#else
+    using CopyInstG2S = Copy_Atom<DefaultCopy, Element>;
+#endif
+    using TiledCopyG2S = decltype(make_tiled_copy(
+        CopyInstG2S{}, tl::RowMajor<kThreadsPerRow, kThreadsPerCol>{},
         Layout<Shape<_1, Int<Base::kNumPerAccess>>>{}));
 
+    // copy from shared memory to global memory dose not have cp.async support,
+    // another `TiledCopy` has to be declared that use `DefaultCopy` as the
+    // `CopyAtom`.
+    using TiledCopyS2G = decltype(make_tiled_copy(
+        Copy_Atom<DefaultCopy, Element>{},
+        tl::RowMajor<kThreadsPerRow, kThreadsPerCol>{},
+        Layout<Shape<_1, Int<Base::kNumPerAccess>>>{}));
     using SmemLayoutC =
         decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTM>, Int<kTN>>{}));
     using StoreC_R2S = cell::copy::R2SCopy2D<Element, TiledMma, SmemLayoutC>;
