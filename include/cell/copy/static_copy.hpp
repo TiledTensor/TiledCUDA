@@ -69,7 +69,7 @@ struct CopyShared2Reg {
 // partial specialization for ldmatrix
 template <typename SrcPtrs, typename DstTile>
 struct CopyShared2Reg<SrcPtrs, DstTile, CopyInst::Ldmatrix> {
-    DEVICE void operator()(SrcPtrs& pos, DstTile& dst) {
+    __device__ void operator()(SrcPtrs& pos, DstTile& dst) {
         static_assert(
             SrcPtrs::kSize == DstTile::kExecCount,
             "The data tile that a single thread loads from shared memory "
@@ -94,6 +94,8 @@ struct CopyShared2Reg<SrcPtrs, DstTile, CopyInst::Ldmatrix> {
 #endif
             reg += DstTile::kRegCountPerAccess;  // advance pointer
         }
+
+        __syncwarp();
     }
 };
 

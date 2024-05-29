@@ -121,11 +121,17 @@ class SharedTile : public Base {
         int warp_row = warp_id / dim_size<1, WarpLayout>;
         int warp_col = warp_id % dim_size<1, WarpLayout>;
 
-        int row_stride =
-            stride * dim_size<0, ThreadLayout> * dim_size<0, WarpLayout>;
+        int row_stride = kCols * dim_size<0, ThreadLayout>;
         col_stride = Base::kNumPerAccess * dim_size<1, ThreadLayout>;
         offset = warp_row * row_stride + warp_col * col_stride;
         data += offset;  // advance pointer
+
+        if (threadIdx.x == 32) {
+            printf("\n\nkCols = %d, kRowsPerExec = %d\n", kCols, kRowsPerExec);
+            printf("warp_row = %d, warp_col = %d\n", warp_row, warp_col);
+            printf("offset = %d, row_stride = %d, col_stride = %d\n", offset,
+                   row_stride, col_stride);
+        }
 
         // step 3. advance the pointer to shared memory position the current
         // thread inside a warp cooperative instruction (indexed by [lane_row,
@@ -147,13 +153,12 @@ class SharedTile : public Base {
                      dim_size<1, WarpLayout>;
         int sc0 = dim_size<0, ElemTileLayout>;
         int sc1 = dim_size<1, ElemTileLayout> / Base::kNumPerAccess;
+
         for (int i = 0; i < sc0; ++i) {
             for (int j = 0; j < sc1; ++j) {
-                shm_pos_[i * sc1 + j] = data;
-
-                offset = i * row_stride + j * col_stride;
-                data += offset;
+                shm_pos_[i * sc1 + j] = data + j * col_stride;
             }
+            data += row_stride;
         }
         return shm_pos_;
     }
