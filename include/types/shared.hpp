@@ -137,7 +137,7 @@ class SharedTile : public Base {
         int n = lane_id / 8;
         int lane_row = n / 2 * 8 + lane_id - n * 8;
         int lane_col = n % 2;
-        col_stride = Base::kNumPerAccess / 8 / sizeof(DType);
+        col_stride = Base::kAccessInBits / 8 / sizeof(DType);
         offset = lane_row * kCols + lane_col * col_stride;
         data += offset;  // advance pointer
 
