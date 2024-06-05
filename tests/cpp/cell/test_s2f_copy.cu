@@ -276,9 +276,9 @@ TEST(TestShared2Reg, shape1) {
 
     // configuration for shared memory tile
     using TemporalExecShared = TileShape<1, 1>;
-    using WarpLayout = TileShape<1, 1>;
-    using ThreadLayout = TileShape<16, 2>;  // fixed when using ldmatrix.
-    using ElemDataTileShared = TileShape<1, 8>;
+    using WarpLayout = tl::RowMajor<1, 1>;
+    using ThreadLayout = tl::RowMajor<16, 2>;  // fixed when using ldmatrix.
+    using ElemDataTileShared = tl::RowMajor<1, 8>;
     // the final copy plan for accessing shared memory
     using Shared = SharedTile<Element, TemporalExecShared, WarpLayout,
                               ThreadLayout, ElemDataTileShared>;
@@ -287,7 +287,7 @@ TEST(TestShared2Reg, shape1) {
 
     // configuration for register tile
     using TemporalExecReg = TileShape<1, 1>;
-    using ElemDataTileReg = TileShape<1, 8>;  // fixed when using ldmatrix
+    using ElemDataTileReg = tl::RowMajor<1, 8>;  // fixed when using ldmatrix
     // the final copy plan for accessing local register file
     using Reg = RegTile<Element, TemporalExecReg, ElemDataTileReg>;
 
@@ -314,16 +314,16 @@ TEST(TestShared2Reg, shape2) {
 
     // configuration for shared memory tile
     using TemporalExecShared = TileShape<1, 1>;
-    using WarpLayout = TileShape<2, 1>;
-    using ThreadLayout = TileShape<16, 2>;  // fixed when using ldmatrix.
-    using ElemDataTileShared = TileShape<2, 16>;
+    using WarpLayout = tl::RowMajor<2, 1>;
+    using ThreadLayout = tl::RowMajor<16, 2>;  // fixed when using ldmatrix.
+    using ElemDataTileShared = tl::RowMajor<2, 16>;
     // the final copy plan for accessing shared memory
     using Shared = SharedTile<Element, TemporalExecShared, WarpLayout,
                               ThreadLayout, ElemDataTileShared>;
 
     // configuration for register tile
     using TemporalExecReg = TileShape<2, 2>;
-    using ElemDataTileReg = TileShape<1, 8>;  // fixed when using ldmatrix
+    using ElemDataTileReg = tl::RowMajor<1, 8>;  // fixed when using ldmatrix
     // the final copy plan for accessing local register file
     using Reg = RegTile<Element, TemporalExecReg, ElemDataTileReg>;
 
@@ -349,9 +349,9 @@ TEST(TestShared2Reg, shape3) {
 
     // configuration for shared memory tile
     using TemporalExecShared = TileShape<2, 1>;
-    using WarpLayout = TileShape<2, 2>;
-    using ThreadLayout = TileShape<16, 2>;  // fixed when using ldmatrix.
-    using ElemDataTileShared = TileShape<2, 16>;
+    using WarpLayout = tl::RowMajor<2, 2>;
+    using ThreadLayout = tl::RowMajor<16, 2>;  // fixed when using ldmatrix.
+    using ElemDataTileShared = tl::RowMajor<2, 16>;
     // the final copy plan for accessing shared memory
     using Shared = SharedTile<Element, TemporalExecShared, WarpLayout,
                               ThreadLayout, ElemDataTileShared>;
@@ -359,7 +359,7 @@ TEST(TestShared2Reg, shape3) {
 
     // configuration for register tile
     using TemporalExecReg = TileShape<2, 2>;
-    using ElemDataTileReg = TileShape<1, 8>;  // fixed when using ldmatrix
+    using ElemDataTileReg = tl::RowMajor<1, 8>;  // fixed when using ldmatrix
     // the final copy plan for accessing local register file
     using Reg = RegTile<Element, TemporalExecReg, ElemDataTileReg>;
 

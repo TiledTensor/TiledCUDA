@@ -85,8 +85,7 @@ struct CopyShared2Reg<SrcPtrs, DstTile, CopyInst::Ldmatrix> {
             asm volatile(
                 "ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, %3}, "
                 "[%4];\n"
-                : "=r"(*(reg)), "=r"(*(reg + 2)), "=r"(*(reg + 1)),
-                  "=r"(*(reg + 3))
+                : "=r"(reg[0]), "=r"(reg[2]), "=r"(reg[1]), "=r"(reg[3])
                 : "r"(smem_addr));
 
 #ifdef DEBUG
@@ -117,7 +116,8 @@ DEVICE void copy_2d_tile_s2r(SrcPtrs& pos, DstTile& dst) {
     copy(pos, dst);
 }
 
-DEVICE void copy_2d_tile_r2s() {
+template <typename SrcTile, typename DstPtrs>
+DEVICE void copy_2d_tile_r2s(SrcTile& src, DstPtrs& pos) {
     // TODO: not implemented yet
 }
 

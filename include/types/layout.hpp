@@ -33,8 +33,11 @@ using ColMajor =
 template <typename Layout_>
 static constexpr size_t num_rows = cute::size<0>(Layout_{});
 
-template <typename Layout_> /*  */
+template <typename Layout_>
 static constexpr size_t num_cols = cute::size<1>(Layout_{});
+
+template <typename Layout_>
+static constexpr size_t get_numel = int(size(Layout_{}));
 
 HOST_DEVICE auto make_row_major_layout(const int row, const int col,
                                        const int stride) {

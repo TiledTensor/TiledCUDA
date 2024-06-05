@@ -5,6 +5,8 @@
 
 namespace tiledcuda::cell {
 
+namespace tl = tile_layout;
+
 namespace detail {
 
 // for debugging purpose
@@ -59,14 +61,14 @@ class RegTile : public Base {
         Base::kAccessInBits / 8 / sizeof(uint32_t);
 
     constexpr static int kRows =
-        dim_size<0, ElemTileLayout> * dim_size<0, TemporalExec>;
+        tl::num_rows<ElemTileLayout> * dim_size<0, TemporalExec>;
     constexpr static int kCols =
-        dim_size<1, ElemTileLayout> * dim_size<1, TemporalExec>;
+        tl::num_cols<ElemTileLayout> * dim_size<1, TemporalExec>;
 
     // how many times the atomic memory access instruction is executed
     constexpr static int kExecCount = get_numel<TemporalExec>;
 
-    constexpr static int kElemInsNumel = get_numel<ElemTileLayout>;
+    constexpr static int kElemInsNumel = tl::get_numel<ElemTileLayout>;
     constexpr static int kNumel = kRows * kCols;
 
     DEVICE RegTile() { memset((void*)data_, 0, sizeof(data_)); }

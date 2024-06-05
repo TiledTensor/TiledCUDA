@@ -53,15 +53,15 @@ using TemporalExecReg = TileShape<2, 1>;
  * data tiles combine to form a shared memory tile data tile. */
 
 // how warps are laied out in a CTA
-using WarpLayout = TileShape<1, 4>;
+using WarpLayout = RowMajor<1, 4>;
 // how threads are laid out in a single warp.
-using ThreadLayout = TileShape<16, 2>;  // fixed when using ldmatrix
+using ThreadLayout = RowMajor<16, 2>;  // fixed when using ldmatrix
 // the shape of an elementary data tile for a single thread.
-using ElemDataTile = TileShape<2, 16>;
+using ElemDataTile = RowMajor<2, 16>;
 
 // shape of the accessed data by executing the atomic instruction for a
 // single time.
-using ElemDataTileReg = TileShape<1, 8>;
+using ElemDataTileReg = RowMajor<1, 8>;
 
 // the copy plan for accessing shared memory
 using Shared = SharedTile<Element, TemporalExecShared, WarpLayout,
