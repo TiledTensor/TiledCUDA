@@ -79,6 +79,14 @@ class SharedTile : public Base {
     constexpr static size_t sc0 = dim_size<0, TemporalExec>;
     constexpr static size_t sc1 = dim_size<1, TemporalExec>;
 
+    // FIXME: The code below that determines whether the register tile is
+    // created by ldmatrix or wmma is quite tricky. These two instructions leads
+    // to different shared memory access patterns. It's important to fix this
+    // tricky implementations to ensure that the code is more readable and
+    // easier to work with.
+    constexpr static bool kIsWmmaTile =
+        tl::num_rows<ThreadLayout_> == 8 && tl::num_cols<ThreadLayout_> == 4;
+
     // NOTE that: this implementation assumes that each thread uses the maximal
     // width of vectorized access, which we treat as an atomic access
     // instruction, to optimize performance on the GPU platform. Specifically,
@@ -86,8 +94,14 @@ class SharedTile : public Base {
     // (denoted by `DataLayout`), `PtrArray` stores the number of times and the
     // positions in shared memory where the atomic memory access instruction is
     // executed.
-    constexpr static int kElemTileNumel = tl::get_numel<ElemTileLayout>;
-    using PtrArray = DevArray<DType*, kElemTileNumel / Base::kNumPerAccess>;
+    constexpr static int kPtrNum =
+        tl::get_numel<ElemTileLayout> / Base::kNumPerAccess;
+
+    // FIXME: hard-coded for wmma
+    constexpr static int kNumPerStore = 2;
+    constexpr static int kPtrNumWmma =
+        tl::get_numel<ElemTileLayout> / kNumPerStore;
+    using PtrArray = DevArray<DType*, kIsWmmaTile ? kPtrNumWmma : kPtrNum>;
 
   public:
     // ctor
@@ -104,6 +118,17 @@ class SharedTile : public Base {
     // @tparam idx: the 2D coordinates of the temporal execution of a spatial
     //              shared memory tile.
     DEVICE PtrArray& operator[](int2 idx) {
+        if (kIsWmmaTile) {
+            compute_shm_pos_wmma(idx.x, idx.y);
+        } else {
+            compute_shm_pos_ldmatrix(idx.x, idx.y);
+        }
+
+        return shm_pos_;
+    }
+
+  private:
+    DEVICE void compute_shm_pos_ldmatrix(int x, int y) {
         // TODO(haruhi): the current implementation assumes shared memory
         // columns are contiguous in memory.
         DType* data = data_;
@@ -111,7 +136,7 @@ class SharedTile : public Base {
         // step 1. advance pointer to a all-warps-tile:
         int stride = kCols * kRowsPerExec;
         int col_stride = kColsPerExec;
-        int offset = idx.x * stride + idx.y * col_stride;
+        int offset = x * stride + y * col_stride;
         data += offset;  // advance pointer
 
         // step 2. advance the pointer to the shared memory position for the
@@ -128,9 +153,8 @@ class SharedTile : public Base {
         data += offset;  // advance pointer
 
         // step 3. advance the pointer to shared memory position the current
-        // thread inside a warp cooperative instruction (indexed by [lane_row,
-        // lane_col]) access.
-        // compute the 2D coordinates
+        // thread inside a warp cooperative instruction (indexed by
+        // [lane_row, lane_col]) access. compute the 2D coordinates
         int lane_id = threadIdx.x % 32;
         // in a warp cooperative instruction, the threads are
         // laid out in a [2, 2] tile, and each tile has a shape of [8, 1].
@@ -153,10 +177,34 @@ class SharedTile : public Base {
                 shm_pos_[i * sc1 + j] = data + j * col_stride;
             data += row_stride;
         }
-        return shm_pos_;
     }
 
-  private:
+    DEVICE void compute_shm_pos_wmma(int x, int y) {
+        DType* data = data_;
+
+        int lane_id = threadIdx.x % 32;
+        int lane_row = lane_id / 4;
+        int lane_col = lane_id % 4;
+
+        int col_stride = tl::num_cols<ElemTileLayout> * 2;
+        int row_stride = tl::num_cols<ElemTileLayout> *
+                         tl::num_cols<ThreadLayout> *
+                         tl::num_rows<ThreadLayout>;
+
+        int row, col, offset;
+        for (int i = 0; i < PtrArray::kSize; i += 4) {
+            for (int j = 0; j < 4; ++j) {
+                // hard-coded the inner thread layout for wmma
+                row = j % 2;
+                col = j / 2;
+                offset = row * row_stride + col * col_stride + lane_row * 16 +
+                         lane_col * 2;
+
+                shm_pos_[i * 4 + j] = data + offset;
+            }
+        }
+    }
+
     DType* data_;  // Pointer to shared memory data.
     // shared memory positions accessed by the current thread.
     PtrArray shm_pos_;

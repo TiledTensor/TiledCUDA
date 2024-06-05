@@ -13,9 +13,6 @@ DEVICE void gemm(const TiledMma& mma, const TensorA& a, const TensorB& b,
     cute::gemm(mma, a, b, acc);
 }
 
-template <const int kM, const int kN, const int kK>
-using InstShape = TileShape<kM, kN, kK>;
-
 namespace detail {
 
 // functor to warp ptx wmma instruction
@@ -46,43 +43,12 @@ struct Gemm<RegTileA, RegTileB, RegTileC, InstShape<16, 16, 16>> {
             : "r"(ra[0]), "r"(ra[1]), "r"(ra[2]), "r"(ra[3]), "r"(rb[0]),
               "r"(rb[2]), "r"(rc[0]), "r"(rc[1]), "r"(rc[2]), "r"(rc[3]));
 
-        if (threadIdx.x == 0) {
-            const half* reg1 = reinterpret_cast<const half*>(a.data());
-            const half* reg2 = reinterpret_cast<const half*>(b.data());
-            const float* reg3 = reinterpret_cast<const float*>(c.data());
-
-            printf("[A-tid = %d]:\t", threadIdx.x);
-            for (int i = 0; i < 8; ++i) printf("%.2f, ", __half2float(reg1[i]));
-
-            printf("\npart 1, [B-tid = %d]:\t", threadIdx.x);
-            printf("%.2f, %.2f, %.2f, %.2f\n", __half2float(reg2[0]),
-                   __half2float(reg2[1]), __half2float(reg2[4]),
-                   __half2float(reg2[5]));
-
-            printf("part 1, [C-tid = %d]:\t", threadIdx.x);
-            for (int i = 0; i < 4; ++i) printf("%.2f, ", reg3[i]);
-            printf("\n");
-        }
-
         asm volatile(
             "mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%0, %1, %2, "
             "%3}, {%4, %5, %6, %7}, {%8, %9}, {%10, %11, %12, %13};\n"
             : "=r"(rc[4]), "=r"(rc[5]), "=r"(rc[6]), "=r"(rc[7])
             : "r"(ra[0]), "r"(ra[1]), "r"(ra[2]), "r"(ra[3]), "r"(rb[1]),
               "r"(rb[3]), "r"(rc[4]), "r"(rc[5]), "r"(rc[6]), "r"(rc[7]));
-
-        if (threadIdx.x == 0) {
-            const half* reg2 = reinterpret_cast<const half*>(b.data());
-            const float* reg3 = reinterpret_cast<const float*>(c.data());
-
-            printf("\npart 2, [B-tid = %d]:\t", threadIdx.x);
-            printf("%.2f, %.2f, %.2f, %.2f\n", __half2float(reg2[2]),
-                   __half2float(reg2[3]), __half2float(reg2[6]),
-                   __half2float(reg2[7]));
-
-            printf("part 2, [C-tid = %d]:\t", threadIdx.x);
-            for (int i = 4; i < 8; ++i) printf("%.2f, ", reg3[i]);
-        }
     }
 };
 

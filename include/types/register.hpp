@@ -56,6 +56,14 @@ class RegTile : public Base {
     using TemporalExec = TemporalExec_;
     using ElemTileLayout = ElemTileLayout_;
 
+    // FIXME: The code below that determines whether the register tile is
+    // created by ldmatrix or wmma is quite tricky. These two instructions leads
+    // to different shared memory access patterns. It's important to fix this
+    // tricky implementations to ensure that the code is more readable and
+    // easier to work with.
+    constexpr static bool kIsWmmaTile =
+        tl::num_rows<ElemTileLayout> == 2 && tl::num_cols<ElemTileLayout> == 4;
+
     // how many 128-bit are used per access
     constexpr static int kRegCountPerAccess =
         Base::kAccessInBits / 8 / sizeof(uint32_t);
@@ -77,6 +85,16 @@ class RegTile : public Base {
 
     DEVICE const DType* operator[](int2 idx) const {
         return &data_[idx.x][idx.y];
+    }
+
+    DEVICE DType& operator[](int idx) {
+        DType* ptr = (DType*)data_;
+        return ptr[idx];
+    }
+
+    DEVICE const DType& operator[](int idx) const {
+        DType* ptr = (DType*)data_;
+        return ptr[idx];
     }
 
     DEVICE DType* mutable_data() { return (DType*)data_; }

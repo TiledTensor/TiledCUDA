@@ -2,6 +2,7 @@
 
 #include "cuda_utils.hpp"
 #include "types/common.hpp"
+#include "types/tile_shape.hpp"
 
 #include <cute/tensor.hpp>
 #include <cutlass/numeric_conversion.h>
@@ -57,7 +58,8 @@ namespace detail {
 enum class CopyInst {
     Ldmatrix = 0,  // ldmatrix for loading data from shared memory to register.
     Stmatrix = 1,
-    LDSM32 = 2
+    LDSM32 = 2,
+    LDSM128 = 3
 };
 
 // functor to copy data from shared memory to register file.
@@ -96,6 +98,25 @@ struct CopyShared2Reg<SrcPtrs, DstTile, CopyInst::Ldmatrix> {
     }
 };
 
+// functor to copy data from shared memory to register file.
+template <typename RegTile, typename SharedPtrs, typename InstShape,
+          CopyInst kCopyInst>
+struct CopyReg2Shared {
+    DEVICE void operator()();
+};
+
+// partial specialization for wmma 16x16x16, and LDSM32
+template <typename RegTile, typename SharedPtrs>
+struct CopyReg2Shared<RegTile, SharedPtrs, InstShape<16, 16, 16>,
+                      CopyInst::LDSM32> {
+    DEVICE void operator()(RegTile& src, SharedPtrs& dst) {
+        for (int i = 0; i < SharedPtrs::kSize; ++i) {
+            dst[i][0] = src[i * 2];
+            dst[i][1] = src[i * 2 + 1];
+        }
+    }
+};
+
 }  // namespace detail
 
 /*
@@ -107,18 +128,25 @@ struct CopyShared2Reg<SrcPtrs, DstTile, CopyInst::Ldmatrix> {
  * @tparam pos: the shared memory positions accessed by the current thread.
  * @tparam dst: the destination data tile in register.
  */
-template <typename SrcPtrs, typename DstTile>
-DEVICE void copy_2d_tile_s2r(SrcPtrs& pos, DstTile& dst) {
+template <typename ShmPtrs, typename RegTile>
+DEVICE void copy_2d_tile_s2r(ShmPtrs& pos, RegTile& dst) {
     using Copy =
-        detail::CopyShared2Reg<SrcPtrs, DstTile, detail::CopyInst::Ldmatrix>;
+        detail::CopyShared2Reg<ShmPtrs, RegTile, detail::CopyInst::Ldmatrix>;
 
     Copy copy;
     copy(pos, dst);
 }
 
-template <typename SrcTile, typename DstPtrs>
-DEVICE void copy_2d_tile_r2s(SrcTile& src, DstPtrs& pos) {
-    // TODO: not implemented yet
+template <typename RegTile, typename SharedPos>
+DEVICE void copy_2d_tile_r2s(RegTile& src, SharedPos& dst) {
+    static_assert(RegTile::kIsWmmaTile);
+
+    using Copy =
+        detail::CopyReg2Shared<RegTile, SharedPos, InstShape<16, 16, 16>,
+                               detail::CopyInst::LDSM32>;
+
+    Copy copy;
+    copy(src, dst);
 }
 
 }  // namespace tiledcuda::cell::copy
