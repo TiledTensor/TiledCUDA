@@ -111,6 +111,7 @@ struct CopyReg2Shared<RegTile, SharedPtrs, InstShape<16, 16, 16>,
                       CopyInst::LDSM32> {
     DEVICE void operator()(RegTile& src, SharedPtrs& dst) {
         for (int i = 0; i < SharedPtrs::kSize; ++i) {
+            // TODO: naive implementation, not vectorized
             dst[i][0] = src[i * 2];
             dst[i][1] = src[i * 2 + 1];
         }

@@ -71,13 +71,22 @@ __device__ void print_tile(const Element* data, int delimeter = kCols) {
     printf("\n");
 }
 
-template <typename Element, typename SharedA, typename RegA, typename SharedB,
-          typename RegB, typename ElementC, typename SharedC, typename RegC,
-          typename CopyTraits>
-__global__ void test_wmma1(ElementC* gC) {
+template <typename S2R, typename R2S, typename S2G>
+__global__ void test_wmma1(typename R2S::Element* g_buf) {
+    using Element = typename S2R::Element;
+    using SharedA = typename S2R::Shared;
+    using RegA = typename S2R::Reg;
+
+    using SharedB = typename S2R::Shared;
+    using RegB = typename S2R::Reg;
+
+    using ElementAcc = typename R2S::Element;
+    using SharedC = typename R2S::Shared;
+    using RegC = typename R2S::Reg;
+
     extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
     auto* buf = reinterpret_cast<Element*>(buf_);
-    auto* st_buf = reinterpret_cast<ElementC*>(buf);
+    auto* st_buf = reinterpret_cast<ElementAcc*>(buf);
 
     init_a<Element, SharedA::kRows, SharedA::kCols>(buf);
     init_b<Element, SharedB::kRows, SharedB::kCols>(buf + SharedA::kNumel);
@@ -103,27 +112,18 @@ __global__ void test_wmma1(ElementC* gC) {
     copy::copy_2d_tile_r2s(rC, sC[make_int2(0, 0)]);
     __syncthreads();
 
-    copy::copy_2d_tile_s2g(st_buf, gC, typename CopyTraits::SmemLayout{},
-                           typename CopyTraits::GmemLayout{},
-                           typename CopyTraits::TiledCopy{});
+    copy::copy_2d_tile_s2g(st_buf, g_buf, typename S2G::SmemLayout{},
+                           typename S2G::GmemLayout{},
+                           typename S2G::TiledCopy{});
 }
 
 }  // namespace
 
 namespace testing {
 
-template <typename Element, int kRows, int kCols>
-struct CopyTraits {
-    using SmemLayout = tl::RowMajor<kRows, kCols>;
-    using GmemLayout = tl::RowMajor<kRows, kCols>;
-    using CopyInst = Copy_Atom<DefaultCopy, Element>;
-
-    using TiledCopy = decltype(make_tiled_copy(CopyInst{}, tl::RowMajor<8, 4>{},
-                                               Layout<Shape<_1, _4>>{}));
-};
-
-TEST(TestWmma, shape1) {
-    using Element = cutlass::half_t;
+template <typename Element_>
+struct S2RTraits {
+    using Element = Element_;
 
     // operand A/B: shared memory
     using TemporalExecShared = TileShape<1, 1>;
@@ -137,35 +137,60 @@ TEST(TestWmma, shape1) {
     using ExecShapeReg = TileShape<1, 1>;
     using ElemTileReg = tl::RowMajor<1, 8>;  // fixed when using ldmatrix
     using Reg = RegTile<Element, ExecShapeReg, ElemTileReg>;
+};
 
-    using ElementC = float;
+template <typename Element_>
+struct R2STraits {
+    using Element = Element_;
+
     // operand C: register
-    using ExecShapeRegC = TileShape<1, 1>;
+    using ExecShapeReg = TileShape<1, 1>;
     // wmma's register tile is 1 x 2 nested with 2 x 2
-    using ElemTileRegC = tl::RowMajor<2, 4>;
-    using RegC = RegTile<ElementC, ExecShapeRegC, ElemTileRegC>;
+    using ElemTileReg = tl::RowMajor<2, 4>;
+    using Reg = RegTile<Element, ExecShapeReg, ElemTileReg>;
 
     // operand C: shared memory
     // wmma's register tile is 1 x 2 nested with 2 x 2
-    using ElemTileSharedC = tl::RowMajor<2, 4>;
-    using ThreadLayoutC = tl::RowMajor<8, 4>;
-    using WarpLayoutC = tl::RowMajor<1, 1>;
-    using TemporalExecSharedC = TileShape<1, 1>;
-    using SharedC = SharedTile<ElementC, TemporalExecSharedC, WarpLayoutC,
-                               ThreadLayoutC, ElemTileSharedC>;
+    using ElemTileShared = tl::RowMajor<2, 4>;
+    using ThreadLayout = tl::RowMajor<8, 4>;
+    using WarpLayout = tl::RowMajor<1, 1>;
+    using TemporalExecShared = TileShape<1, 1>;
+    using Shared = SharedTile<Element, TemporalExecShared, WarpLayout,
+                              ThreadLayout, ElemTileShared>;
+};
+
+template <typename Element, int kRows, int kCols>
+struct S2GTraits {
+    using SmemLayout = tl::RowMajor<kRows, kCols>;
+    using GmemLayout = tl::RowMajor<kRows, kCols>;
+    using CopyInst = Copy_Atom<DefaultCopy, Element>;
+
+    using TiledCopy = decltype(make_tiled_copy(CopyInst{}, tl::RowMajor<8, 4>{},
+                                               Layout<Shape<_1, _4>>{}));
+};
+
+TEST(TestWmma, shape1) {
+    using Element = cutlass::half_t;
+    // transfer operand A/B from the shared memory to register
+    using LoadS2R = S2RTraits<Element>;
+    using SharedA = LoadS2R::Shared;
+    using SharedB = LoadS2R::Shared;
+
+    // transfer operand C from register to shared memory
+    using StoreR2S = R2STraits<float>;
+    using SharedC = StoreR2S::Shared;
+    // transfer operand C from shared memory to global memory
+    using StoreS2G = S2GTraits<float, SharedA::kRows, SharedB::kCols>;
+
+    const int kThreads = SharedA::kThreads;
+    dim3 dim_grid(1, 1, 1);
+    dim3 dim_block(kThreads, 1, 1);
 
     thrust::device_vector<float> d_c(SharedC::kNumel);
     thrust::fill(d_c.begin(), d_c.end(), 0.);
 
-    const int kThreads = Shared::kThreads;
-    dim3 dim_grid(1, 1, 1);
-    dim3 dim_block(kThreads, 1, 1);
-
-    using CopyS2G = CopyTraits<ElementC, Shared::kRows, Shared::kCols>;
-
-    int shm_size = (Shared::kNumel + Shared::kNumel) * sizeof(Element);
-    test_wmma1<Element, Shared, Reg, Shared, Reg, ElementC, SharedC, RegC,
-               CopyS2G><<<dim_grid, dim_block, shm_size>>>(
+    int shm_size = (SharedA::kNumel + SharedB::kNumel) * sizeof(Element);
+    test_wmma1<LoadS2R, StoreR2S, StoreS2G><<<dim_grid, dim_block, shm_size>>>(
         thrust::raw_pointer_cast(d_c.data()));
     cudaDeviceSynchronize();
 
@@ -173,7 +198,7 @@ TEST(TestWmma, shape1) {
     h_c1 = d_c;
 
     {  // ground truth
-        int M = 16, N = 16, K = 16;
+        int M = SharedA::kRows, N = SharedB::kCols, K = SharedA::kCols;
 
         thrust::host_vector<float> h_a(M * K);
         thrust::host_vector<float> h_b(K * N);
