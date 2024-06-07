@@ -55,7 +55,7 @@ struct Gemm<RegTileA, RegTileB, RegTileC, InstShape<16, 16, 16>> {
 }  // namespace detail
 
 template <typename RegTileA, typename RegTileB, typename RegTileC>
-DEVICE void wmma(const RegTileA& a, const RegTileB& b, RegTileC& c) {
+DEVICE void gemm2(const RegTileA& a, const RegTileB& b, RegTileC& c) {
     detail::Gemm<RegTileA, RegTileB, RegTileC, InstShape<16, 16, 16>> gemm;
     gemm(a, b, c);
 }

@@ -95,5 +95,17 @@ struct SwizzledRowMajor<cutlass::half_t, kRows, kCols, 1> {
                                               Shape<Int<kRows>, Int<kCols>>{}));
 };
 
+template <const int kRows, const int kCols>
+struct SwizzledRowMajor<float, kRows, kCols, 0> {
+    // FIXME: not implmented yet. placeholder for future implementation.
+    using SmemLayout = RowMajor<kRows, kCols, kCols>;
+};
+
+template <const int kRows, const int kCols>
+struct SwizzledRowMajor<float, kRows, kCols, 1> {
+    // FIXME: not implmented yet. placeholder for future implementation.
+    using SmemLayout = RowMajor<kRows, kCols, kCols>;
+};
+
 }  // namespace tile_layout
 }  // namespace tiledcuda::cell
