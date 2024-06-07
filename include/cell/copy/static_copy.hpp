@@ -150,4 +150,18 @@ DEVICE void copy_2d_tile_r2s(RegTile& src, SharedPos& dst) {
     copy(src, dst);
 }
 
+/// @brief Copy a tile from shared memory to register.
+/// @tparam Shared the shared memory tile type.
+/// @tparam Reg the register tile type.
+/// @tparam WarpLayout the warp layout.
+template <typename Shared, typename Reg, typename WarpLayout>
+DEVICE void copy_tile_s2r(
+    const Shared& src, Reg& dst,
+    const WarpLayout& layout /*to trigger type inference*/) {}
+
+template <typename Reg, typename Shared, typename WarpLayout>
+DEVICE void copy_tile_r2s(
+    const Reg& src, Shared& reg,
+    const WarpLayout& layout /*to trigger type inference*/) {}
+
 }  // namespace tiledcuda::cell::copy

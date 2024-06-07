@@ -60,4 +60,7 @@ DEVICE void gemm2(const RegTileA& a, const RegTileB& b, RegTileC& c) {
     gemm(a, b, c);
 }
 
+template <typename RegA, typename RegB, typename RegC>
+DEVICE void gemm_(const RegA& a, const RegB& b, RegC& c) {}
+
 }  // namespace tiledcuda::cell::compute

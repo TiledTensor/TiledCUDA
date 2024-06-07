@@ -127,6 +127,8 @@ class SharedTile : public Base {
         return shm_pos_;
     }
 
+    DEVICE void operator()(int x, int y) {}
+
   private:
     DEVICE void compute_shm_pos_ldmatrix(int x, int y) {
         // TODO(haruhi): the current implementation assumes shared memory
@@ -208,6 +210,22 @@ class SharedTile : public Base {
     DType* data_;  // Pointer to shared memory data.
     // shared memory positions accessed by the current thread.
     PtrArray shm_pos_;
+};
+
+template <class Element_, class TileLayout_>
+class Shared {
+  public:
+    using DType = Element_;
+    using Layout = TileLayout_;
+
+    static constexpr int kNumel = tl::get_numel<Layout>;
+    static constexpr int kRows = tl::num_rows<Layout>;
+    static constexpr int kCols = tl::num_cols<Layout>;
+
+    DEVICE Shared(DType* data) : data_(data) {}
+
+  private:
+    DType* data_;
 };
 
 }  // namespace tiledcuda::cell

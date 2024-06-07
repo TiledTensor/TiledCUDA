@@ -111,4 +111,45 @@ class RegTile : public Base {
     DType data_[kRows][kCols];
 };
 
+template <class Element_, class TileLayout_>
+class Reg {
+  public:
+    using DType = Element_;
+    using TileLayout = TileLayout_;
+
+    static constexpr int kRows = tl::num_rows<TileLayout>;
+    static constexpr int kCols = tl::num_cols<TileLayout>;
+
+    DEVICE Reg() { memset((void*)data_, 0, sizeof(data_)); }
+
+    DEVICE DType* operator[](int2 idx) { return &data_[idx.x][idx.y]; }
+
+    DEVICE const DType* operator[](int2 idx) const {
+        return &data_[idx.x][idx.y];
+    }
+
+    DEVICE DType& operator[](int idx) {
+        DType* ptr = (DType*)data_;
+        return ptr[idx];
+    }
+
+    DEVICE const DType& operator[](int idx) const {
+        DType* ptr = (DType*)data_;
+        return ptr[idx];
+    }
+
+    DEVICE DType* mutable_data() { return (DType*)data_; }
+
+    DEVICE const DType* data() const { return (DType*)data_; }
+
+    template <typename T>
+    DEVICE static void dump_value(const T* data, int numel) {
+        detail::dump_value<T>(data, numel);
+    };
+
+  private:
+    // register tile data is implemented as an 2D array of size kRows x kCols
+    DType data_[kRows][kCols];
+};
+
 }  // namespace tiledcuda::cell
