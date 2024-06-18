@@ -1,6 +1,5 @@
 #pragma once
 
-#include "cell/traits/base.hpp"
 #include "types/common.hpp"
 #include "types/layout.hpp"
 
@@ -8,28 +7,6 @@ namespace tiledcuda::cell {
 
 using namespace cell;
 namespace tl = tile_layout;
-
-namespace {
-template <typename Element, const int kRows, const int kCols, const int kStride>
-__device__ void print_tile(const Element* data) {
-    const int delimeter = 64;
-
-    half* data_ = reinterpret_cast<half*>(const_cast<Element*>(data));
-
-    if (threadIdx.x || blockIdx.x || blockIdx.y) return;
-
-    int row, col;
-    for (int i = 0; i < kRows * kCols; ++i) {
-        row = i / kCols;
-        col = i % kCols;
-
-        printf("%.0f, ", __half2float(data_[row * kStride + col]));
-
-        if ((i + 1) % delimeter == 0) printf("\n");
-    }
-    printf("\n\n");
-}
-}  // namespace
 
 template <class Element_, class Layout_>
 class SharedTile {
@@ -49,6 +26,11 @@ class SharedTile {
     // for read access
     DEVICE const DType& operator()(int x, int y) const {
         return data_[layout_(x, y)];
+    }
+
+    DEVICE void dump_value() {
+        PrintTile<DType, Layout> printer;
+        printer(data_, layout_);
     }
 
   private:

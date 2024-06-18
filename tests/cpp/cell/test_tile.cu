@@ -11,15 +11,12 @@ namespace tl = tile_layout;
 
 namespace {
 
-/// utility function
 template <typename Shared>
 __device__ void init_tile(Shared& data) {
-    if (threadIdx.x) return;
-
     int v = 0;
     for (int i = 0; i < Shared::kRows; ++i) {
         for (int j = 0; j < Shared::kCols; ++j) {
-            data(i, j) = static_cast<typename Shared::DType>(++v % 2048);
+            data(i, j) = static_cast<typename Shared::DType>(v++);
         }
     }
 }
@@ -34,36 +31,16 @@ __global__ void test_shared_tile() {
     Shared s_tile(buf);
     init_tile(s_tile);
 
-    if (threadIdx.x == 0) {
-        printf("\nShared tile:\n");
-        for (int i = 0; i < Shared::kRows; ++i) {
-            for (int j = 0; j < Shared::kCols; ++j) {
-                // print cutlass::half_t
-                printf("%.0f, ", float(s_tile(i, j) * 1.0_hf));
-            }
-            printf("\n");
-        }
-    }
+    printf("Shared tile:\n");
+    s_tile.dump_value();
 
     using Reg = RegTile<DType, tl::RowMajor<2, 4>>;
     Reg r_tile;
 
-    if (threadIdx.x == 0) {
-        for (int i = 0; i < Reg::kRows; ++i) {
-            for (int j = 0; j < Reg::kCols; ++j) {
-                r_tile(i, j) = static_cast<DType>(i * Reg::kCols + j);
-            }
-        }
+    init_tile(r_tile);
 
-        printf("RegTile\n");
-        for (int i = 0; i < Reg::kRows; ++i) {
-            for (int j = 0; j < Reg::kCols; ++j) {
-                // print cutlass::half_t
-                printf("%.0f, ", float(r_tile(i, j) * 1.0_hf));
-            }
-            printf("\n");
-        }
-    }
+    printf("Shared tile:\n");
+    r_tile.dump_value();
 }
 
 }  // namespace
@@ -76,7 +53,8 @@ TEST(TestTile, test_shared_tile) {
 
     using Shared1 = SharedTile<Element, tl::RowMajor<rows, cols>>;
     int shm_size = Shared1::kNumel * sizeof(Element);
-    test_shared_tile<Shared1><<<1, 32, shm_size>>>();
+    // DONOT change the launch config
+    test_shared_tile<Shared1><<<1, 1, shm_size>>>();
     cudaDeviceSynchronize();
 }
 

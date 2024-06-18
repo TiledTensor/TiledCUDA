@@ -1,8 +1,7 @@
 #pragma once
 
-#include "cell/traits/base.hpp"
+#include "types/common.hpp"
 #include "types/layout.hpp"
-#include "types/tile_shape.hpp"
 
 namespace tiledcuda::cell {
 
@@ -28,6 +27,11 @@ class RegTile {
     // for read access
     DEVICE const DType& operator()(int x, int y) const {
         return data_[layout_(x, y)];
+    }
+
+    DEVICE void dump_value() {
+        PrintTile<DType, Layout> printer;
+        printer(static_cast<DType*>(data_), layout_);
     }
 
   private:
