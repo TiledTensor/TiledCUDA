@@ -53,7 +53,7 @@ TEST(TestTile, test_shared_tile) {
 
     using Shared1 = SharedTile<Element, tl::RowMajor<rows, cols>>;
     int shm_size = Shared1::kNumel * sizeof(Element);
-    // DONOT change the launch config
+    // DONOT change this launch config
     test_shared_tile<Shared1><<<1, 1, shm_size>>>();
     cudaDeviceSynchronize();
 }

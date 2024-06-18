@@ -22,7 +22,6 @@ class DevArray {
     Element data_[kSize];
 };
 
-// functor to copy data from shared memory to register file.
 template <typename DType, typename Layout>
 struct PrintTile {
     DEVICE void operator()(const DType* data, const Layout& layout);

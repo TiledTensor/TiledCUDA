@@ -1,7 +1,6 @@
 #include "cell/mod.hpp"
 #include "common/test_utils.hpp"
-#include "types/tile_iterator.hpp"
-#include "types/types.hpp"
+#include "types/mod.hpp"
 
 #include <glog/logging.h>
 #include <thrust/device_vector.h>

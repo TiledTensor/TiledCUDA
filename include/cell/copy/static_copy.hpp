@@ -1,8 +1,7 @@
 #pragma once
 
 #include "cuda_utils.hpp"
-#include "types/common.hpp"
-#include "types/tile_shape.hpp"
+#include "types/mod.hpp"
 
 #include <cute/tensor.hpp>
 #include <cutlass/numeric_conversion.h>

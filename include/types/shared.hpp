@@ -1,7 +1,7 @@
 #pragma once
 
-#include "types/common.hpp"
 #include "types/layout.hpp"
+#include "util/print.hpp"
 
 namespace tiledcuda::cell {
 
@@ -28,10 +28,7 @@ class SharedTile {
         return data_[layout_(x, y)];
     }
 
-    DEVICE void dump_value() {
-        PrintTile<DType, Layout> printer;
-        printer(data_, layout_);
-    }
+    DEVICE void dump_value() { print_tile(data_, layout_); }
 
   private:
     DType* data_;

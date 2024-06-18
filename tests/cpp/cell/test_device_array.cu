@@ -1,6 +1,6 @@
 #include "cell/copy/mod.hpp"
 #include "common/test_utils.hpp"
-#include "types/types.hpp"
+#include "types/mod.hpp"
 
 #include <assert.h>
 

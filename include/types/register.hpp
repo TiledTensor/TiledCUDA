@@ -1,7 +1,7 @@
 #pragma once
 
-#include "types/common.hpp"
 #include "types/layout.hpp"
+#include "util/print.hpp"
 
 namespace tiledcuda::cell {
 
@@ -30,8 +30,7 @@ class RegTile {
     }
 
     DEVICE void dump_value() {
-        PrintTile<DType, Layout> printer;
-        printer(static_cast<DType*>(data_), layout_);
+        print_tile(static_cast<DType*>(data_), layout_);
     }
 
   private:
