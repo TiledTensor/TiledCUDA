@@ -2,9 +2,11 @@
 
 #include "cell/traits/base.hpp"
 #include "types/common.hpp"
+#include "types/layout.hpp"
 
 namespace tiledcuda::cell {
 
+using namespace cell;
 namespace tl = tile_layout;
 
 namespace {
@@ -29,20 +31,29 @@ __device__ void print_tile(const Element* data) {
 }
 }  // namespace
 
-template <class Element_, class TileLayout_>
-class Shared {
+template <class Element_, class Layout_>
+class SharedTile {
   public:
     using DType = Element_;
-    using Layout = TileLayout_;
+    using Layout = Layout_;
 
     static constexpr int kNumel = tl::get_numel<Layout>;
     static constexpr int kRows = tl::num_rows<Layout>;
     static constexpr int kCols = tl::num_cols<Layout>;
 
-    DEVICE Shared(DType* data) : data_(data) {}
+    DEVICE SharedTile(DType* data) : data_(data), layout_(Layout{}) {}
+
+    // for write access
+    DEVICE DType& operator()(int x, int y) { return data_[layout_(x, y)]; }
+
+    // for read access
+    DEVICE const DType& operator()(int x, int y) const {
+        return data_[layout_(x, y)];
+    }
 
   private:
     DType* data_;
+    Layout layout_;
 };
 
 }  // namespace tiledcuda::cell

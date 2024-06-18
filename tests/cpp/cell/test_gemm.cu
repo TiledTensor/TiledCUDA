@@ -11,7 +11,6 @@ namespace tiledcuda {
 
 using namespace cell;
 using namespace cute;
-
 namespace tl = tile_layout;
 
 namespace {
@@ -66,9 +65,9 @@ __global__ void test_wmma1(const Element* ga, const Element* gb,
     __copy_async();
     __syncthreads();
 
-    Reg<Element, tl::RowMajor<4, 24>> rA;
-    Reg<Element, tl::RowMajor<4, 24>> rB;
-    Reg<ElementAcc, tl::RowMajor<2, 8>> acc;
+    RegTile<Element, tl::RowMajor<4, 24>> rA;
+    RegTile<Element, tl::RowMajor<4, 24>> rB;
+    RegTile<ElementAcc, tl::RowMajor<2, 8>> acc;
 
     TileIteratorA sAs(shared_a);
     TileIteratorB sBs(shared_b);
@@ -131,11 +130,7 @@ TEST(TestWmma, shape1) {
     dim3 dim_grid(1, 1, 1);
     dim3 dim_block(kThreads, 1, 1);
 
-    int size_ab = (M + N) * K * sizeof(Element);
-    int size_c = M * N * sizeof(ElementAcc);
-    int shm_size = size_ab > size_c ? size_ab : size_c;
-
-    using SharedA = Shared<Element, tl::RowMajor<M, K>>;
+    using SharedA = SharedTile<Element, tl::RowMajor<M, K>>;
     using TileIteratorA = TileIterator<SharedA, TileShape<32, 32>>;
     LOG(INFO) << "TileIteratorA: [" << TileIteratorA::Tile::kRows << ", "
               << TileIteratorA::Tile::kCols
@@ -143,12 +138,12 @@ TEST(TestWmma, shape1) {
               << "sc0 = " << TileIteratorA::sc0
               << ", sc1 = " << TileIteratorA::sc1 << std::endl;
 
-    using SharedB = Shared<Element, tl::RowMajor<K, N>>;
+    using SharedB = SharedTile<Element, tl::RowMajor<K, N>>;
     using TileIteratorB = TileIterator<SharedB, TileShape<32, 32>>;
     LOG(INFO) << "TileIteratorB: sc0 = " << TileIteratorB::sc0
               << ", sc1 = " << TileIteratorB::sc1 << std::endl;
 
-    using SharedC = Shared<ElementAcc, tl::RowMajor<M, N>>;
+    using SharedC = SharedTile<ElementAcc, tl::RowMajor<M, N>>;
 
     // for global to shared memory copy using CuTe
     using LoadSharedA = traits::G2S2DCopyTraits<Element, M, K, M, K, kThreads,
@@ -160,6 +155,9 @@ TEST(TestWmma, shape1) {
         traits::S2G2DCopyTraits<ElementAcc, M, N, M, N, kThreads,
                                 false /*use swizzle*/>;
 
+    int size_ab = (M + N) * K * sizeof(Element);
+    int size_c = M * N * sizeof(ElementAcc);
+    int shm_size = size_ab > size_c ? size_ab : size_c;
     test_wmma1<Element, ElementAcc, LoadSharedA, LoadSharedB, StoreSharedC,
                TileIteratorA, TileIteratorB, SharedC, WarpLayout>
         <<<dim_grid, dim_block, shm_size>>>(
