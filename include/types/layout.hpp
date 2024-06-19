@@ -33,8 +33,11 @@ using ColMajor =
 template <typename Layout_>
 static constexpr size_t num_rows = cute::size<0>(Layout_{});
 
-template <typename Layout_> /*  */
+template <typename Layout_>
 static constexpr size_t num_cols = cute::size<1>(Layout_{});
+
+template <typename Layout_>
+static constexpr size_t get_numel = int(size(Layout_{}));
 
 HOST_DEVICE auto make_row_major_layout(const int row, const int col,
                                        const int stride) {
@@ -90,6 +93,18 @@ struct SwizzledRowMajor<cutlass::half_t, kRows, kCols, 1> {
         Swizzle<3, 3, 3>{}, cute::Layout<Shape<_8, _64>, Stride<_64, _1>>{}));
     using SmemLayout = decltype(tile_to_shape(SmemLayoutAtom{},
                                               Shape<Int<kRows>, Int<kCols>>{}));
+};
+
+template <const int kRows, const int kCols>
+struct SwizzledRowMajor<float, kRows, kCols, 0> {
+    // FIXME: not implmented yet. placeholder for future implementation.
+    using SmemLayout = RowMajor<kRows, kCols, kCols>;
+};
+
+template <const int kRows, const int kCols>
+struct SwizzledRowMajor<float, kRows, kCols, 1> {
+    // FIXME: not implmented yet. placeholder for future implementation.
+    using SmemLayout = RowMajor<kRows, kCols, kCols>;
 };
 
 }  // namespace tile_layout

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "cuda_utils.hpp"
-#include "types/common.hpp"
+#include "types/mod.hpp"
 
 #include <cute/tensor.hpp>
 #include <cutlass/numeric_conversion.h>
@@ -57,68 +57,64 @@ namespace detail {
 enum class CopyInst {
     Ldmatrix = 0,  // ldmatrix for loading data from shared memory to register.
     Stmatrix = 1,
-    LDSM32 = 2
+    Ldsm32 = 2,
+    Ldsm128 = 3
+};
+
+enum class RegLayout {
+    TcuWmma = 0,  // tile layout for TCU WMMA.
 };
 
 // functor to copy data from shared memory to register file.
-template <typename SrcPtrs, typename DstTile, CopyInst kCopyInst>
+template <typename Shared, typename Reg, CopyInst kCopyInst>
 struct CopyShared2Reg {
     DEVICE void operator()();
 };
 
 // partial specialization for ldmatrix
-template <typename SrcPtrs, typename DstTile>
-struct CopyShared2Reg<SrcPtrs, DstTile, CopyInst::Ldmatrix> {
-    DEVICE void operator()(SrcPtrs& pos, DstTile& dst) {
-        static_assert(
-            SrcPtrs::kSize == DstTile::kExecCount,
-            "The data tile that a single thread loads from shared memory "
-            "to its local register should have a equal shape.");
+template <typename Shared, typename Reg>
+struct CopyShared2Reg<Shared, Reg, CopyInst::Ldmatrix> {
+    DEVICE void operator()(const Shared& src, Reg& dst) {}
+};
 
-        uint32_t smem_addr;
-        // cast to pointer pointing to 128-bit register array
-        uint32_t* reg = reinterpret_cast<uint32_t*>(dst.mutable_data());
+// functor to copy data from shared memory to register file.
+template <typename Reg, typename Shared, typename InstShape,
+          RegLayout kRegLayout, CopyInst kCopyInst>
+struct CopyReg2Shared {
+    DEVICE void operator()();
+};
 
-        for (int i = 0; i < SrcPtrs::kSize; ++i) {
-            smem_addr = __cvta_generic_to_shared(pos[i]);
-
-            asm volatile(
-                "ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, %3}, "
-                "[%4];\n"
-                : "=r"(*(reg)), "=r"(*(reg + 2)), "=r"(*(reg + 1)),
-                  "=r"(*(reg + 3))
-                : "r"(smem_addr));
-
-#ifdef DEBUG
-            DstTile::dump_value(reg, 8);
-#endif
-            reg += DstTile::kRegCountPerAccess;  // advance pointer
-        }
-    }
+// partial specialization for wmma 16x16x16, and LDSM32
+template <typename Reg, typename Shared>
+struct CopyReg2Shared<Reg, Shared, InstShape<16, 16, 16>, RegLayout::TcuWmma,
+                      CopyInst::Ldsm32> {
+    DEVICE void operator()(const Reg& src, Shared& dst) {}
 };
 
 }  // namespace detail
 
-/*
- * @brief: use ldmatrix to loads 2D data tile from shared memory to thread's
- *         local register.
- *         FIXME(haruhi): a straightforward implementation is provided at the
- *         moment. Consider a better one.
- *
- * @tparam pos: the shared memory positions accessed by the current thread.
- * @tparam dst: the destination data tile in register.
- */
-template <typename SrcPtrs, typename DstTile>
-DEVICE void copy_2d_tile_s2r(SrcPtrs& pos, DstTile& dst) {
+/// @brief Copy a tile from shared memory: to register.
+/// @tparam Shared the shared memory tile type.
+/// @tparam Reg the register tile type.
+/// @tparam WarpLayout the warp layout.
+template <typename Shared, typename Reg, typename WarpLayout>
+DEVICE void copy_tile_s2r(const Shared& src, Reg& dst,
+                          const WarpLayout& layout /*for auto type-infer*/) {
     using Copy =
-        detail::CopyShared2Reg<SrcPtrs, DstTile, detail::CopyInst::Ldmatrix>;
+        detail::CopyShared2Reg<Shared, Reg, detail::CopyInst::Ldmatrix>;
 
     Copy copy;
-    copy(pos, dst);
+    copy(src, dst);
 }
 
-DEVICE void copy_2d_tile_r2s() {
-    // TODO: not implemented yet
+template <typename Reg, typename Shared, typename WarpLayout>
+DEVICE void copy_tile_r2s(const Reg& src, Shared& dst,
+                          const WarpLayout& layout /*for auto type infer*/) {
+    using Copy = detail::CopyReg2Shared<Reg, Shared, InstShape<16, 16, 16>,
+                                        detail::RegLayout::TcuWmma,
+                                        detail::CopyInst::Ldsm32>;
+    Copy copy;
+    copy(src, dst);
 }
 
 }  // namespace tiledcuda::cell::copy

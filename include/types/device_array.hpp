@@ -1,6 +1,10 @@
 #pragma once
 
+#include "types/layout.hpp"
+
 namespace tiledcuda::cell {
+
+namespace tl = tile_layout;
 
 /// @brief: A fixed-length small 1D array on the device.
 /// usage: store a set of data pointers on device.
