@@ -1,21 +1,22 @@
 #pragma once
 
 #include "types/layout.hpp"
+#include "util/debug.hpp"
 
 namespace tiledcuda {
 namespace cell {
 
 namespace tl = tile_layout;
 
+// TODO: a naive implementation for printing a tile.
+// improve it to be pretty printing and be compatible with more data types.
 template <typename DType, typename Layout>
 DEVICE void print_tile(const DType* data, const Layout& layout) {
-    if (threadIdx.x || blockIdx.x || blockIdx.y) return;
-
-    const half* data_ = reinterpret_cast<const half*>(data);
+    if (!thread0()) return;
 
     for (int i = 0; i < tl::num_rows<Layout>; ++i) {
         for (int j = 0; j < tl::num_cols<Layout>; ++j) {
-            printf("%.1f, ", __half2float(data_[layout(i, j)]));
+            printf("%.1f, ", static_cast<float>(data[layout(i, j)]));
         }
         printf("\n");
     }
@@ -24,7 +25,7 @@ DEVICE void print_tile(const DType* data, const Layout& layout) {
 
 template <typename Layout>
 DEVICE void print_tile(const cutlass::half_t* data, const Layout& layout) {
-    if (threadIdx.x || blockIdx.x || blockIdx.y) return;
+    if (!thread0()) return;
 
     const half* data_ = reinterpret_cast<const half*>(data);
 

@@ -8,7 +8,7 @@ namespace tiledcuda::cell {
 using namespace cell;
 namespace tl = tile_layout;
 
-template <class Element_, class Layout_>
+template <typename Element_, typename Layout_>
 class SharedTile {
   public:
     using DType = Element_;
@@ -24,9 +24,8 @@ class SharedTile {
     DEVICE DType& operator()(int x, int y) { return data_[layout_(x, y)]; }
 
     // for read access
-    DEVICE const DType& operator()(int x, int y) const {
-        return data_[layout_(x, y)];
-    }
+    DEVICE
+    const DType& operator()(int x, int y) const { return data_[layout_(x, y)]; }
 
     DEVICE void dump_value() { print_tile(data_, layout_); }
 

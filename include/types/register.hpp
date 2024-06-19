@@ -7,7 +7,7 @@ namespace tiledcuda::cell {
 
 namespace tl = tile_layout;
 
-template <class Element_, class Layout_>
+template <typename Element_, typename Layout_>
 class RegTile {
   public:
     using DType = Element_;
@@ -20,6 +20,10 @@ class RegTile {
     DEVICE RegTile() : layout_(Layout{}) {
         memset((void*)data_, 0, sizeof(data_));
     }
+
+    DEVICE DType* mutable_data() { return (DType*)data_; }
+
+    DEVICE const DType* data() const { return (DType*)data_; }
 
     // for write access
     DEVICE DType& operator()(int x, int y) { return data_[layout_(x, y)]; }

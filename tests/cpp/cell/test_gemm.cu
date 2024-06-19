@@ -1,6 +1,6 @@
 #include "cell/mod.hpp"
 #include "common/test_utils.hpp"
-#include "types/mod.hpp"
+#include "util/debug.hpp"
 
 #include <glog/logging.h>
 #include <thrust/device_vector.h>
@@ -32,18 +32,6 @@ void check_result1(const DType1* a, const DType1* b, DType2* c, int M, int N,
     }
 }
 
-/// utility function
-template <typename Element, const int kRows, const int kCols>
-__device__ void print_tile(const Element* data, int delimeter = kCols) {
-    if (threadIdx.x || blockIdx.x || blockIdx.y) return;
-
-    for (int i = 0; i < kRows * kCols; ++i) {
-        printf("%.2f, ", float(data[i] * 1.0_hf));  // print cutlass::half_t
-        if ((i + 1) % delimeter == 0) printf("\n");
-    }
-    printf("\n");
-}
-
 template <typename Element, typename ElementAcc, typename LoadSharedA,
           typename LoadSharedB, typename StoreSharedC, typename TileIteratorA,
           typename TileIteratorB, typename SharedC, typename WarpLayout>
@@ -54,7 +42,7 @@ __global__ void test_wmma1(const Element* ga, const Element* gb,
     auto* shared_b = shared_a + TileIteratorA::Tile::kNumel;
     auto* shared_c = reinterpret_cast<ElementAcc*>(buf_);
 
-    // transfer data tiles from global to shared
+    // transfer tiles from global to shared memory
     copy::copy_2d_tile_g2s(ga, shared_a, typename LoadSharedA::SrcLayout{},
                            typename LoadSharedA::DstLayout{},
                            typename LoadSharedA::TiledCopy{});
@@ -74,9 +62,35 @@ __global__ void test_wmma1(const Element* ga, const Element* gb,
     static_assert(TileIteratorA::sc1 == TileIteratorB::sc0,
                   "dimension mismatch!");
 
+    /*
+     shared memory tile A [64, 128] is partitioned into
+     a 2D grid of 32x32 sub-tiles:
+     |--------|----------|----------|----------|----------|
+     |iterator|    0     |    1     |    2     |    3     |
+     |--------|----------|----------|----------|----------|
+     |        |sub-tile 0|sub-tile 1|sub-tile 2|sub-tile 3|
+     |--------|----------|----------|----------|----------|
+     |        |sub-tile 4|sub-tile 5|sub-tile 6|sub-tile 7|
+     |--------|----------|----------|----------|----------|
+
+     shared memory tile B [128, 64] is partitioned into
+     a 2D grid of 32x32 sub-tiles:
+     |--------|----------|----------|
+     |iterator|          |          |
+     |--------|----------|----------|
+     |   0    |sub-tile 0|sub-tile 1|
+     |--------|----------|----------|
+     |   1    |sub-tile 2|sub-tile 3|
+     |--------|----------|----------|
+     |   2    |sub-tile 4|sub-tile 5|
+     |--------|----------|----------|
+     |   3    |sub-tile 6|sub-tile 7|
+     |--------|----------|----------|
+    */
+
     for (int k = 0; k < TileIteratorA::sc1; ++k) {
-        copy::copy_tile_s2r(*sAs(_, k), rA, WarpLayout{});
-        copy::copy_tile_s2r(*sBs(k, _), rB, WarpLayout{});
+        copy::copy_tile_s2r(sAs(_, k).to_tile(), rA, WarpLayout{});
+        copy::copy_tile_s2r(sBs(k, _).to_tile(), rB, WarpLayout{});
 
         compute::gemm_(rA, rB, acc);
     }

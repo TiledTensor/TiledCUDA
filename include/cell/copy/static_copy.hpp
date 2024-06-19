@@ -61,6 +61,10 @@ enum class CopyInst {
     Ldsm128 = 3
 };
 
+enum class RegLayout {
+    TcuWmma = 0,  // tile layout for TCU WMMA.
+};
+
 // functor to copy data from shared memory to register file.
 template <typename Shared, typename Reg, CopyInst kCopyInst>
 struct CopyShared2Reg {
@@ -74,14 +78,16 @@ struct CopyShared2Reg<Shared, Reg, CopyInst::Ldmatrix> {
 };
 
 // functor to copy data from shared memory to register file.
-template <typename Reg, typename Shared, typename InstShape, CopyInst kCopyInst>
+template <typename Reg, typename Shared, typename InstShape,
+          RegLayout kRegLayout, CopyInst kCopyInst>
 struct CopyReg2Shared {
     DEVICE void operator()();
 };
 
 // partial specialization for wmma 16x16x16, and LDSM32
 template <typename Reg, typename Shared>
-struct CopyReg2Shared<Reg, Shared, InstShape<16, 16, 16>, CopyInst::Ldsm32> {
+struct CopyReg2Shared<Reg, Shared, InstShape<16, 16, 16>, RegLayout::TcuWmma,
+                      CopyInst::Ldsm32> {
     DEVICE void operator()(const Reg& src, Shared& dst) {}
 };
 
@@ -105,6 +111,7 @@ template <typename Reg, typename Shared, typename WarpLayout>
 DEVICE void copy_tile_r2s(const Reg& src, Shared& dst,
                           const WarpLayout& layout /*for auto type infer*/) {
     using Copy = detail::CopyReg2Shared<Reg, Shared, InstShape<16, 16, 16>,
+                                        detail::RegLayout::TcuWmma,
                                         detail::CopyInst::Ldsm32>;
     Copy copy;
     copy(src, dst);
