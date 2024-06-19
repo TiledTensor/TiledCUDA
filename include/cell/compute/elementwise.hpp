@@ -24,13 +24,4 @@ DEVICE void cute_sigmoid(cute::Tensor<XEngine, XLayout>& tensor) {
     }
 }
 
-template <class FromType, class ToType>
-DEVICE void cast(FromType* src, ToType* dst, int numel) {
-    static_assert(sizeof(FromType) > sizeof(ToType),
-                  "The current implementation requires FromType to be larger "
-                  "than ToType.");
-
-    for (int i = 0; i < numel; ++i) dst[i] = static_cast<ToType>(src[i]);
-}
-
 }  // namespace tiledcuda::cell::compute
