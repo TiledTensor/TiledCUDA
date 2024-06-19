@@ -14,24 +14,6 @@ namespace tl = tile_layout;
 
 namespace {
 
-template <typename DType1, typename DType2>
-void check_result1(const DType1* a, const DType1* b, DType2* c, int M, int N,
-                   int K, const float* result) {
-    for (int i = 0; i < M; ++i) {
-        for (int j = 0; j < N; ++j) {
-            DType2 s = 0.;
-            for (int k = 0; k < K; ++k) s += a[i * K + k] * b[k * N + j];
-            c[i * N + j] = s;
-        }
-    }
-
-    for (int i = 0; i < M; ++i) {
-        for (int j = 0; j < N; ++j) {
-            EXPECT_NEAR(c[i * N + j], result[i * N + j], 1e-2);
-        }
-    }
-}
-
 template <typename Element, typename ElementAcc, typename LoadSharedA,
           typename LoadSharedB, typename StoreSharedC, typename TileIteratorA,
           typename TileIteratorB, typename SharedC, typename WarpLayout>
@@ -182,14 +164,6 @@ TEST(TestWmma, shape1) {
 
     thrust::host_vector<float> h_c1;
     h_c1 = d_c;
-
-    // {  // ground truth
-
-    //     check_result1(thrust::raw_pointer_cast(h_a.data()),
-    //                   thrust::raw_pointer_cast(h_b.data()),
-    //                   thrust::raw_pointer_cast(h_c.data()), M, N, K,
-    //                   thrust::raw_pointer_cast(h_c1.data()));
-    // }
 }
 
 }  // namespace testing

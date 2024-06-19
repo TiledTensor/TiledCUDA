@@ -1,6 +1,5 @@
 if(WITH_TESTING)
   include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-
   file(
     GLOB_RECURSE UNIT_TESTS
     LIST_DIRECTORIES FALSE
