@@ -126,7 +126,7 @@ TEST(TestWmma, shape1) {
     dim3 dim_block(kThreads, 1, 1);
 
     using SharedA = SharedTile<Element, tl::RowMajor<M, K>>;
-    using TileIteratorA = TileIterator<SharedA, TileShape<32, 32>>;
+    using TileIteratorA = SharedTileIterator<SharedA, TileShape<32, 32>>;
     LOG(INFO) << "TileIteratorA: [" << TileIteratorA::Tile::kRows << ", "
               << TileIteratorA::Tile::kCols
               << "]; numel = " << TileIteratorA::Tile::kNumel << std::endl
@@ -134,7 +134,7 @@ TEST(TestWmma, shape1) {
               << ", sc1 = " << TileIteratorA::sc1 << std::endl;
 
     using SharedB = SharedTile<Element, tl::RowMajor<K, N>>;
-    using TileIteratorB = TileIterator<SharedB, TileShape<32, 32>>;
+    using TileIteratorB = SharedTileIterator<SharedB, TileShape<32, 32>>;
     LOG(INFO) << "TileIteratorB: sc0 = " << TileIteratorB::sc0
               << ", sc1 = " << TileIteratorB::sc1 << std::endl;
 

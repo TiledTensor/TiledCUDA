@@ -20,6 +20,10 @@ class SharedTile {
 
     DEVICE SharedTile(DType* data) : data_(data), layout_(Layout{}) {}
 
+    DEVICE DType* mutable_data() { return data_; }
+
+    DEVICE const DType* data() const { return data_; }
+
     // for write access
     DEVICE DType& operator()(int x, int y) { return data_[layout_(x, y)]; }
 
