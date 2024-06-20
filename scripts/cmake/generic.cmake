@@ -10,9 +10,6 @@ set(CMAKE_CUDA_STANDARD
     CACHE STRING "The CUDA standard whose features are requested." FORCE)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
-# set(CMAKE_CXX20_STANDARD_COMPILE_OPTION  "-std=c++2a")
-# set(CMAKE_CXX20_EXTENSION_COMPILE_OPTION  "-std=gnu++2a")
-
 # Set host compiler flags. Enable all warnings and treat them as errors
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wall")
 

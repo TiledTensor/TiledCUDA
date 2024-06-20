@@ -15,8 +15,14 @@ class SharedTile {
     using Layout = Layout_;
 
     static constexpr int kNumel = tl::get_numel<Layout>;
+
     static constexpr int kRows = tl::num_rows<Layout>;
     static constexpr int kCols = tl::num_cols<Layout>;
+
+    static constexpr int kRowStride = tl::row_stride<Layout>;
+    static constexpr int kColStride = tl::col_stride<Layout>;
+
+    static constexpr bool kIsRowMajor = tl::is_rowmajor<Layout>;
 
     DEVICE SharedTile(DType* data) : data_(data), layout_(Layout{}) {}
 

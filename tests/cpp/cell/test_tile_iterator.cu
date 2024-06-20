@@ -29,64 +29,85 @@ __global__ void test_tile_iterator() {
 
     Iterator tiles(buf);
 
-    // iterate over row
+    printf("Iterate over rows.\n\n");
     for (int i = 0; i < Iterator::sc0; ++i) {
-        printf("Iteration %d\n", i);
+        printf("Iteration-[%d, _]:\n", i);
         tiles(i, _).to_tile().dump_value();
         printf("\n");
     }
 
-    // iterate over column
+    printf("Iterate over columns.\n\n");
     for (int j = 0; j < Iterator::sc1; ++j) {
-        printf("Iteration %d\n", j);
+        printf("Iteration-[_, %d]:\n", j);
         tiles(_, j).to_tile().dump_value();
         printf("\n");
     }
 
-    // index using 2-dimensional array
+    printf("Iterate over rows and columns.\n\n");
     for (int i = 0; i < Iterator::sc0; ++i) {
         for (int j = 0; j < Iterator::sc1; ++j) {
-            printf("Iteration [%d, %d]\n", i, j);
+            printf("Iteration-[%d, %d]:\n", i, j);
             tiles(i, j).dump_value();
             printf("\n");
         }
     }
 
-    // another way to iterator over two-dimensions
+    printf("Another way to iterate over rows and columns.\n\n");
     for (int i = 0; i < Iterator::sc0; ++i) {
         auto cols = tiles(i, _);
-        for (int j = 0; j < Iterator::sc1; ++j) {
-            printf("Iteration [%d, %d]\n", i, j);
+
+        printf("\n");
+        for (int j = 0; j < decltype(cols)::sc1; ++j) {
+            printf("Iteration-[%d, %d]:\n", i, j);
             cols(j).dump_value();
-            printf("\n");
         }
     }
 
-    // another way to iterator over two-dimensions
+    printf("Another way to iterate over rows and columns.\n\n");
     for (int i = 0; i < Iterator::sc1; ++i) {
         auto rows = tiles(_, i);
-        for (int j = 0; j < Iterator::sc0; ++j) {
-            printf("Iteration [%d, %d]\n", i, j);
+
+        for (int j = 0; j < decltype(rows)::sc0; ++j) {
+            printf("Iteration-[%d, %d]:\n", i, j);
             rows(j).dump_value();
-            printf("\n");
         }
     }
 }
 
 }  // namespace
 
-TEST(TestTile, test_shared_tile) {
+TEST(TestTile, test_row_major) {
     using Element = cutlass::half_t;
 
-    const int rows = 8;
-    const int cols = 4;
+    const int rows = 4;
+    const int cols = 12;
 
     using Tile = SharedTile<Element, tl::RowMajor<rows, cols>>;
-    using Iterator = SharedTileIterator<Tile, TileShape<2, 2>>;
+    using Iterator = SharedTileIterator<Tile, TileShape<2, 4>>;
+
+    LOG(INFO) << std::endl << "Test Row-major" << std::endl;
 
     int shm_size = Tile::kNumel * sizeof(Element);
-    // DONOT change this launch config. The unittest is implemented for a single
-    // thread.
+    // DONOT change this launch config. The unittest is implemented for a
+    // single thread.
+    test_tile_iterator<Iterator><<<1, 1, shm_size>>>();
+    cudaDeviceSynchronize();
+}
+
+TEST(TestTile, test_col_major) {
+    using Element = cutlass::half_t;
+
+    const int rows = 4;
+    const int cols = 12;
+
+    using Tile = SharedTile<Element, tl::ColMajor<rows, cols>>;
+    using Iterator = SharedTileIterator<Tile, TileShape<2, 4>>;
+
+    LOG(INFO) << std::endl << "Test Column-major" << std::endl;
+
+    int shm_size = Tile::kNumel * sizeof(Element);
+    // DONOT change this launch config. The unittest is implemented for a
+    // single thread.
     test_tile_iterator<Iterator><<<1, 1, shm_size>>>();
     cudaDeviceSynchronize();
 }

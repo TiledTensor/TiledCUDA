@@ -1,5 +1,6 @@
 #pragma once
 
+#include "types/shared.hpp"
 #include "types/tile_shape.hpp"
 
 namespace tiledcuda::cell {
@@ -12,10 +13,11 @@ static const __device__ Underscore _;  // for slicing
 template <class Tile, class ChunkShape>
 struct SharedTileIterator;
 
-/// @brief TileIterator is to chunk a tile into smaller tiles, and iterate over
-///        the smaller sub-tiles.
-/// @tparam Tile_ the tile type.
-/// @tparam ChunkShape_ the shape of the chunk.
+/// @brief `SharedTileIterator` chunks a shared memory tile into smaller tiles
+///         and iterates over these smaller sub-tiles.
+/// @tparam Tile_: The type of the large tile to chunk.
+/// @tparam ChunkShape_: The shape of the smaller tiles into which the large
+///                      tile is partitioned (chunk shape).
 template <class Tile_, class ChunkShape_>
 class SharedTileIterator {
   public:
@@ -27,14 +29,11 @@ class SharedTileIterator {
     static_assert(Tile::kCols >= dim_size<1, ChunkShape>,
                   "Tile::kCols must be >= dim_size<1, ChunkShape>");
 
-    static constexpr int sc0 = Tile::kRows / dim_size<0, ChunkShape>;
-    static constexpr int sc1 = Tile::kCols / dim_size<1, ChunkShape>;
+    static constexpr int kStride0 = dim_size<0, ChunkShape>;
+    static constexpr int kStride1 = dim_size<1, ChunkShape>;
 
-    // constants for construct the new `Tile` for slicing
-    static constexpr int row_stride = tl::row_stride<typename Tile::Layout>;
-    static constexpr int col_stride = tl::col_stride<typename Tile::Layout>;
-
-    static constexpr bool kIsRowMajor = col_stride == 1;
+    static constexpr int sc0 = Tile::kRows / kStride0;
+    static constexpr int sc1 = Tile::kCols / kStride1;
 
     DEVICE SharedTileIterator(typename Tile::DType* data) : data_(data) {}
 
@@ -45,58 +44,82 @@ class SharedTileIterator {
     // 2. If any part of the index is an underscore, this access is
     //    considered to be a slice, naturally it returns a TileIterator.
 
-    DEVICE auto operator()(int x) {
-        // FIXME(haruhi): placeholder implementation.
+    DEVICE auto operator()(int i) {
         static_assert(sc0 == 1 || sc1 == 1,
-                      "A single index is supported only when the stripe count "
+                      "A single index is supported only when the strip count "
                       "of one of the iterator's dimensions is 1.");
-        Tile tile(data_);
+
+        int x = sc0 == 1 ? 0 : i;
+        int y = sc0 == 1 ? i : 0;
+
+        using TileLayout =
+            decltype(tl::make_tile_layout<kStride0, kStride1, Tile::kRowStride,
+                                          Tile::kColStride>());
+        using NewTile = SharedTile<typename Tile::DType, TileLayout>;
+
+        int offset = Tile::kIsRowMajor
+                         ? x * (kStride0 * Tile::kRowStride) + y * kStride1
+                         : x * kStride0 + y * (Tile::kColStride * kStride1);
+
+        NewTile tile(data_ + offset);
 
         return tile;
     }
 
     DEVICE auto operator()(int x, int y) {
-        // placeholder
-        Tile tile(data_);
+        // The indices must be within the strip count.
+        assert(x < sc0 && y < sc1);
+
+        using TileLayout =
+            decltype(tl::make_tile_layout<kStride0, kStride1, Tile::kRowStride,
+                                          Tile::kColStride>());
+        using NewTile = SharedTile<typename Tile::DType, TileLayout>;
+
+        int offset = Tile::kIsRowMajor
+                         ? x * (kStride0 * Tile::kCols) + y * kStride1
+                         : x * kStride0 + y * (Tile::kRows * kStride1);
+        NewTile tile(data_ + offset);
 
         return tile;
     }
 
-    // FIXME(haruhi): this is a placeholder to bypass compiling. The return
-    // types here needs to be computed based on the input arguments.
     DEVICE auto operator()(int x, const Underscore& y) {
-        const int row = dim_size<0, ChunkShape>;
-        const int col = Tile::kCols;
+        assert(x < sc0);  // The index must be within the strip count.
 
-        using NewLayout =
-            decltype(tl::make_tile_layout<row, col, row_stride, col_stride>());
+        // Updated the layout for sub-tiles accessed by the sliced iterator.
+        // Note: Only the shape changes; the stride remains the same.
+        using TileLayout = decltype(tl::make_tile_layout<kStride0, Tile::kCols,
+                                                         Tile::kRowStride,
+                                                         Tile::kColStride>());
 
-        using NewTile = SharedTile<typename Tile::DType, NewLayout>;
+        using NewTile = SharedTile<typename Tile::DType, TileLayout>;
         using Iter = SharedTileIterator<NewTile, ChunkShape>;
         static_assert(Iter::sc0 == 1);
 
-        int offset = kIsRowMajor ? x * Tile::kCols * dim_size<1, ChunkShape>
-                                 : x * row_stride;
+        // advance pointer to the correct start position
+        int offset =
+            Tile::kIsRowMajor ? x * (kStride0 * Tile::kCols) : x * kStride0;
 
         Iter iter(data_ + offset);
         return iter;
     }
 
-    // FIXME(haruhi): this is a placeholder to bypass compiling. The return
-    // types here needs to be computed based on the input arguments.
     DEVICE auto operator()(const Underscore& x, int y) {
-        const int row = Tile::kRows;
-        const int col = dim_size<1, ChunkShape>;
+        assert(y < sc1);  // The index must be within the strip count.
 
-        using NewLayout =
-            decltype(tl::make_tile_layout<row, col, row_stride, col_stride>());
+        // Updated the layout for sub-tiles accessed by the sliced iterator.
+        // Note: Only the shape changes; the stride remains the same.
+        using TileLayout = decltype(tl::make_tile_layout<Tile::kRows, kStride1,
+                                                         Tile::kRowStride,
+                                                         Tile::kColStride>());
 
-        using NewTile = SharedTile<typename Tile::DType, NewLayout>;
+        using NewTile = SharedTile<typename Tile::DType, TileLayout>;
         using Iter = SharedTileIterator<NewTile, ChunkShape>;
         static_assert(Iter::sc1 == 1);
 
-        int offset = kIsRowMajor ? y * dim_size<1, ChunkShape>
-                                 : y * Tile::kRows * dim_size<1, ChunkShape>;
+        // advance pointer to the correct start position
+        int offset =
+            Tile::kIsRowMajor ? y * kStride1 : y * (Tile::kRows * kStride1);
 
         Iter iter(data_ + offset);
         return iter;
