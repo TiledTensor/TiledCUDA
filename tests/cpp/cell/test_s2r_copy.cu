@@ -1,4 +1,4 @@
-#include "cell/copy/mod.hpp"
+#include "cell/copy/shared_to_register.hpp"
 #include "common/test_utils.hpp"
 #include "types/mod.hpp"
 
@@ -7,7 +7,6 @@
 namespace tiledcuda {
 
 using namespace cell;
-using namespace cute;
 namespace tl = tile_layout;
 
 namespace {
