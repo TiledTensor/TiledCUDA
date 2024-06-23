@@ -1,18 +1,13 @@
 #pragma once
 
-#include "cell/copy/static_copy.hpp"
+#include "cell/copy/mod.hpp"
 #include "cell/traits/base.hpp"
-#include "types/layout.hpp"
-#include "types/tile_shape.hpp"
-
-#include <cute/arch/copy.hpp>
-#include <cute/tensor.hpp>
-
-#include <type_traits>
+#include "types/mod.hpp"
 
 namespace tiledcuda::cell::traits {
 
 using namespace cute;
+
 namespace tl = tiledcuda::cell::tile_layout;
 
 template <typename Element_, typename CtaTileShape,

@@ -2,7 +2,7 @@
 
 #include "cuda_utils.hpp"
 
-#include <cute/algorithm/copy.hpp>
+#include <cute/tensor.hpp>
 
 namespace tiledcuda::cell::copy {
 

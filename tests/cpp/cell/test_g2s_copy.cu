@@ -1,4 +1,4 @@
-#include "cell/copy/dyn_copy.hpp"
+#include "cell/copy/mod.hpp"
 #include "cell/sync.hpp"
 #include "cell/traits/copy.hpp"
 #include "common/test_utils.hpp"
