@@ -2,7 +2,6 @@
 #include "cuda_info.hpp"
 #include "errors.hpp"
 #include "kernels/lstm_cell.hpp"
-#include "types/layout.hpp"
 
 namespace tiledcuda::kernels {
 

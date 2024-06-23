@@ -1,5 +1,6 @@
 #pragma once
 
+#include "cell/copy/constants.hpp"
 #include "cuda_utils.hpp"
 #include "types/mod.hpp"
 
@@ -51,70 +52,5 @@ struct R2SCopy2D {
         return make_tensor(make_rmem_ptr<To_type>(&frag), tensor.layout());
     }
 };
-
-namespace detail {
-
-enum class CopyInst {
-    Ldmatrix = 0,  // ldmatrix for loading data from shared memory to register.
-    Stmatrix = 1,
-    Ldsm32 = 2,
-    Ldsm128 = 3
-};
-
-enum class RegLayout {
-    TcuWmma = 0,  // tile layout for TCU WMMA.
-};
-
-// functor to copy data from shared memory to register file.
-template <typename Shared, typename Reg, CopyInst kCopyInst>
-struct CopyShared2Reg {
-    DEVICE void operator()();
-};
-
-// partial specialization for ldmatrix
-template <typename Shared, typename Reg>
-struct CopyShared2Reg<Shared, Reg, CopyInst::Ldmatrix> {
-    DEVICE void operator()(const Shared& src, Reg& dst) {}
-};
-
-// functor to copy data from shared memory to register file.
-template <typename Reg, typename Shared, typename InstShape,
-          RegLayout kRegLayout, CopyInst kCopyInst>
-struct CopyReg2Shared {
-    DEVICE void operator()();
-};
-
-// partial specialization for wmma 16x16x16, and LDSM32
-template <typename Reg, typename Shared>
-struct CopyReg2Shared<Reg, Shared, InstShape<16, 16, 16>, RegLayout::TcuWmma,
-                      CopyInst::Ldsm32> {
-    DEVICE void operator()(const Reg& src, Shared& dst) {}
-};
-
-}  // namespace detail
-
-/// @brief Copy a tile from shared memory: to register.
-/// @tparam Shared the shared memory tile type.
-/// @tparam Reg the register tile type.
-/// @tparam WarpLayout the warp layout.
-template <typename Shared, typename Reg, typename WarpLayout>
-DEVICE void copy_tile_s2r(const Shared& src, Reg& dst,
-                          const WarpLayout& layout /*for auto type-infer*/) {
-    using Copy =
-        detail::CopyShared2Reg<Shared, Reg, detail::CopyInst::Ldmatrix>;
-
-    Copy copy;
-    copy(src, dst);
-}
-
-template <typename Reg, typename Shared, typename WarpLayout>
-DEVICE void copy_tile_r2s(const Reg& src, Shared& dst,
-                          const WarpLayout& layout /*for auto type infer*/) {
-    using Copy = detail::CopyReg2Shared<Reg, Shared, InstShape<16, 16, 16>,
-                                        detail::RegLayout::TcuWmma,
-                                        detail::CopyInst::Ldsm32>;
-    Copy copy;
-    copy(src, dst);
-}
 
 }  // namespace tiledcuda::cell::copy

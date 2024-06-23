@@ -1,7 +1,6 @@
 #include "cell/mod.hpp"
 #include "errors.hpp"
 #include "kernels/bmm.hpp"
-#include "types/layout.hpp"
 
 namespace tiledcuda::kernels {
 

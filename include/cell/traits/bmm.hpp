@@ -1,13 +1,8 @@
 #pragma once
 
-#include "cell/copy/static_copy.hpp"
+#include "cell/copy/mod.hpp"
 #include "cell/traits/base.hpp"
 #include "types/tile_shape.hpp"
-
-#include <cute/arch/copy.hpp>
-#include <cute/tensor.hpp>
-
-#include <type_traits>
 
 namespace tiledcuda::cell::traits {
 

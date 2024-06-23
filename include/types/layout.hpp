@@ -37,7 +37,27 @@ template <typename Layout_>
 static constexpr size_t num_cols = cute::size<1>(Layout_{});
 
 template <typename Layout_>
+static constexpr size_t row_stride = cute::size<0>(Layout_{}.layout().stride());
+
+template <typename Layout_>
+static constexpr size_t col_stride = cute::size<1>(Layout_{}.layout().stride());
+
+template <typename Layout_>
 static constexpr size_t get_numel = int(size(Layout_{}));
+
+/// We wrap CuTe's `Layout`, which consists of `Shape` and `Stride`, into an
+/// intelligent row-major or column-major layout. In a row-major layout, the
+/// column stride is 1, whereas in a column-major layout, the row stride is 1.
+template <typename Layout_>
+static constexpr bool is_rowmajor = col_stride<Layout_> == 1;
+
+template <const int Shape1, const int Shape2, const int Stride1,
+          const int Stride2>
+HOST_DEVICE auto make_tile_layout() {
+    using Layout = cute::Layout<Shape<Int<Shape1>, Int<Shape2>>,
+                                Stride<Int<Stride1>, Int<Stride2>>>;
+    return Layout{};
+}
 
 HOST_DEVICE auto make_row_major_layout(const int row, const int col,
                                        const int stride) {
