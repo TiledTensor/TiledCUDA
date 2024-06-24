@@ -81,7 +81,7 @@ DEVICE int warp_col_id() {
  *         |2 | 4 | 18|
  *         |  |...|...|
  *         |15| 15| 31|
- *  Example: if threadIdx is 43, then its lane row is 8, lane col is 0.
+ *  Example: if threadIdx.x is 43, then its lane row is 8, lane col is 0.
  */
 DEVICE int lane_row_id() {
     int lane_id = threadIdx.x % warpSize;  // thread index inside a warp
@@ -100,19 +100,22 @@ template <const WarpReuse kMode, typename Shared, typename WarpLayout>
 DEVICE int get_warp_offset() {
     constexpr static bool row_major = Shared::kIsRowMajor;
 
+    // Tile shape for a single warp
+    constexpr static int warp_shape_row =
+        Shared::kRows / tl::num_rows<WarpLayout>;
+    constexpr static int warp_shape_col =
+        Shared::kCols / tl::num_cols<WarpLayout>;
+
+    constexpr static int warp_rstride =
+        row_major ? Shared::kRowStride * warp_shape_row : warp_shape_row;
+    constexpr static int warp_cstride =
+        row_major ? warp_shape_col : Shared::kColStride * warp_shape_col;
+
     int offset = 0;
     switch (kMode) {
         case WarpReuse::RowReuseCont: {
             // In the `RowReuseCont` mode, warps in a same row repeatedly load
             // the same data, and each warp loads a continuous chunks of data.
-
-            // Tile shape for a single warp
-            constexpr static int warp_shape_row =
-                Shared::kRows / tl::num_rows<WarpLayout>;
-            constexpr static int warp_rstride =
-                row_major ? Shared::kRowStride * warp_shape_row
-                          : warp_shape_row;
-
             int warp_row = warp_row_id<WarpLayout>();
             offset = warp_row * warp_rstride;
             break;
@@ -121,14 +124,6 @@ DEVICE int get_warp_offset() {
             // In the `ColReuseCont` mode, warps in a same column repeatedly
             // load the same data, and each warp loads a continuous chunks of
             // data.
-
-            // Tile shape for a single warp
-            constexpr static int warp_shape_col =
-                Shared::kCols / tl::num_cols<WarpLayout>;
-            constexpr static int warp_cstride =
-                row_major ? warp_shape_col
-                          : Shared::kColStride * warp_shape_col;
-
             int warp_col = warp_col_id<WarpLayout>();
             offset = warp_col * warp_cstride;
             break;
@@ -141,7 +136,6 @@ DEVICE int get_warp_offset() {
     }
     return offset;
 }
-
 }  // namespace
 
 /// @brief The functor that copys data from shared memory to register file.
@@ -206,7 +200,8 @@ struct SharedToRegLoader<Reg_, WarpLayout_, kMode, CopyInst::LoadMat> {
         const DType* data;
         for (int i = 0; i < row_exec; ++i) {
             for (int j = 0; j < col_exec; ++j) {
-                // 2. advance pointer to the 16x16 base tile indexed by (i, j).
+                // 2. advance pointer to the 16x128-bits `BaseTile` indexed by
+                // (i, j).
                 data = src_ptr + (i * tile_rstride + j * tile_cstride);
                 // 3. advance the pointer to data accessed by the current thread
                 // inside a 16x16 base tile.

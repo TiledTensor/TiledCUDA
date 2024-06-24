@@ -64,6 +64,7 @@ TEST(TestShared2Reg, operand_B) {
 
     // a 32x64 row-major shared tile is equivalent to a 64x32 col-major tile
     using Shared = SharedTile<Element, tl::RowMajor<32, 64>>;
+
     using Reg = RegTile<Element, tl::RowMajor<4, 8>>;
 
     using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::ColReuseCont,
