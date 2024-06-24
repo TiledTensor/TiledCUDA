@@ -18,10 +18,10 @@ namespace {
 
 template <typename Element, typename ElementAcc, typename LoadSharedA,
           typename LoadSharedB, typename StoreSharedC, typename TileIteratorA,
-          typename RegA, typename TileIteratorB, typename RegB,
-          typename SharedC, typename RegC, typename WarpLayout>
-__global__ void test_wmma1(const Element* ga, const Element* gb,
-                           ElementAcc* gc) {
+          typename RegA, typename LoadRegA, typename TileIteratorB,
+          typename RegB, typename LoadRegB, typename SharedC, typename RegC>
+__global__ void test_wmma1(const Element* ga, const Element* gb, ElementAcc* gc,
+                           LoadRegA& load_rA, LoadRegB& load_rB) {
     extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
     auto* shared_a = reinterpret_cast<Element*>(buf_);
     auto* shared_b = shared_a + TileIteratorA::Tile::kNumel;
@@ -45,8 +45,8 @@ __global__ void test_wmma1(const Element* ga, const Element* gb,
     RegC acc;
 
     for (int k = 0; k < TileIteratorA::sc1; ++k) {
-        copy_tile_s2r(sAs(_, k).to_tile(), rA, WarpLayout{}, WarpReuse::RowCir);
-        copy_tile_s2r(sBs(k, _).to_tile(), rB, WarpLayout{}, WarpReuse::ColCir);
+        load_rA(sAs(_, k).to_tile(), rA);
+        load_rB(sBs(k, _).to_tile(), rB);
 
         compute::gemm_(rA, rB, acc);
     }
@@ -103,6 +103,10 @@ TEST(TestWmma, shape1) {
     using SharedA = SharedTile<Element, tl::RowMajor<M, K>>;
     using TileIteratorA = SharedTileIterator<SharedA, TileShape<32, 32>>;
     using RegA = RegTile<Element, tl::RowMajor<4, 24>>;
+    using LoadRegA =
+        SharedToRegLoader<RegA, WarpLayout, WarpReuse::RowReuseCont,
+                          CopyInst::LoadMat>;
+    LoadRegA load_rA;
 
     LOG(INFO) << "TileIteratorA: [" << TileIteratorA::Tile::kRows << ", "
               << TileIteratorA::Tile::kCols
@@ -129,6 +133,10 @@ TEST(TestWmma, shape1) {
     using SharedB = SharedTile<Element, tl::RowMajor<K, N>>;
     using RegB = RegTile<Element, tl::RowMajor<4, 24>>;
     using TileIteratorB = SharedTileIterator<SharedB, TileShape<32, 32>>;
+    using LoadRegB =
+        SharedToRegLoader<RegB, WarpLayout, WarpReuse::ColReuseCont,
+                          CopyInst::LoadMat>;
+    LoadRegB load_rB;
 
     LOG(INFO) << "TileIteratorB: sc0 = " << TileIteratorB::sc0
               << ", sc1 = " << TileIteratorB::sc1 << std::endl;
@@ -164,11 +172,11 @@ TEST(TestWmma, shape1) {
     dim3 dim_block(kThreads, 1, 1);
 
     test_wmma1<Element, ElementAcc, LoadSharedA, LoadSharedB, StoreSharedC,
-               TileIteratorA, RegA, TileIteratorB, RegB, SharedC, RegC,
-               WarpLayout><<<dim_grid, dim_block, shm_size>>>(
+               TileIteratorA, RegA, LoadRegA, TileIteratorB, RegB, LoadRegB,
+               SharedC, RegC><<<dim_grid, dim_block, shm_size>>>(
         thrust::raw_pointer_cast(d_a.data()),
         thrust::raw_pointer_cast(d_b.data()),
-        thrust::raw_pointer_cast(d_c.data()));
+        thrust::raw_pointer_cast(d_c.data()), load_rA, load_rB);
 
     cudaDeviceSynchronize();
 

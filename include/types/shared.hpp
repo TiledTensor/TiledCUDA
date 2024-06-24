@@ -30,6 +30,8 @@ class SharedTile {
 
     DEVICE const DType* data() const { return data_; }
 
+    HOST_DEVICE const Layout& layout() const { return layout_; }
+
     // for write access
     DEVICE DType& operator()(int x, int y) { return data_[layout_(x, y)]; }
 
