@@ -2,7 +2,6 @@
 
 #include "cell/copy/constants.hpp"
 #include "types/mod.hpp"
-#include "util/print.hpp"
 
 namespace tiledcuda::cell::copy {
 
@@ -96,6 +95,8 @@ DEVICE int lane_col_id() {
     return lane_id / 16;
 }
 
+/// @brief This function returns the offset to the start position of the current
+///        warp in the shared memory according to the warp reuse mode.
 template <const WarpReuse kMode, typename Shared, typename WarpLayout>
 DEVICE int get_warp_offset() {
     constexpr static bool row_major = Shared::kIsRowMajor;
@@ -150,6 +151,8 @@ struct SharedToRegLoader {
     DEVICE void operator()(const Shared& src, Reg& dst);
 };
 
+/// @brief partial specialization for loading data from shared memory to
+///        register file using `ldmatrix`.
 template <typename Reg_, typename WarpLayout_, const WarpReuse kMode>
 struct SharedToRegLoader<Reg_, WarpLayout_, kMode, CopyInst::LoadMat> {
     using Reg = Reg_;
@@ -182,11 +185,11 @@ struct SharedToRegLoader<Reg_, WarpLayout_, kMode, CopyInst::LoadMat> {
         // warp reuse mode.
         src_ptr += get_warp_offset<kMode, Shared, WarpLayout>();
 
-        // strides to iterate over each 16x128-bits base tile.
-        const int tile_rstride =  // row stride for a base tile
+        // strides to iterate over each 16x128-bits `Base Tile`.
+        const int tile_rstride =  // row stride for a `Base Tile`
             row_major ? BaseTileShape<DType>::row * Shared::kRowStride
                       : BaseTileShape<DType>::row;
-        const int tile_cstride =  // col stride for a base tile
+        const int tile_cstride =  // col stride for a `Base Tile`
             row_major ? BaseTileShape<DType>::col
                       : BaseTileShape<DType>::col * Shared::kColStride;
 
@@ -204,17 +207,17 @@ struct SharedToRegLoader<Reg_, WarpLayout_, kMode, CopyInst::LoadMat> {
                 // (i, j).
                 data = src_ptr + (i * tile_rstride + j * tile_cstride);
                 // 3. advance the pointer to data accessed by the current thread
-                // inside a 16x16 base tile.
+                // inside a 16x128-bits `Base Tile`.
                 data += (lane_row * lane_rstride + lane_col * lane_cstride);
 
                 // issue the hardware-backed memory access instruction
                 ldmatrix(data, dst_ptr);
 
-                // advance the pointer to store the next 16x16 base tile.
+                // advance the pointer to store the next 16x128-bits
+                // `Base Tile`.
                 dst_ptr += BaseTileShape<DType>::elem_per_thread;
             }
         }
-        dst.dump_value();
     }
 };
 
@@ -225,7 +228,7 @@ struct RegToShared {
     DEVICE void operator()(const Reg& src, Shared& dst);
 };
 
-// partial specialization for wmma 16x16x16, and LDSM32
+///@brief partial specialization for wmma 16x16x16, and LDSM32
 template <typename Reg, typename Shared>
 struct RegToShared<Reg, Shared, InstShape<16, 16, 16>, RegLayout::TileWMMA,
                    CopyInst::LoadS32> {

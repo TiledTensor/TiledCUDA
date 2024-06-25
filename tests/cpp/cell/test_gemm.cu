@@ -46,7 +46,10 @@ __global__ void test_wmma1(const Element* ga, const Element* gb, ElementAcc* gc,
 
     for (int k = 0; k < TileIteratorA::sc1; ++k) {
         load_rA(sAs(_, k).to_tile(), rA);
-        load_rB(sBs(k, _).to_tile(), rB);
+        // Since we interpret a column-major B with a shape of [K, N] as a
+        // row-major B with a shape of [N, K], here sBs is sliced along the
+        // first dimension instead of the second one.
+        load_rB(sBs(_, k).to_tile(), rB);
 
         compute::gemm_(rA, rB, acc);
     }
@@ -90,19 +93,20 @@ TEST(TestWmma, shape1) {
                                 false /*use swizzle*/>;
 
     /*
-     shared memory tile A [64, 128] is partitioned into
-     a 2D grid of 32x32 sub-tiles:
-     |--------|----------|----------|----------|----------|
-     |iterator|    0     |    1     |    2     |    3     |
-     |--------|----------|----------|----------|----------|
-     |        |sub-tile 0|sub-tile 1|sub-tile 2|sub-tile 3|
-     |--------|----------|----------|----------|----------|
-     |        |sub-tile 4|sub-tile 5|sub-tile 6|sub-tile 7|
-     |--------|----------|----------|----------|----------|
-    */
+     *  shared memory tile A [64, 128] is partitioned into a 2D grid of 32x32
+     *  sub-tiles:
+     *  |--------|----------|----------|----------|----------|
+     *  |iterator|    0     |    1     |    2     |    3     |
+     *  |--------|----------|----------|----------|----------|
+     *  |        |sub-tile 0|sub-tile 1|sub-tile 2|sub-tile 3|
+     *  |--------|----------|----------|----------|----------|
+     *  |        |sub-tile 4|sub-tile 5|sub-tile 6|sub-tile 7|
+     *  |--------|----------|----------|----------|----------|
+     */
     using SharedA = SharedTile<Element, tl::RowMajor<M, K>>;
+    // [64, 128] is chunked by [32, 32], strip counts = [64/32, 128/32] = [2, 4]
     using TileIteratorA = SharedTileIterator<SharedA, TileShape<32, 32>>;
-    using RegA = RegTile<Element, tl::RowMajor<4, 24>>;
+    using RegA = RegTile<Element, tl::RowMajor<4, 8>>;
     using LoadRegA =
         SharedToRegLoader<RegA, WarpLayout, WarpReuse::RowReuseCont,
                           CopyInst::LoadMat>;
@@ -115,23 +119,26 @@ TEST(TestWmma, shape1) {
               << ", sc1 = " << TileIteratorA::sc1 << std::endl;
 
     /*
-     shared memory tile B [128, 64] is partitioned into
-     a 2D grid of 32x32 sub-tiles:
-     |--------|----------|----------|
-     |iterator|          |          |
-     |--------|----------|----------|
-     |   0    |sub-tile 0|sub-tile 1|
-     |--------|----------|----------|
-     |   1    |sub-tile 2|sub-tile 3|
-     |--------|----------|----------|
-     |   2    |sub-tile 4|sub-tile 5|
-     |--------|----------|----------|
-     |   3    |sub-tile 6|sub-tile 7|
-     |--------|----------|----------|
+     *  shared memory tile B [128, 64] is partitioned into a 2D grid of 32x32
+     *  sub-tiles:
+     *  |--------|----------|----------|
+     *  |iterator|          |          |
+     *  |--------|----------|----------|
+     *  |   0    |sub-tile 0|sub-tile 1|
+     *  |--------|----------|----------|
+     *  |   1    |sub-tile 2|sub-tile 3|
+     *  |--------|----------|----------|
+     *  |   2    |sub-tile 4|sub-tile 5|
+     *  |--------|----------|----------|
+     *  |   3    |sub-tile 6|sub-tile 7|
+     *  |--------|----------|----------|
      */
 
-    using SharedB = SharedTile<Element, tl::RowMajor<K, N>>;
-    using RegB = RegTile<Element, tl::RowMajor<4, 24>>;
+    // A row-major Tile with a shape of [N, K] is equivalent to a column-major
+    // Tile with a shape of [K, N]
+    using SharedB = SharedTile<Element, tl::RowMajor<N, K>>;  // 64, 128
+    using RegB = RegTile<Element, tl::RowMajor<4, 8>>;
+    // [64, 128] is chunked by [32, 32], strip counts = [64/32, 128/32] = [2, 4]
     using TileIteratorB = SharedTileIterator<SharedB, TileShape<32, 32>>;
     using LoadRegB =
         SharedToRegLoader<RegB, WarpLayout, WarpReuse::ColReuseCont,
@@ -141,7 +148,7 @@ TEST(TestWmma, shape1) {
     LOG(INFO) << "TileIteratorB: sc0 = " << TileIteratorB::sc0
               << ", sc1 = " << TileIteratorB::sc1 << std::endl;
 
-    static_assert(TileIteratorA::sc1 == TileIteratorB::sc0,
+    static_assert(TileIteratorA::sc1 == TileIteratorB::sc1,
                   "dimension mismatch!");
 
     using SharedC = SharedTile<ElementAcc, tl::RowMajor<M, N>>;
