@@ -62,7 +62,8 @@ TEST(TestShared2Reg, operand_B) {
     using WarpLayout = tl::RowMajor<2, 2>;
     const int kThreads = tl::get_numel<WarpLayout> * 32;
 
-    using Shared = SharedTile<Element, tl::RowMajor<64, 32>>;
+    // a 32x64 row-major shared tile is equivalent to a 64x32 col-major tile
+    using Shared = SharedTile<Element, tl::RowMajor<32, 64>>;
     using Reg = RegTile<Element, tl::RowMajor<4, 8>>;
 
     using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::ColReuseCont,
