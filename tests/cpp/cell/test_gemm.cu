@@ -18,10 +18,10 @@ namespace {
 
 template <typename Element, typename ElementAcc, typename LoadSharedA,
           typename LoadSharedB, typename StoreSharedC, typename TileIteratorA,
-          typename RegA, typename TileIteratorB, typename RegB,
-          typename SharedC, typename RegC, typename WarpLayout>
-__global__ void test_wmma1(const Element* ga, const Element* gb,
-                           ElementAcc* gc) {
+          typename RegA, typename LoadRegA, typename TileIteratorB,
+          typename RegB, typename LoadRegB, typename SharedC, typename RegC>
+__global__ void test_wmma1(const Element* ga, const Element* gb, ElementAcc* gc,
+                           LoadRegA& load_rA, LoadRegB& load_rB) {
     extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
     auto* shared_a = reinterpret_cast<Element*>(buf_);
     auto* shared_b = shared_a + TileIteratorA::Tile::kNumel;
@@ -45,8 +45,11 @@ __global__ void test_wmma1(const Element* ga, const Element* gb,
     RegC acc;
 
     for (int k = 0; k < TileIteratorA::sc1; ++k) {
-        copy_tile_s2r(sAs(_, k).to_tile(), rA, WarpLayout{}, WarpReuse::RowCir);
-        copy_tile_s2r(sBs(k, _).to_tile(), rB, WarpLayout{}, WarpReuse::ColCir);
+        load_rA(sAs(_, k).to_tile(), rA);
+        // Since we interpret a column-major B with a shape of [K, N] as a
+        // row-major B with a shape of [N, K], here sBs is sliced along the
+        // first dimension instead of the second one.
+        load_rB(sBs(_, k).to_tile(), rB);
 
         compute::gemm_(rA, rB, acc);
     }
@@ -90,19 +93,24 @@ TEST(TestWmma, shape1) {
                                 false /*use swizzle*/>;
 
     /*
-     shared memory tile A [64, 128] is partitioned into
-     a 2D grid of 32x32 sub-tiles:
-     |--------|----------|----------|----------|----------|
-     |iterator|    0     |    1     |    2     |    3     |
-     |--------|----------|----------|----------|----------|
-     |        |sub-tile 0|sub-tile 1|sub-tile 2|sub-tile 3|
-     |--------|----------|----------|----------|----------|
-     |        |sub-tile 4|sub-tile 5|sub-tile 6|sub-tile 7|
-     |--------|----------|----------|----------|----------|
-    */
+     *  shared memory tile A [64, 128] is partitioned into a 2D grid of 32x32
+     *  sub-tiles:
+     *  |--------|----------|----------|----------|----------|
+     *  |iterator|    0     |    1     |    2     |    3     |
+     *  |--------|----------|----------|----------|----------|
+     *  |        |sub-tile 0|sub-tile 1|sub-tile 2|sub-tile 3|
+     *  |--------|----------|----------|----------|----------|
+     *  |        |sub-tile 4|sub-tile 5|sub-tile 6|sub-tile 7|
+     *  |--------|----------|----------|----------|----------|
+     */
     using SharedA = SharedTile<Element, tl::RowMajor<M, K>>;
+    // [64, 128] is chunked by [32, 32], strip counts = [64/32, 128/32] = [2, 4]
     using TileIteratorA = SharedTileIterator<SharedA, TileShape<32, 32>>;
-    using RegA = RegTile<Element, tl::RowMajor<4, 24>>;
+    using RegA = RegTile<Element, tl::RowMajor<4, 8>>;
+    using LoadRegA =
+        SharedToRegLoader<RegA, WarpLayout, WarpReuse::RowReuseCont,
+                          CopyInst::LoadMat>;
+    LoadRegA load_rA;
 
     LOG(INFO) << "TileIteratorA: [" << TileIteratorA::Tile::kRows << ", "
               << TileIteratorA::Tile::kCols
@@ -111,29 +119,36 @@ TEST(TestWmma, shape1) {
               << ", sc1 = " << TileIteratorA::sc1 << std::endl;
 
     /*
-     shared memory tile B [128, 64] is partitioned into
-     a 2D grid of 32x32 sub-tiles:
-     |--------|----------|----------|
-     |iterator|          |          |
-     |--------|----------|----------|
-     |   0    |sub-tile 0|sub-tile 1|
-     |--------|----------|----------|
-     |   1    |sub-tile 2|sub-tile 3|
-     |--------|----------|----------|
-     |   2    |sub-tile 4|sub-tile 5|
-     |--------|----------|----------|
-     |   3    |sub-tile 6|sub-tile 7|
-     |--------|----------|----------|
+     *  shared memory tile B [128, 64] is partitioned into a 2D grid of 32x32
+     *  sub-tiles:
+     *  |--------|----------|----------|
+     *  |iterator|          |          |
+     *  |--------|----------|----------|
+     *  |   0    |sub-tile 0|sub-tile 1|
+     *  |--------|----------|----------|
+     *  |   1    |sub-tile 2|sub-tile 3|
+     *  |--------|----------|----------|
+     *  |   2    |sub-tile 4|sub-tile 5|
+     *  |--------|----------|----------|
+     *  |   3    |sub-tile 6|sub-tile 7|
+     *  |--------|----------|----------|
      */
 
-    using SharedB = SharedTile<Element, tl::RowMajor<K, N>>;
-    using RegB = RegTile<Element, tl::RowMajor<4, 24>>;
+    // A row-major Tile with a shape of [N, K] is equivalent to a column-major
+    // Tile with a shape of [K, N]
+    using SharedB = SharedTile<Element, tl::RowMajor<N, K>>;  // 64, 128
+    using RegB = RegTile<Element, tl::RowMajor<4, 8>>;
+    // [64, 128] is chunked by [32, 32], strip counts = [64/32, 128/32] = [2, 4]
     using TileIteratorB = SharedTileIterator<SharedB, TileShape<32, 32>>;
+    using LoadRegB =
+        SharedToRegLoader<RegB, WarpLayout, WarpReuse::ColReuseCont,
+                          CopyInst::LoadMat>;
+    LoadRegB load_rB;
 
     LOG(INFO) << "TileIteratorB: sc0 = " << TileIteratorB::sc0
               << ", sc1 = " << TileIteratorB::sc1 << std::endl;
 
-    static_assert(TileIteratorA::sc1 == TileIteratorB::sc0,
+    static_assert(TileIteratorA::sc1 == TileIteratorB::sc1,
                   "dimension mismatch!");
 
     using SharedC = SharedTile<ElementAcc, tl::RowMajor<M, N>>;
@@ -164,11 +179,11 @@ TEST(TestWmma, shape1) {
     dim3 dim_block(kThreads, 1, 1);
 
     test_wmma1<Element, ElementAcc, LoadSharedA, LoadSharedB, StoreSharedC,
-               TileIteratorA, RegA, TileIteratorB, RegB, SharedC, RegC,
-               WarpLayout><<<dim_grid, dim_block, shm_size>>>(
+               TileIteratorA, RegA, LoadRegA, TileIteratorB, RegB, LoadRegB,
+               SharedC, RegC><<<dim_grid, dim_block, shm_size>>>(
         thrust::raw_pointer_cast(d_a.data()),
         thrust::raw_pointer_cast(d_b.data()),
-        thrust::raw_pointer_cast(d_c.data()));
+        thrust::raw_pointer_cast(d_c.data()), load_rA, load_rB);
 
     cudaDeviceSynchronize();
 
