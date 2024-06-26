@@ -1,9 +1,12 @@
 #pragma once
 
 #include "cell/copy/constants.hpp"
+#include "cell/traits/base.hpp"
 #include "types/mod.hpp"
 
 namespace tiledcuda::cell::copy {
+
+using namespace tiledcuda::cell::traits;
 
 namespace {  // helper functions
 template <typename Element>
@@ -16,8 +19,8 @@ DEVICE void ldmatrix(const Element* src, Element* dst) {
         : "r"(smem_addr));
 }
 
-/// @brief the warp row that the current thread belongs to, based on the warp
-///        layout.
+// @brief the warp row that the current thread belongs to, based on the warp
+//        layout.
 template <typename WarpLayout>
 DEVICE int warp_row_id() {
     /*
@@ -41,8 +44,8 @@ DEVICE int warp_row_id() {
     return warp_row;
 }
 
-/// @brief: Returns the warp col that the current thread belongs to, based on
-///         the warp layout.
+// @brief: Returns the warp col that the current thread belongs to, based on
+//         the warp layout.
 template <typename WarpLayout>
 DEVICE int warp_col_id() {
     /*
@@ -70,33 +73,38 @@ DEVICE int warp_col_id() {
     return warp_col;
 }
 
-/// @brief This function returns the lane row of the current thread within a
-///        warp. We assume that the threads in a warp are arranged as follows (a
-///        16 x 2 column-major):
-/*         |  | 0 |  1|
- *         |--|---|---|
- *         |0 | 0 | 16|
- *         |1 | 2 | 17|
- *         |2 | 4 | 18|
- *         |  |...|...|
- *         |15| 15| 31|
- *  Example: if threadIdx.x is 43, then its lane row is 8, lane col is 0.
- */
+// @brief This function returns the lane row of the current thread within a
+//        warp. NOTE: this function is only valid for the thread layout in
+//        `ldmatrix` or `stmatrix`. We assume that the threads in a warp are
+//        arranged as follows (a 16 x 2 column-major):
+//        |  | 0 |  1|
+//        |--|---|---|
+//        |0 | 0 | 16|
+//        |1 | 2 | 17|
+//        |2 | 4 | 18|
+//        |  |...|...|
+//        |15| 15| 31|
+// Example: if threadIdx.x is 43, then its lane row is 8, lane col is 0.
+template <typename Layout>
 DEVICE int lane_row_id() {
     int lane_id = threadIdx.x % warpSize;  // thread index inside a warp
-    return lane_id % 16;
+    return tl::is_rowmajor<Layout> ? lane_id / tl::num_cols<Layout>
+                                   : lane_id % tl::num_rows<Layout>;
 }
 
-/// @brief This function returns the lane col of the current thread within a
-///        warp. We assume that the threads in a warp are arranged as explained
-///        above.
+// @brief This function returns the lane col of the current thread within a
+//        warp. NOTE: this function is only valid for the thread layout in
+//        `ldmatrix` or `stmatrix`. We assume that the threads in a warp are
+//        arranged as explained above.
+template <typename Layout>
 DEVICE int lane_col_id() {
     int lane_id = threadIdx.x % warpSize;  // thread index inside a warp
-    return lane_id / 16;
+    return tl::is_rowmajor<Layout> ? lane_id % tl::num_cols<Layout>
+                                   : lane_id / tl::num_rows<Layout>;
 }
 
-/// @brief This function returns the offset to the start position of the current
-///        warp in the shared memory according to the warp reuse mode.
+// @brief This function returns the offset to the start position of the current
+//        warp in the shared memory according to the warp reuse mode.
 template <const WarpReuse kMode, typename Shared, typename WarpLayout>
 DEVICE int get_warp_offset() {
     constexpr static bool row_major = Shared::kIsRowMajor;
@@ -114,6 +122,14 @@ DEVICE int get_warp_offset() {
 
     int offset = 0;
     switch (kMode) {
+        case WarpReuse::Cont: {
+            // In 'Cont' mode, all warps evenly divide the large data tiles
+            // and load the data without repeated loads.
+            int warp_row = warp_row_id<WarpLayout>();
+            int warp_col = warp_col_id<WarpLayout>();
+            offset = warp_row * warp_rstride + warp_col * warp_cstride;
+            break;
+        }
         case WarpReuse::RowReuseCont: {
             // In the `RowReuseCont` mode, warps in a same row repeatedly load
             // the same data, and each warp loads a continuous chunks of data.
@@ -137,6 +153,31 @@ DEVICE int get_warp_offset() {
     }
     return offset;
 }
+
+template <typename Element, const int rows, const int warps_per_row,
+          const WarpReuse mode>
+DEVICE static constexpr int row_exec_count() {
+    switch (mode) {
+        case WarpReuse::ColReuseCont:
+        case WarpReuse::ColReuseCir:
+            return rows / BaseTileShape<Element>::row;
+        default:  // Cont, Cir, RowReuseCont, RowReuseCir hit this case.
+            return rows / BaseTileShape<Element>::row / warps_per_row;
+    }
+}
+
+template <typename Element, const int cols, const int warps_per_col,
+          const WarpReuse mode>
+DEVICE static constexpr int col_exec_count() {
+    switch (mode) {
+        case WarpReuse::RowReuseCont:
+        case WarpReuse::RowReuseCir:
+            return cols / BaseTileShape<Element>::col;
+        default:  // Cont, Cir, ColReuseCont, ColReuseCir hit this case.
+            return cols / BaseTileShape<Element>::col / warps_per_col;
+    }
+}
+
 }  // namespace
 
 /// @brief The functor that copys data from shared memory to register file.
@@ -194,11 +235,12 @@ struct SharedToRegLoader<Reg_, WarpLayout_, kMode, CopyInst::LoadMat> {
                       : BaseTileShape<DType>::col * Shared::kColStride;
 
         // row stride and col stride for a thread in a warp
-        const int lane_rstride = row_major ? Shared::kRowStride : 8;
-        const int lane_cstride = row_major ? 8 : Shared::kColStride;
+        static constexpr int stride = traits::TraitsBase<DType>::kNumPerAccess;
+        const int lane_rstride = row_major ? Shared::kRowStride : stride;
+        const int lane_cstride = row_major ? stride : Shared::kColStride;
 
-        int lane_row = lane_row_id();
-        int lane_col = lane_col_id();
+        int lane_row = lane_row_id<traits::ThreadLdmatrix>();
+        int lane_col = lane_col_id<traits::ThreadLdmatrix>();
 
         const DType* data;
         for (int i = 0; i < row_exec; ++i) {
@@ -221,26 +263,109 @@ struct SharedToRegLoader<Reg_, WarpLayout_, kMode, CopyInst::LoadMat> {
     }
 };
 
-// functor to copy data from shared memory to register file.
-template <typename Reg, typename Shared, typename InstShape,
-          RegLayout kRegLayout, CopyInst kCopyInst>
-struct RegToShared {
+///@brief A functor that implements threads in a CTA to cooperatively store a
+///       register tile in shared memory.
+template <typename Reg, typename WarpLayout, RegLayout kRegLayout,
+          CopyInst kCopyInst>
+struct RegToSharedStorer {
+    // shared memory tile may be computed from runtime value, thus leave it as a
+    // parameter instead of template parameter.
+    template <typename Shared>
     DEVICE void operator()(const Reg& src, Shared& dst);
 };
 
 ///@brief partial specialization for wmma 16x16x16, and LDSM32
-template <typename Reg, typename Shared>
-struct RegToShared<Reg, Shared, InstShape<16, 16, 16>, RegLayout::TileWMMA,
-                   CopyInst::LoadS32> {
-    DEVICE void operator()(const Reg& src, Shared& dst) {}
-};
+template <typename Reg_, typename WarpLayout_>
+struct RegToSharedStorer<Reg_, WarpLayout_, RegLayout::WMMA_m16n16k16,
+                         CopyInst::LoadS32> {
+    using Reg = Reg_;
+    using WarpLayout = WarpLayout_;
+    using DType = typename Reg::DType;
 
-template <typename Reg, typename Shared>
-DEVICE void copy_tile_r2s(const Reg& src, Shared& dst) {
-    using Copy = RegToShared<Reg, Shared, InstShape<16, 16, 16>,
-                             RegLayout::TileWMMA, CopyInst::LoadS32>;
-    Copy copy;
-    copy(src, dst);
-}
+    template <typename Shared>
+    DEVICE void operator()(const Reg& src, Shared& dst) {
+        static_assert(std::is_same<typename Shared::DType, DType>::value,
+                      "The data type of Shared and Reg must be the same.");
+        static_assert(
+            (Reg::kNumel * 32 * tl::get_numel<WarpLayout>) == Shared::kNumel,
+            "The number of elements in Reg and Shared must be the same.");
+
+        const bool row_major = Shared::kIsRowMajor;  // get the layout of shared
+        const DType* src_ptr = src.data();    // pointer for register tile
+        DType* dst_ptr = dst.mutable_data();  // pointer for shared memory tile
+
+        int row_exec =
+            row_exec_count<DType, Shared::kRows, tl::num_rows<WarpLayout>,
+                           WarpReuse::Cont>();
+        int col_exec =
+            row_exec_count<DType, Shared::kRows, tl::num_rows<WarpLayout>,
+                           WarpReuse::Cont>();
+
+        // 1. advance the pointer to input data to the current warp according to
+        // warp reuse mode. During the store process, threads do not write to
+        // the same shared memory location, thus the warp reuse mode is set to
+        // `Cont`.
+        int offset = get_warp_offset<WarpReuse::Cont, Shared, WarpLayout>();
+        dst_ptr += offset;
+
+        // strides to iterate over each 16x128-bits `Base Tile` in the shared
+        // memory
+        const int tile_rstride =  // row stride for a `Base Tile`
+            row_major ? BaseTileShape<DType>::row * Shared::kRowStride
+                      : BaseTileShape<DType>::row;
+        const int tile_cstride =  // col stride for a `Base Tile`
+            row_major ? BaseTileShape<DType>::col
+                      : BaseTileShape<DType>::col * Shared::kColStride;
+
+        // FIXME(haruhi): Try to find a better way to organize these
+        // hardware-dependent magic numbers.
+        // The number 2 is interpreted as follows: 8x8 block is a fundamental
+        // unit of a TCU instruction. Regardless of the output precision, a
+        // single execution of WMMA stores 2 elements in each thread's local
+        // register.
+        static constexpr int stride = 2;
+        const int lane_rstride = row_major ? Shared::kRowStride : stride;
+        const int lane_cstride = row_major ? stride : Shared::kColStride;
+
+        static constexpr int rstride =
+            row_major ? tl::num_rows<ThreadWmma> * Shared::kRowStride
+                      : tl::num_rows<ThreadWmma>;
+        static constexpr int cstride =
+            row_major ? stride * tl::num_cols<ThreadWmma>
+                      : stride * tl::num_cols<ThreadWmma> * Shared::kColStride;
+
+        auto store_base_tile = [&](const DType* src, DType* dst) {
+            int src_offset, dst_offset;
+            for (int i = 0; i < 2; ++i) {
+                for (int j = 0; j < 2; ++j) {
+                    src_offset = i * 4 + j * 2;
+                    dst_offset = i * rstride + j * cstride;
+
+                    (dst + dst_offset)[0] = (src + src_offset)[0];
+                    (dst + dst_offset)[1] = (src + src_offset)[1];
+                }
+            }
+        };
+
+        int lane_row = lane_row_id<traits::ThreadWmma>();
+        int lane_col = lane_col_id<traits::ThreadWmma>();
+        DType* data;
+        for (int i = 0; i < row_exec; ++i) {
+            for (int j = 0; j < col_exec; ++j) {
+                // 2. advance pointer to the 16x128-bits `BaseTile` indexed by
+                // (i, j).
+                data = dst_ptr + (i * tile_rstride + j * tile_cstride);
+                // 3. advance the pointer to data accessed by the current thread
+                // inside a 16x128-bits `Base Tile`.
+                data += (lane_row * lane_rstride + lane_col * lane_cstride);
+
+                // store the 16x128-bits `Base Tile` to shared memory
+                store_base_tile(src_ptr, data);
+
+                src_ptr += BaseTileShape<DType>::elem_per_thread;
+            }
+        }
+    }
+};
 
 }  // namespace tiledcuda::cell::copy

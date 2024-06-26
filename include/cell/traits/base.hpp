@@ -1,5 +1,7 @@
 #pragma once
 
+#include "types/layout.hpp"
+
 #include <cutlass/numeric_size.h>
 
 namespace tiledcuda::cell::traits {
@@ -12,4 +14,24 @@ struct TraitsBase {
     static constexpr int kElmentBits = cutlass::sizeof_bits<Element>::value;
     static constexpr int kNumPerAccess = kAccessInBits / kElmentBits;
 };
+
+// FIXME(haruhi): This is a quick implementation. Improve it in the future.
+// `BasicTileShape` is the minimal shape that efficiently utilizes the
+// hardware's capabilities. Strive to organize all the magic numbers around this
+// BaseTile more clearly.
+template <typename Element, typename Base = TraitsBase<Element>>
+struct BaseTileShape : public Base {
+    static constexpr int elem_per_thread = Base::kNumPerAccess;
+
+    static constexpr int row = 16;
+    // This definition aligns with `ldmatrix`.
+    // When 32 threads in a warp execute `ldmatrix`, they are arranged in a 2x2
+    // thread tile, with each tile containing 8 contiguous threads. Each thread
+    // accesses 128 contiguous bits of data in shared memory.
+    static constexpr int col = elem_per_thread * 2;
+};
+
+using ThreadLdmatrix = tile_layout::ColMajor<16, 2>;
+using ThreadWmma = tile_layout::RowMajor<8, 4>;
+
 }  // namespace tiledcuda::cell::traits
