@@ -11,8 +11,7 @@ if(WITH_TESTING)
     string(REPLACE ".cu" "" TEST_NAME "${FILE_NAME}")
 
     if("${TEST_NAME}" STREQUAL "test_gemm")
-      # gemm requires extra dependencies
-      continue()
+      continue() # the unittest for gemm requires extra dependencies
     endif()
 
     cuda_test(${TEST_NAME} SRCS "${CMAKE_CURRENT_SOURCE_DIR}/${FILE_PATH}")

@@ -21,12 +21,12 @@ DEVICE void print_tile(const DType* data, const Layout& layout) {
     printf("\n");
 }
 
-/// @brief Print a tile of half-precision floating point numbers. NOTE: when use
-/// print in the device function, do add (if(thread0())) to avoid printing
-/// multiple times by multiple threads. usage:
-/// if(thread0()) {
-///   print_tile(data, layout);
-/// }
+// @brief Print a tile of half-precision floating point numbers. NOTE: when use
+// print in the device function, do add (if(thread0())) to avoid printing
+// multiple times by multiple threads. usage:
+// if(thread0()) {
+//   print_tile(data, layout);
+// }
 template <typename Layout>
 DEVICE void print_tile(const cutlass::half_t* data, const Layout& layout) {
     const half* data_ = reinterpret_cast<const half*>(data);
