@@ -8,9 +8,6 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
-#include <ctime>
-#include <random>
-
 namespace tiledcuda {
 
 using namespace cell;
@@ -30,8 +27,8 @@ float rand_float(float a = 1e-3, float b = 1) {
 
 void check_correctness(const __half* hc1, const float* hc2, int numel) {
     for (int i = 0; i < numel; ++i) {
-        printf("%.3f, ", __half2float(hc1[i]));
-        if (i && (i + 1) % 16 == 0) printf("\n");
+        printf("[%.1f: %.1f], ", __half2float(hc1[i]), hc2[i]);
+        if (i && (i + 1) % 8 == 0) printf("\n");
 
         // ASSERT_NEAR(hc1[i], hc2[i], 1e-3);
     }
@@ -133,6 +130,12 @@ __global__ void test_wmma(const Element* ga, const Element* gb, ElementAcc* gc,
         load_rB(sBs(k), rB);
 
         compute::gemm_(rA, rB, acc);
+
+        // if (thread0()) {
+        //     rA.dump_value();
+        //     rB.dump_value();
+        //     acc.dump_value();
+        // }
     }
     __syncthreads();
 
@@ -185,8 +188,7 @@ void run_test_gemm() {
     LOG(INFO) << "TileIteratorA: [" << config::TileIteratorA::Tile::kRows
               << ", " << config::TileIteratorA::Tile::kCols
               << "]; numel = " << config::TileIteratorA::Tile::kNumel
-              << std::endl
-              << "sc0 = " << config::TileIteratorA::sc0
+              << ", sc0 = " << config::TileIteratorA::sc0
               << ", sc1 = " << config::TileIteratorA::sc1 << std::endl;
     /*
      *  shared memory tile B [128, 64] is partitioned into a 2D grid of 32 x 64
@@ -203,9 +205,13 @@ void run_test_gemm() {
      *  |   3    |sub-tile 6|
      *  |--------|----------|
      */
-    LOG(INFO) << "TileIteratorB: sc0 = " << config::TileIteratorB::sc0
+    LOG(INFO) << "TileIteratorB: [" << config::TileIteratorB::Tile::kRows
+              << ", " << config::TileIteratorB::Tile::kCols
+              << "]; numel = " << config::TileIteratorB::Tile::kNumel
+              << ", sc0 = " << config::TileIteratorB::sc0
               << ", sc1 = " << config::TileIteratorB::sc1 << std::endl
-              << "kThreads: " << config::kThreads << std::endl;
+              << std::endl;
+
     dim3 dim_grid(1, 1, 1);
     dim3 dim_block(config::kThreads, 1, 1);
     int size_ab = (M + N) * K * sizeof(Element);
