@@ -334,6 +334,9 @@ struct RegToSharedStorer<Reg_, WarpLayout_, RegLayout::WMMA_m16n16k16,
             row_major ? stride * tl::num_cols<ThreadWmma>
                       : stride * tl::num_cols<ThreadWmma> * Shared::kColStride;
 
+        // TODO: Improve this is a naive implementation that does not use
+        // vectorized access in future. To use vectorized access, we need to
+        // know the return type of WMMA.
         auto store_base_tile = [&](const DType* src, DType* dst) {
             int src_offset, dst_offset;
             for (int i = 0; i < 2; ++i) {

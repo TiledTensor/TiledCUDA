@@ -61,13 +61,12 @@ __global__ void run_test_store(Loader& loader, Storer& storer) {
     Shared s_tile(buf);
     Reg r_tile;
 
-    // load from shared to register
-    loader(s_tile, r_tile);
+    loader(s_tile, r_tile);  // load from shared to register
     __syncthreads();
     memset(buf_, 0, Shared::kNumel * sizeof(DType));  // clean the shared memory
 
-    // the reverse operation, store from register to shared
-    storer(r_tile, s_tile);
+    storer(r_tile,
+           s_tile);  // the reverse operation, store from register to shared
     __syncthreads();
 
     if (thread0()) {

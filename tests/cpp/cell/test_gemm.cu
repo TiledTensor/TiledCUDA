@@ -1,7 +1,9 @@
 #include "cell/mod.hpp"
 #include "common/test_utils.hpp"
+#include "cuda_utils.hpp"
 #include "util/debug.hpp"
 
+#include <cublas_v2.h>
 #include <glog/logging.h>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
@@ -15,6 +17,20 @@ namespace tl = tile_layout;
 using namespace cute;
 
 namespace {
+
+// This implementation interprets A and C as being laid out in row-major order,
+// while B is laid out in column-major order.
+void cublas_hgemm(int m, int n, int k, const __half* A, const __half* B,
+                  __half* C, int lda, int ldb, int ldc) {
+    __half alf = 1.;
+    __half bet = 0.;
+
+    cublasHandle_t handle;
+    CublasCheck(cublasCreate(&handle));
+    CublasCheck(cublasHgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, k, &alf, A,
+                            lda, B, ldb, &bet, C, ldc));
+    CublasCheck(cublasDestroy(handle));
+}
 
 template <typename Element, typename ElementAcc,                              //
           typename LoadSharedA, typename LoadSharedB, typename StoreSharedC,  //
@@ -186,11 +202,37 @@ TEST(TestWmma, shape1) {
         thrust::raw_pointer_cast(d_a.data()),
         thrust::raw_pointer_cast(d_b.data()),
         thrust::raw_pointer_cast(d_c.data()), load_rA, load_rB, store_rC);
-
     cudaDeviceSynchronize();
 
-    thrust::host_vector<float> h_c1;
-    h_c1 = d_c;
+    {
+        // unittest for correctness
+        // cublas as the ground-truth
+        thrust::device_vector<__half> d_cublas(M * N);
+        thrust::fill(d_cublas.begin(), d_cublas.end(), 0.);
+
+        // Matrix A has a row-major layout with dimensions [M, K],
+        // Matrix B has a column-major layout with dimensions [K, N],
+        // and Matrix C has a row-major layout with dimensions [M, N].
+        //
+        // This is equivalent to the following:
+        // Matrix A has a column-major layout with dimensions [K, M],
+        // Matrix B has a column-major layout with dimensions [K, N],
+        // and Matrix C has a column-major layout with dimensions [N, M].
+        // cuBlas is a Fortran-style(column-major) BLAS library,
+        // then we compute: C = B^T @ A
+        //             [N, M] = [N, K] @ [K, M]
+        cublas_hgemm(N, M, K,
+                     reinterpret_cast<const __half*>(
+                         thrust::raw_pointer_cast(d_b.data())),
+                     reinterpret_cast<const __half*>(
+                         thrust::raw_pointer_cast(d_a.data())),
+                     reinterpret_cast<__half*>(
+                         thrust::raw_pointer_cast(d_cublas.data())),
+                     K /*lda*/, K /*ldb*/, N /*ldc*/);
+
+        h_c = d_c;
+        thrust::host_vector<__half> h_groundtruth = d_cublas;
+    }
 }
 
 }  // namespace testing

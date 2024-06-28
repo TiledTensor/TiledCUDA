@@ -10,6 +10,16 @@ if(WITH_TESTING)
     string(REGEX REPLACE ".+/(.+)\\..*" "\\1" FILE_NAME ${FILE_PATH})
     string(REPLACE ".cu" "" TEST_NAME "${FILE_NAME}")
 
+    if("${TEST_NAME}" STREQUAL "test_gemm")
+      # gemm requires extra dependencies
+      continue()
+    endif()
+
     cuda_test(${TEST_NAME} SRCS "${CMAKE_CURRENT_SOURCE_DIR}/${FILE_PATH}")
   endforeach()
+
+  cuda_test(test_gemm SRCS "${CMAKE_CURRENT_SOURCE_DIR}/cell/test_gemm.cu"
+            "${PROJECT_SOURCE_DIR}/src/cuda_utils.cc" DEPS
+            ${CUDA_CUBLAS_LIBRARIES})
+
 endif()
