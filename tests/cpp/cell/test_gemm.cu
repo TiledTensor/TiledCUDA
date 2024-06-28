@@ -25,17 +25,47 @@ float rand_float(float a = 1e-3, float b = 1) {
     return a + r;
 }
 
-void check_correctness(const __half* hc1, const float* hc2, int numel) {
-    for (int i = 0; i < numel; ++i) {
-        printf("[%.1f: %.1f], ", __half2float(hc1[i]), hc2[i]);
+void check_correctness(const half* hc1, const float* hc2, const float* hc3,
+                       int numel) {
+    printf("cublas:\n");
+    for (int i = 0; i < numel / 16; ++i) {
+        printf("%.3f, ", __half2float(hc1[i]));
         if (i && (i + 1) % 8 == 0) printf("\n");
+        // ASSERT_NEAR(hc1[i], hc2[i], 1e-3);
+    }
+    printf("\nnaive:\n");
+    for (int i = 0; i < numel / 16; ++i) {
+        printf("%.3f, ", hc2[i]);
+        if (i && (i + 1) % 8 == 0) printf("\n");
+        // ASSERT_NEAR(hc1[i], hc2[i], 1e-3);
+    }
+    printf("\n");
 
+    printf("ours:\n");
+    for (int i = 0; i < numel / 16; ++i) {
+        printf("%.3f, ", hc3[i]);
+        if (i && (i + 1) % 8 == 0) printf("\n");
         // ASSERT_NEAR(hc1[i], hc2[i], 1e-3);
     }
     printf("\n");
 }
 
-//@brief: This implementation interprets A and C as being laid out in row-major
+// In this implementation, A and C are interpreted as being laid out in
+// row-major, and B is interpreted as being laid out in column-major.
+void naive_gemm(int kM, int kN, int kK,  //
+                const __half* A, const __half* B, float* C) {
+    for (int i = 0; i < kM; ++i) {
+        for (int j = 0; j < kN; ++j) {
+            float s = 0.;
+            for (int k = 0; k < kK; ++k) {
+                s += __half2float(A[i * kK + k]) * __half2float(B[j * kK + k]);
+            }
+            C[i * kN + j] = s;
+        }
+    }
+}
+
+// @brief: This implementation interprets A and C as being laid out in row-major
 //        order, while B is laid out in column-major order.
 void cublas_hgemm(int m, int n, int k, const __half* A, const __half* B,
                   __half* C, int lda, int ldb, int ldc) {
@@ -59,26 +89,26 @@ struct TestTraits {
                                                 false /*use swizzle*/>;
     using LoadSharedB = traits::G2S2DCopyTraits<Element, N, K, N, K, kThreads,
                                                 false /*use swizzle*/>;
-
     // transfer operand C from shared memory to global memory
     using StoreSharedC =
         traits::S2G2DCopyTraits<ElementAcc, M, N, M, N, kThreads,
                                 false /*use swizzle*/>;
 
+    // ============= shared to register loader =================
     using SharedA = SharedTile<Element, tl::RowMajor<M, K>>;
     // [64, 128] is chunked by [32, 32], strip counts = [64/64, 128/32] = [1, 4]
-    using TileIteratorA = SharedTileIterator<SharedA, TileShape<64, 32>>;
-    using RegA = RegTile<Element, tl::RowMajor<4, 8>>;
+    using TileIteratorA = SharedTileIterator<SharedA, TileShape<32, 32>>;
+    using RegA = RegTile<Element, tl::RowMajor<2, 8>>;
     using LoadRegA =
         SharedToRegLoader<RegA, WarpLayout, WarpReuse::RowReuseCont,
                           CopyInst::LoadMat>;
 
     // A row-major Tile with a shape of [N, K] is equivalent to a column-major
     // Tile with a shape of [K, N]
-    using SharedB = SharedTile<Element, tl::RowMajor<N, K>>;  // 64, 128
-    using RegB = RegTile<Element, tl::RowMajor<4, 8>>;
+    using SharedB = SharedTile<Element, tl::ColMajor<K, N>>;  // 64, 128
+    using RegB = RegTile<Element, tl::RowMajor<2, 8>>;
     // [64, 128] is chunked by [32, 32], strip counts = [64/64, 128/32] = [1, 4]
-    using TileIteratorB = SharedTileIterator<SharedB, TileShape<64, 32>>;
+    using TileIteratorB = SharedTileIterator<SharedB, TileShape<32, 32>>;
     using LoadRegB =
         SharedToRegLoader<RegB, WarpLayout, WarpReuse::ColReuseCont,
                           CopyInst::LoadMat>;
@@ -86,8 +116,9 @@ struct TestTraits {
     static_assert(TileIteratorA::sc1 == TileIteratorB::sc1,
                   "dimension mismatch!");
 
+    // ============= register to shared storer =================
     using SharedC = SharedTile<ElementAcc, tl::RowMajor<M, N>>;  // 64, 64
-    using RegC = RegTile<ElementAcc, tl::RowMajor<4, 8>>;
+    using RegC = RegTile<ElementAcc, tl::RowMajor<2, 4>>;
 
     using StoreRegC =
         RegToSharedStorer<RegC, WarpLayout, RegLayout::WMMA_m16n16k16,
@@ -126,16 +157,13 @@ __global__ void test_wmma(const Element* ga, const Element* gb, ElementAcc* gc,
     RegC acc;
 
     for (int k = 0; k < TileIteratorA::sc1; ++k) {
-        load_rA(sAs(k), rA);
-        load_rB(sBs(k), rB);
+        auto sA = sAs(k);
+        auto sB = sBs(k);
+
+        load_rA(sA, rA);
+        load_rB(sB, rB);
 
         compute::gemm_(rA, rB, acc);
-
-        // if (thread0()) {
-        //     rA.dump_value();
-        //     rB.dump_value();
-        //     acc.dump_value();
-        // }
     }
     __syncthreads();
 
@@ -151,6 +179,8 @@ __global__ void test_wmma(const Element* ga, const Element* gb, ElementAcc* gc,
 
 namespace testing {
 
+// #define DEBUG
+
 template <const int M, const int N, const int K, typename WarpLayout>
 void run_test_gemm() {
     /// unittest for register-level gemm by calling into wmma PTX
@@ -159,16 +189,30 @@ void run_test_gemm() {
 
     // initialize data
     thrust::host_vector<Element> h_a(M * K);
-    thrust::host_vector<Element> h_b(K * N);
-    thrust::host_vector<ElementAcc> h_c(M * N);
-    for (int i = 0; i < h_a.size(); ++i)
-        // h_a[i] = static_cast<Element>(i % 2048 / 100.);
+    for (int i = 0; i < h_a.size(); ++i) {
+#ifdef DEBUG
+        h_a[i] = static_cast<Element>(i % 2048);
+#else
         h_a[i] = static_cast<Element>(rand_float());
+#endif
+    }
 
-    for (int i = 0; i < h_b.size(); ++i)
-        // h_b[i] = static_cast<Element>(i % 2048 / 100.);
+    thrust::host_vector<Element> h_b(K * N);
+    for (int i = 0; i < h_b.size(); ++i) {
+#ifdef DEBUG
+        h_b[i] = static_cast<Element>(i % 2048);
+#else
         h_b[i] = static_cast<Element>(rand_float());
+#endif
+    }
+    thrust::host_vector<ElementAcc> h_c(M * N);
     thrust::fill(h_c.begin(), h_c.end(), 0.);
+
+    thrust::host_vector<ElementAcc> h_naive(M * N);
+    thrust::fill(h_c.begin(), h_c.end(), 0.);
+
+    naive_gemm(M, N, K, reinterpret_cast<const __half*>(h_a.data()),
+               reinterpret_cast<const __half*>(h_b.data()), h_naive.data());
 
     thrust::device_vector<Element> d_a = h_a;
     thrust::device_vector<Element> d_b = h_b;
@@ -176,35 +220,13 @@ void run_test_gemm() {
 
     /// define the configuration of the test
     using config = TestTraits<Element, ElementAcc, WarpLayout, M, N, K>;
-    /*
-     *  shared memory tile A [64, 128] is partitioned into a 2D grid of 64 x 32
-     *  sub-tiles:
-     *  |--------|----------|----------|----------|----------|
-     *  |iterator|    0     |    1     |    2     |    3     |
-     *  |--------|----------|----------|----------|----------|
-     *  |        |sub-tile 0|sub-tile 1|sub-tile 2|sub-tile 3|
-     *  |--------|----------|----------|----------|----------|
-     */
+
+    LOG(INFO) << "kThreads: " << config::kThreads << std::endl;
     LOG(INFO) << "TileIteratorA: [" << config::TileIteratorA::Tile::kRows
               << ", " << config::TileIteratorA::Tile::kCols
               << "]; numel = " << config::TileIteratorA::Tile::kNumel
               << ", sc0 = " << config::TileIteratorA::sc0
               << ", sc1 = " << config::TileIteratorA::sc1 << std::endl;
-    /*
-     *  shared memory tile B [128, 64] is partitioned into a 2D grid of 32 x 64
-     *  sub-tiles:
-     *  |--------|----------|
-     *  |iterator|          |
-     *  |--------|----------|
-     *  |   0    |sub-tile 0|
-     *  |--------|----------|
-     *  |   1    |sub-tile 2|
-     *  |--------|----------|
-     *  |   2    |sub-tile 4|
-     *  |--------|----------|
-     *  |   3    |sub-tile 6|
-     *  |--------|----------|
-     */
     LOG(INFO) << "TileIteratorB: [" << config::TileIteratorB::Tile::kRows
               << ", " << config::TileIteratorB::Tile::kCols
               << "]; numel = " << config::TileIteratorB::Tile::kNumel
@@ -261,13 +283,16 @@ void run_test_gemm() {
 
     thrust::host_vector<__half> h_groundtruth = d_cublas;
 
+#ifndef DEBUG
     check_correctness(thrust::raw_pointer_cast(h_groundtruth.data()),
+                      thrust::raw_pointer_cast(h_naive.data()),
                       thrust::raw_pointer_cast(h_c.data()), M * N);
+#endif
 }
 
 TEST(TestWmma, TestGemm) {
     // M, N, K is this test is for shared memory tile
-    run_test_gemm<64, 64, 128, tl::RowMajor<2, 2>>();
+    run_test_gemm<32, 32, 32, tl::RowMajor<2, 2>>();
 }
 
 }  // namespace testing

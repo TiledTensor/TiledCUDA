@@ -12,7 +12,7 @@ namespace {  // helper functions
 template <typename Element>
 DEVICE void ldmatrix(const Element* src, Element* dst) {
     uint32_t* reg = reinterpret_cast<uint32_t*>(dst);
-    uint32_t smem_addr = __cvta_generic_to_shared(src);
+    uint32_t smem_addr = static_cast<uint32_t>(__cvta_generic_to_shared(src));
     asm volatile(
         "ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, %3}, [%4];\n"
         : "=r"(reg[0]), "=r"(reg[2]), "=r"(reg[1]), "=r"(reg[3])
@@ -154,28 +154,66 @@ DEVICE int get_warp_offset() {
     return offset;
 }
 
+// @brief This function returns the number of times a `BaseTile` is executed
+//        along the direction of the shared memory row.
 template <typename Element, const int rows, const int warps_per_row,
           const WarpReuse mode>
 DEVICE static constexpr int row_exec_count() {
+    const int base_tile_row = BaseTileShape<Element>::row;
+
+    assert(rows % base_tile_row == 0 &&
+           "The current implementation requires that the number of shared "
+           "memory rows be divisible by the base tile row.\n");
+
+    int count = 0;
     switch (mode) {
+        /// Warps in the same columns (`warps_per_row` in total) repeatedly load
+        /// the shared memory rows. Therefore, `row_exec` is not divided by
+        /// warps_per_row.
         case WarpReuse::ColReuseCont:
         case WarpReuse::ColReuseCir:
-            return rows / BaseTileShape<Element>::row;
+            count = rows / base_tile_row;
+            break;
         default:  // Cont, Cir, RowReuseCont, RowReuseCir hit this case.
-            return rows / BaseTileShape<Element>::row / warps_per_row;
+            count = rows / base_tile_row / warps_per_row;
+            break;
     }
+
+    // Check to ensure that the count is not zero, which could be caused by an
+    // incorrect combination of shared memory tile shape and warp layout.
+    // TODO: This should actually be a static assert, but we're
+    // currently using a runtime assert for implementation issues.
+    assert(count);
+    return count;
 }
 
 template <typename Element, const int cols, const int warps_per_col,
           const WarpReuse mode>
 DEVICE static constexpr int col_exec_count() {
+    const int base_tile_col = BaseTileShape<Element>::col;
+
+    assert(cols % base_tile_col == 0 &&
+           "The number of shared memory columns must be divisible by the base "
+           "tile column.\n");
+
+    int count = 0;
     switch (mode) {
+        /// Warps in the same rows (`warps_per_col` in total) repeatedly load
+        /// the shared memory columns. Therefore, `col_exec` is not divided by
+        /// `warps_per_col`.
         case WarpReuse::RowReuseCont:
         case WarpReuse::RowReuseCir:
-            return cols / BaseTileShape<Element>::col;
+            count = cols / base_tile_col;
+            break;
         default:  // Cont, Cir, ColReuseCont, ColReuseCir hit this case.
-            return cols / BaseTileShape<Element>::col / warps_per_col;
+            count = cols / base_tile_col / warps_per_col;
+            break;
     }
+
+    // Check to ensure that the count is not zero, which could be caused by an
+    // incorrect combination of shared memory tile shape and warp layout.
+    assert(count);
+    return count;
 }
 
 }  // namespace
@@ -242,12 +280,23 @@ struct SharedToRegLoader<Reg_, WarpLayout_, kMode, CopyInst::LoadMat> {
         int lane_row = lane_row_id<traits::ThreadLdmatrix>();
         int lane_col = lane_col_id<traits::ThreadLdmatrix>();
 
+        if (!row_major) {
+            // transpose the lane position if the shared memory is in
+            // column-major. 16 threads are mapped to the strided dimension of
+            // the data while the 2 threads are mapped to the contiguous
+            // dimension of the data.
+            int tmp = lane_row;
+            lane_row = lane_col;
+            lane_col = tmp;
+        }
+
         const DType* data;
         for (int i = 0; i < row_exec; ++i) {
             for (int j = 0; j < col_exec; ++j) {
                 // 2. advance pointer to the 16x128-bits `BaseTile` indexed by
                 // (i, j).
                 data = src_ptr + (i * tile_rstride + j * tile_cstride);
+
                 // 3. advance the pointer to data accessed by the current thread
                 // inside a 16x128-bits `Base Tile`.
                 data += (lane_row * lane_rstride + lane_col * lane_cstride);
