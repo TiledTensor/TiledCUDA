@@ -29,6 +29,11 @@ struct BaseTileShape : public Base {
     // thread tile, with each tile containing 8 contiguous threads. Each thread
     // accesses 128 contiguous bits of data in shared memory.
     static constexpr int col = elem_per_thread * 2;
+
+    // TODO: Comment this;
+    static constexpr int sub_row = 2;
+    static constexpr int sub_col = 4;
+    static constexpr int sub_numel = sub_row * sub_col;
 };
 
 using ThreadLdmatrix = tile_layout::ColMajor<16, 2>;

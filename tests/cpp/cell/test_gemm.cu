@@ -1,4 +1,5 @@
 #include "cell/mod.hpp"
+#include "cell/traits/base.hpp"
 #include "common/test_utils.hpp"
 #include "cuda_utils.hpp"
 #include "util/debug.hpp"
@@ -25,26 +26,24 @@ float rand_float(float a = 1e-3, float b = 1) {
     return a + r;
 }
 
-#define DEBUG_PRINT
+#define DEBUG
 
 void check_correctness(const half* hc1, const float* hc2, int row, int col) {
-    int numel = row * col;
-
-#ifdef DEBUG_PRINT
-    printf("cublas:\n");
-    for (int i = 0; i < 128; i++) {
-        printf("%.2f, ", __half2float(hc1[i]));
-        if (i & (i + 1) % 8 == 0) printf("\n");
-    }
-
-    printf("\nours:\n");
-    for (int i = 0; i < 128; i++) {
+#if defined(DEBUG)
+    printf("\n\nours:\n");
+    printf("%d:\t", 0);
+    for (int i = 0; i < 64; i++) {
         printf("%.2f, ", hc2[i]);
-        if (i & (i + 1) % 8 == 0) printf("\n");
+        if (i & (i + 1) % 8 == 0) printf("\n%d:\t", (i + 1) / 8);
     }
-    printf("\n");
-#endif
-
+    printf("\ncublas:\n");
+    printf("%d:\t", 0);
+    for (int i = 0; i < 64; i++) {
+        printf("%.2f, ", __half2float(hc1[i]));
+        if (i & (i + 1) % 8 == 0) printf("\n%d:\t", (i + 1) / 8);
+    }
+#else
+    int numel = row * col;
     bool pass_unittest = true;
     for (int i = 0; i < numel; ++i) {
         float diff = __half2float(hc1[i]) - hc2[i];
@@ -55,6 +54,7 @@ void check_correctness(const half* hc1, const float* hc2, int row, int col) {
         }
     }
     assert(pass_unittest);
+#endif
 }
 
 // @brief: This implementation interprets A and C as being laid out in row-major
@@ -85,13 +85,16 @@ void cublas_hgemm(int m, int n, int k, const __half* A, const __half* B,
 template <typename Element, typename ElementAcc,  //
           const int M, const int N, const int K>
 struct TestTraits {
-    using WarpLayout = tl::RowMajor<2, 2>;
-    static constexpr int warp_per_row = tl::num_rows<WarpLayout>;
-    static constexpr int warp_per_col = tl::num_cols<WarpLayout>;
+    using BaseShape = cell::traits::BaseTileShape<Element>;
 
-    static const int kThreads = tl::get_numel<WarpLayout> * 32;
+    /// ======== 1. configurate threads and warp layout in a CTA ============
+    static constexpr int warp_per_row = 2;
+    static constexpr int warp_per_col = 2;
+    static const int kThreads = warp_per_col * warp_per_col * 32;
 
-    // for global to shared memory copy using CuTe
+    using WarpLayout = tl::RowMajor<warp_per_row, warp_per_col>;
+
+    /// == 2. configurate tile transfer between global and shared using CuTe ==
     using LoadSharedA = traits::G2S2DCopyTraits<Element, M, K, M, K, kThreads,
                                                 false /*use swizzle*/>;
     using LoadSharedB = traits::G2S2DCopyTraits<Element, N, K, N, K, kThreads,
@@ -101,50 +104,58 @@ struct TestTraits {
         traits::S2G2DCopyTraits<ElementAcc, M, N, M, N, kThreads,
                                 false /*use swizzle*/>;
 
-    // ============= shared to register loader =================
-    static constexpr int chunk_row = 32;
-    static constexpr int chunk_col = 32;
-    using ChunkShape = TileShape<chunk_row, chunk_col>;
-
-    static constexpr int reg_tile_row = 2;
-    static constexpr int reg_tile_col = 4;
-
+    /// === 3. configurate tile transfer between shared and register loader ===
+    // shared tile for operand A
+    static constexpr int stride_k = 32;
     using SharedA = SharedTile<Element, tl::RowMajor<M, K>>;
-    using TileIteratorA = SharedTileIterator<SharedA, ChunkShape>;
+    using TileIteratorA = SharedTileIterator<SharedA, TileShape<M, stride_k>>;
 
-    static constexpr int rA_row = M / warp_per_row / 16 * reg_tile_row;
-    static constexpr int rA_col = K / 16 * reg_tile_col;
-
-    using RegA = RegTile<Element, tl::RowMajor<rA_row, rA_col>>;
-    using LoadRegA =
-        SharedToRegLoader<RegA, WarpLayout, WarpReuse::RowReuseCont,
-                          CopyInst::LoadMat>;
-
+    // shared tile for operand B
     using SharedB = SharedTile<Element, tl::ColMajor<K, N>>;
-
-    static constexpr int rB_row = K / 16 * reg_tile_col;
-    static constexpr int rB_col = N / warp_per_col / 16 * reg_tile_row;
-
-    using RegB = RegTile<Element, tl::RowMajor<rB_col, rB_row>>;
-
-    using TileIteratorB = SharedTileIterator<SharedB, ChunkShape>;
-    using LoadRegB =
-        SharedToRegLoader<RegB, WarpLayout, WarpReuse::ColReuseCont,
-                          CopyInst::LoadMat>;
+    using TileIteratorB = SharedTileIterator<SharedB, TileShape<stride_k, N>>;
 
     static_assert(TileIteratorA::sc1 == TileIteratorB::sc0,
                   "mismatched K dimension!");
 
-    // ============= register to shared storer =================
+    // register tile for operand A
+    // calculate register usage for operand A
+    static constexpr int rA_row =
+        M / warp_per_row / BaseShape::row * BaseShape::sub_row;
+    static constexpr int rA_col = K / BaseShape::col * BaseShape::sub_col;
+    using RegA = RegTile<Element, tl::RowMajor<rA_row, rA_col>>;
+
+    // load RegTileA from shared
+    using LoadRegA = SharedToRegLoader<RegA, WarpLayout,
+                                       WarpReuse::RowReuseCont,  //
+                                       CopyInst::LoadMat>;
+
+    // register tile for operand B
+    // calculate register usage for operand B
+    static constexpr int rB_row = K / BaseShape::col * BaseShape::sub_col;
+    static constexpr int rB_col =
+        N / warp_per_col / BaseShape::row * BaseShape::sub_row;
+    using RegB = RegTile<Element, tl::RowMajor<rB_col, rB_row>>;
+
+    // load RegTileB from shared
+    using LoadRegB = SharedToRegLoader<RegB, WarpLayout,
+                                       WarpReuse::ColReuseCont,  //
+                                       CopyInst::LoadMat>;
+
+    // shared tile for output C
     using SharedC = SharedTile<ElementAcc, tl::RowMajor<M, N>>;
 
-    static constexpr int rC_row = M / warp_per_row / 16 * reg_tile_row;
-    static constexpr int rC_col = N / warp_per_col / 16 * reg_tile_col;
+    // register tile for output C
+    // calculate register usage for output C
+    static constexpr int rC_row =
+        M / warp_per_row / BaseShape::row * BaseShape::sub_row;
+    static constexpr int rC_col =
+        N / warp_per_col / BaseShape::col * BaseShape::sub_col;
     using RegC = RegTile<ElementAcc, tl::RowMajor<rC_row, rC_col>>;
 
-    using StoreRegC =
-        RegToSharedStorer<RegC, WarpLayout, RegLayout::WMMA_m16n16k16,
-                          CopyInst::LoadS32>;
+    // store RegTileC to shared
+    using StoreRegC = RegToSharedStorer<RegC, WarpLayout,
+                                        RegLayout::WMMA_m16n16k16,  //
+                                        CopyInst::LoadS32>;
 };
 
 template <typename Element, typename ElementAcc,                              //
@@ -178,11 +189,19 @@ __global__ void test_wmma(const Element* ga, const Element* gb, ElementAcc* gc,
     RegC acc;
 
     for (int k = 0; k < TileIteratorA::sc1; ++k) {
-        auto sA = sAs(k);
-        auto sB = sBs(k);
+        load_rA(sAs(k), rA);
+        load_rB(sBs(k), rB);
 
-        load_rA(sA, rA);
-        load_rB(sB, rB);
+        if (thread0()) {
+            printf("rA\n");
+            rA.dump_value();
+
+            printf("rB\n");
+            rB.dump_value();
+
+            printf("rC\n");
+            acc.dump_value();
+        }
 
         compute::gemm_(rA, rB, acc);
     }
@@ -282,7 +301,11 @@ void run_test() {
                       thrust::raw_pointer_cast(h_c.data()), M, N);
 }
 
-TEST(TestWmma, TestGemm) { run_test<32, 32, 32>(); }
+TEST(TestGemm, test) {
+    // run_test<32, 32, 32>();
+    // run_test<64, 32, 32>();
+    run_test<32, 64, 32>();
+}
 
 }  // namespace testing
 }  // namespace tiledcuda
