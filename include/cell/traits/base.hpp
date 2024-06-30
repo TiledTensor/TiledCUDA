@@ -15,10 +15,10 @@ struct TraitsBase {
     static constexpr int kNumPerAccess = kAccessInBits / kElmentBits;
 };
 
-// FIXME(haruhi): This is a quick implementation. Improve it in the future.
-// `BasicTileShape` is the minimal shape that efficiently utilizes the
-// hardware's capabilities. Strive to organize all the magic numbers around this
-// BaseTile more clearly.
+// FIXME(haruhi): This is a quick implementation. These magic numbers SHOULD be
+// carefully checked to ensure the correctness. `BasicTileShape` is the minimal
+// shape that efficiently utilizes the hardware's capabilities. Strive to
+// organize all the magic numbers around this BaseTile more clearly.
 template <typename Element, typename Base = TraitsBase<Element>>
 struct BaseTileShape : public Base {
     static constexpr int elem_per_thread = Base::kNumPerAccess;
@@ -36,9 +36,14 @@ struct BaseTileShape : public Base {
     // this inconsistency.
     static constexpr int col = elem_per_thread * 2;
 
-    // TODO: Comment this;
+    // A 16 x 128-bit BaseShape has a sub-structure.
+    // Within a 16 x 128-bit BaseShape, each thread processes 4 fragments in
+    // this BaseTile. For example, if the input type is half, each access
+    // handles 8 halves (128 / 16). Therefore, each fragment has a row-major
+    // layout with a shape of [2, 8 / (4 / 2)] = [2, 4].
+    // NOTE: this check assumes that the fragment is ALWAYS row-major.
     static constexpr int sub_row = 2;
-    static constexpr int sub_col = 4;
+    static constexpr int sub_col = elem_per_thread / 2;
     static constexpr int sub_numel = sub_row * sub_col;
 };
 

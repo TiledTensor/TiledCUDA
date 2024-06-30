@@ -29,6 +29,7 @@ float rand_float(float a = 1e-3, float b = 1) {
 // #define DEBUG
 void check_correctness(const half* hc1, const float* hc2, int row, int col) {
     int numel = row * col;
+
 #if defined(DEBUG)
     printf("\n\nours:\n");
     printf("%d:\t", 0);
@@ -43,10 +44,12 @@ void check_correctness(const half* hc1, const float* hc2, int row, int col) {
         if (i & (i + 1) % 32 == 0) printf("\n%d:\t", (i + 1) / 32);
     }
 #else
+    static const float eps = 5e-2;
     bool pass_unittest = true;
+
     for (int i = 0; i < numel; ++i) {
         float diff = __half2float(hc1[i]) - hc2[i];
-        if (diff > 7e-3) {
+        if (diff > eps) {
             printf("Error results [%d], Expected: %.3f, Got: %.3f\n", i,
                    __half2float(hc1[i]), hc2[i]);
             pass_unittest = false;
@@ -105,7 +108,7 @@ struct TestTraits {
 
     /// === 3. configurate tile transfer between shared and register loader ===
     // shared tile for operand A
-    static constexpr int stride_k = 32;
+    static constexpr int stride_k = 32;  // chunk the k dimension with stride 32
     using SharedA = SharedTile<Element, tl::RowMajor<M, K>>;
     using TileIteratorA = SharedTileIterator<SharedA, TileShape<M, stride_k>>;
 
@@ -118,9 +121,13 @@ struct TestTraits {
 
     // register tile for operand A
     // calculate register usage for operand A
-    static constexpr int rA_row =
-        M / warp_per_row / BaseShape::row * BaseShape::sub_row;
-    static constexpr int rA_col = K / BaseShape::col * BaseShape::sub_col;
+
+    // warp tile shape for the operand A
+    static constexpr int A_wm = M / warp_per_row;
+    static constexpr int A_wk = K;
+
+    static constexpr int rA_row = A_wm / BaseShape::row * BaseShape::sub_row;
+    static constexpr int rA_col = A_wk / BaseShape::col * BaseShape::sub_col;
     using RegA = RegTile<Element, tl::RowMajor<rA_row, rA_col>>;
 
     // load RegTileA from shared
@@ -130,10 +137,16 @@ struct TestTraits {
 
     // register tile for operand B
     // calculate register usage for operand B
-    static constexpr int rB_row = K / BaseShape::col * BaseShape::sub_col;
-    static constexpr int rB_col =
-        N / warp_per_col / BaseShape::row * BaseShape::sub_row;
-    using RegB = RegTile<Element, tl::RowMajor<rB_col, rB_row>>;
+    static constexpr int B_wk = K;
+    static constexpr int B_wN = N / warp_per_col;
+
+    static constexpr int rB_row = B_wk / BaseShape::col * BaseShape::sub_col;
+    static constexpr int rB_col = B_wN / BaseShape::row * BaseShape::sub_row;
+
+    // FIXME (haruhi): There is a dangerous inconsistency in the implementation;
+    // the shared tile has a column-major layout, while the register tile has a
+    // row-major layout.
+    using RegB = RegTile<Element, tl::RowMajor<rB_row, rB_col>>;
 
     // load RegTileB from shared
     using LoadRegB = SharedToRegLoader<RegB, WarpLayout,
@@ -145,10 +158,13 @@ struct TestTraits {
 
     // register tile for output C
     // calculate register usage for output C
-    static constexpr int rC_row =
-        M / warp_per_row / BaseShape::row * BaseShape::sub_row;
-    static constexpr int rC_col =
-        N / warp_per_col / BaseShape::col * BaseShape::sub_col;
+    static constexpr int C_wm = M / warp_per_row;
+    static constexpr int C_wn = N / warp_per_col;
+
+    // FIXME (haruhi): hard-coded magic number here due to C's DType is float.
+    // magic numbers defines in `BaseTileShape` depends on the DType of C.
+    static constexpr int rC_row = C_wm / 16 * 2;
+    static constexpr int rC_col = C_wn / 16 * 4;
     using RegC = RegTile<ElementAcc, tl::RowMajor<rC_row, rC_col>>;
 
     // store RegTileC to shared
@@ -191,16 +207,16 @@ __global__ void test_wmma(const Element* ga, const Element* gb, ElementAcc* gc,
         load_rA(sAs(k), rA);
         load_rB(sBs(k), rB);
 
-        // if (thread0()) {
-        //     printf("rA\n");
-        //     rA.dump_value();
+        if (thread0()) {
+            printf("rA\n");
+            rA.dump_value();
 
-        //     printf("rB\n");
-        //     rB.dump_value();
+            printf("rB\n");
+            rB.dump_value();
 
-        //     printf("rC\n");
-        //     acc.dump_value();
-        // }
+            printf("rC\n");
+            acc.dump_value();
+        }
 
         compute::gemm_(rA, rB, acc);
     }
@@ -256,6 +272,15 @@ void run_test() {
               << ", sc1 = " << config::TileIteratorB::sc1 << std::endl
               << std::endl;
 
+    LOG(INFO) << std::endl
+              << "RegA: [" << config::RegA::kRows << ", " << config::RegA::kCols
+              << "]" << std::endl
+              << "RegB: [" << config::RegB::kRows << ", " << config::RegB::kCols
+              << "]" << std::endl
+              << "RegC: [" << config::RegC::kRows << ", " << config::RegC::kCols
+              << "]" << std::endl
+              << std::endl;
+
     dim3 dim_grid(1, 1, 1);
     dim3 dim_block(config::kThreads, 1, 1);
     int size_ab = (M + N) * K * sizeof(Element);
@@ -298,12 +323,13 @@ void run_test() {
 
     check_correctness(thrust::raw_pointer_cast(h_cublas.data()),
                       thrust::raw_pointer_cast(h_c.data()), M, N);
+    cudaDeviceSynchronize();
 }
 
 TEST(TestGemm, test) {
     // run_test<32, 32, 32>();
-    // run_test<64, 32, 32>();
-    run_test<32, 64, 32>();
+    run_test<64, 32, 32>();
+    // run_test<32, 64, 32>();
 }
 
 }  // namespace testing

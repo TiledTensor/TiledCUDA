@@ -43,16 +43,23 @@ struct Gemm<RegTileA, RegTileB, RegTileC, InstShape<16, 16, 16>> {
                   "Mismatched data type for operand A and B.");
     static_assert(std::is_same<OutType, float>::value, "Output must be float.");
 
+    // A register tile's contiguous dimension maps to the fragment's contiguous
+    // dimension, and the strided dimension maps to the strided dimension.
     static constexpr int ms = RegTileA::kRows / BaseShape::sub_row;
-    static constexpr int ns = RegTileB::kRows / BaseShape::sub_row;
+    static constexpr int ns = RegTileB::kCols / BaseShape::sub_row;
     static constexpr int ks = RegTileA::kCols / BaseShape::sub_col;
-    static_assert(RegTileB::kCols / BaseShape::sub_col == ks,
+
+    // FIXME (haruhi): This check requires operand B to have a column-major
+    // layout of [K, N], meaning the k dimension is contiguous in memory.
+    static_assert(RegTileB::kRows / BaseShape::sub_col == ks,
                   "Mismatched k-dimension for operand A and B.");
 
     static_assert(ms && ns && ks, "Invalid tile shapes for GEMM.");
 
     DEVICE void operator()(const RegTileA& a, const RegTileB& b, RegTileC& c) {
         if (thread0()) {
+            printf("RegA::kCols: %d\n", RegTileA::kCols);
+            printf("BaseShape::sub_col: %d\n", BaseShape::sub_col);
             printf("ms: %d, ns: %d, ks: %d\n", ms, ns, ks);
         }
 
