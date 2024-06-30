@@ -128,6 +128,11 @@ DEVICE int get_warp_offset() {
             int warp_row = warp_row_id<WarpLayout>();
             int warp_col = warp_col_id<WarpLayout>();
             offset = warp_row * warp_rstride + warp_col * warp_cstride;
+
+            // if (thread(32)) {
+            //     printf("warp_row: %d, warp_col: %d, offset: %d\n", warp_row,
+            //            warp_col, offset);
+            // }
             break;
         }
         case WarpReuse::RowReuseCont: {
@@ -347,8 +352,12 @@ struct RegToSharedStorer<Reg_, WarpLayout_, RegLayout::WMMA_m16n16k16,
             row_exec_count<DType, Shared::kRows, tl::num_rows<WarpLayout>,
                            WarpReuse::Cont>();
         int col_exec =
-            row_exec_count<DType, Shared::kRows, tl::num_rows<WarpLayout>,
+            row_exec_count<DType, Shared::kCols, tl::num_cols<WarpLayout>,
                            WarpReuse::Cont>();
+
+        // if (thread0()) {
+        //     printf("row_exec: %d, col_exec: %d\n", row_exec, col_exec);
+        // }
 
         // 1. advance the pointer to input data to the current warp according to
         // warp reuse mode. During the store process, threads do not write to
@@ -362,9 +371,7 @@ struct RegToSharedStorer<Reg_, WarpLayout_, RegLayout::WMMA_m16n16k16,
         const int tile_rstride =  // row stride for a `Base Tile`
             row_major ? BaseTileShape<DType>::row * Shared::kRowStride
                       : BaseTileShape<DType>::row;
-        const int tile_cstride =  // col stride for a `Base Tile`
-            row_major ? BaseTileShape<DType>::col
-                      : BaseTileShape<DType>::col * Shared::kColStride;
+        const int tile_cstride = row_major ? 16 : 16 * Shared::kColStride;
 
         // FIXME(haruhi): Try to find a better way to organize these
         // hardware-dependent magic numbers.
@@ -373,9 +380,6 @@ struct RegToSharedStorer<Reg_, WarpLayout_, RegLayout::WMMA_m16n16k16,
         // single execution of WMMA stores 2 elements in each thread's local
         // register.
         static constexpr int stride = 2;
-        const int lane_rstride = row_major ? Shared::kRowStride : stride;
-        const int lane_cstride = row_major ? stride : Shared::kColStride;
-
         static constexpr int rstride =
             row_major ? tl::num_rows<ThreadWmma> * Shared::kRowStride
                       : tl::num_rows<ThreadWmma>;
@@ -388,7 +392,7 @@ struct RegToSharedStorer<Reg_, WarpLayout_, RegLayout::WMMA_m16n16k16,
         // know the return type of WMMA.
         auto store_base_tile = [&](const DType* src, DType* dst) {
             int src_offset, dst_offset;
-
+            // TODO(haruhi): comments the magic number
             for (int i = 0; i < 2; ++i) {
                 for (int j = 0; j < 2; ++j) {
                     src_offset = i * 4 + j * 2;
@@ -402,7 +406,23 @@ struct RegToSharedStorer<Reg_, WarpLayout_, RegLayout::WMMA_m16n16k16,
 
         int lane_row = lane_row_id<traits::ThreadWmma>();
         int lane_col = lane_col_id<traits::ThreadWmma>();
+
         DType* data;
+        const int lane_rstride = row_major ? Shared::kRowStride : stride;
+        const int lane_cstride = row_major ? stride : Shared::kColStride;
+
+        // if (thread(13)) {
+        //     printf("lane_pos = [%d, %d]\n", lane_row, lane_col);
+        //     printf("tile_rstride = %d, tile_cstride = %d\n", tile_rstride,
+        //            tile_cstride);
+        //     printf("tl::num_rows<ThreadWmma> = %d\n",
+        //     tl::num_rows<ThreadWmma>); printf("Shared::kRowStride = %d,
+        //     Shared::kColStride = %d\n",
+        //            Shared::kRowStride, Shared::kColStride);
+        //     printf("rstride = %d, cstride = %d\n", rstride, cstride);
+        //     printf("lane_rstride = %d, lane_cstride = %d\n\n", lane_rstride,
+        //            lane_cstride);
+        // }
 
         for (int i = 0; i < row_exec; ++i) {
             for (int j = 0; j < col_exec; ++j) {

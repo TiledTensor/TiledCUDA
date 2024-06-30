@@ -81,26 +81,26 @@ struct Gemm<RegTileA, RegTileB, RegTileC, InstShape<16, 16, 16>> {
                 : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[1]),
                   "r"(B[3]), "f"(C[4]), "f"(C[5]), "f"(C[6]), "f"(C[7]));
 
-            // if (thread0()) {
-            //     const __half* a = reinterpret_cast<const __half*>(A);
-            //     const __half* b = reinterpret_cast<const __half*>(B);
-            //     float* c = C;
+            if (thread0()) {
+                const __half* a = reinterpret_cast<const __half*>(A);
+                const __half* b = reinterpret_cast<const __half*>(B);
+                float* c = C;
 
-            //     printf("\nA:\n");
-            //     for (int i = 0; i < 8; ++i)
-            //         printf("%.2f, ", __half2float(a[i]));
+                printf("\nA:\t");
+                for (int i = 0; i < 8; ++i)
+                    printf("%.2f, ", __half2float(a[i]));
 
-            //     printf("\nB:\n");
-            //     printf("%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f,",  //
-            //            __half2float(b[0]), __half2float(b[1]),
-            //            __half2float(b[4]), __half2float(b[5]),
-            //            __half2float(b[2]), __half2float(b[3]),
-            //            __half2float(b[6]), __half2float(b[7]));
+                printf("\nB:\t");
+                printf("%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f,",  //
+                       __half2float(b[0]), __half2float(b[1]),
+                       __half2float(b[4]), __half2float(b[5]),
+                       __half2float(b[2]), __half2float(b[3]),
+                       __half2float(b[6]), __half2float(b[7]));
 
-            //     printf("\nC:");
-            //     for (int i = 0; i < 8; ++i) printf("%.2f, ", c[i]);
-            //     printf("\n");
-            // }
+                printf("\nC:\t");
+                for (int i = 0; i < 8; ++i) printf("%.2f, ", c[i]);
+                printf("\n");
+            }
         };
 
         int offset_a = 0, offset_b = 0, offset_c = 0;

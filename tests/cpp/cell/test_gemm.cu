@@ -26,28 +26,27 @@ float rand_float(float a = 1e-3, float b = 1) {
     return a + r;
 }
 
-#define DEBUG
-
+// #define DEBUG
 void check_correctness(const half* hc1, const float* hc2, int row, int col) {
+    int numel = row * col;
 #if defined(DEBUG)
     printf("\n\nours:\n");
     printf("%d:\t", 0);
-    for (int i = 0; i < 64; i++) {
-        printf("%.2f, ", hc2[i]);
-        if (i & (i + 1) % 8 == 0) printf("\n%d:\t", (i + 1) / 8);
+    for (int i = 0; i < 128; i++) {
+        printf("%.1f, ", hc2[i]);
+        if (i & (i + 1) % 32 == 0) printf("\n%d:\t", (i + 1) / 32);
     }
     printf("\ncublas:\n");
     printf("%d:\t", 0);
-    for (int i = 0; i < 64; i++) {
-        printf("%.2f, ", __half2float(hc1[i]));
-        if (i & (i + 1) % 8 == 0) printf("\n%d:\t", (i + 1) / 8);
+    for (int i = 0; i < 128; i++) {
+        printf("%.1f, ", __half2float(hc1[i]));
+        if (i & (i + 1) % 32 == 0) printf("\n%d:\t", (i + 1) / 32);
     }
 #else
-    int numel = row * col;
     bool pass_unittest = true;
     for (int i = 0; i < numel; ++i) {
         float diff = __half2float(hc1[i]) - hc2[i];
-        if (diff > 1e-2) {
+        if (diff > 7e-3) {
             printf("Error results [%d], Expected: %.3f, Got: %.3f\n", i,
                    __half2float(hc1[i]), hc2[i]);
             pass_unittest = false;
@@ -192,16 +191,16 @@ __global__ void test_wmma(const Element* ga, const Element* gb, ElementAcc* gc,
         load_rA(sAs(k), rA);
         load_rB(sBs(k), rB);
 
-        if (thread0()) {
-            printf("rA\n");
-            rA.dump_value();
+        // if (thread0()) {
+        //     printf("rA\n");
+        //     rA.dump_value();
 
-            printf("rB\n");
-            rB.dump_value();
+        //     printf("rB\n");
+        //     rB.dump_value();
 
-            printf("rC\n");
-            acc.dump_value();
-        }
+        //     printf("rC\n");
+        //     acc.dump_value();
+        // }
 
         compute::gemm_(rA, rB, acc);
     }

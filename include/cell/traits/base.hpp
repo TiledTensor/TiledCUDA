@@ -28,6 +28,12 @@ struct BaseTileShape : public Base {
     // When 32 threads in a warp execute `ldmatrix`, they are arranged in a 2x2
     // thread tile, with each tile containing 8 contiguous threads. Each thread
     // accesses 128 contiguous bits of data in shared memory.
+
+    // FIXME(haruhi): This is a risky assumption and leads to very dangerous
+    // implementations.
+    // It defines the `BasicTile` shape for ldmatrix. In BaseTileShape for wmma,
+    // the column count is always 16, irrespective of the data type. Resolve
+    // this inconsistency.
     static constexpr int col = elem_per_thread * 2;
 
     // TODO: Comment this;
