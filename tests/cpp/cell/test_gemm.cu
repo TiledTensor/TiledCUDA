@@ -25,44 +25,17 @@ float rand_float(float a = 1e-3, float b = 1) {
     return a + r;
 }
 
-void check_correctness(const half* hc1, const float* hc2, const float* hc3,
-                       int numel) {
-    printf("cublas:\n");
-    for (int i = 0; i < numel / 16; ++i) {
-        printf("%.3f, ", __half2float(hc1[i]));
-        if (i && (i + 1) % 8 == 0) printf("\n");
-        // ASSERT_NEAR(hc1[i], hc2[i], 1e-3);
-    }
-    printf("\nnaive:\n");
-    for (int i = 0; i < numel / 16; ++i) {
-        printf("%.3f, ", hc2[i]);
-        if (i && (i + 1) % 8 == 0) printf("\n");
-        // ASSERT_NEAR(hc1[i], hc2[i], 1e-3);
-    }
-    printf("\n");
-
-    printf("ours:\n");
-    for (int i = 0; i < numel / 16; ++i) {
-        printf("%.3f, ", hc3[i]);
-        if (i && (i + 1) % 8 == 0) printf("\n");
-        // ASSERT_NEAR(hc1[i], hc2[i], 1e-3);
-    }
-    printf("\n");
-}
-
-// In this implementation, A and C are interpreted as being laid out in
-// row-major, and B is interpreted as being laid out in column-major.
-void naive_gemm(int kM, int kN, int kK,  //
-                const __half* A, const __half* B, float* C) {
-    for (int i = 0; i < kM; ++i) {
-        for (int j = 0; j < kN; ++j) {
-            float s = 0.;
-            for (int k = 0; k < kK; ++k) {
-                s += __half2float(A[i * kK + k]) * __half2float(B[j * kK + k]);
-            }
-            C[i * kN + j] = s;
+void check_correctness(const half* hc1, const float* hc2, int numel) {
+    bool pass_unittest = true;
+    for (int i = 0; i < numel; ++i) {
+        float diff = __half2float(hc1[i]) - hc2[i];
+        if (diff > 1e-2) {
+            printf("Error results [%d], Expected: %.3f, Got: %.3f\n", i,
+                   __half2float(hc1[i]), hc2[i]);
+            pass_unittest = false;
         }
     }
+    assert(pass_unittest);
 }
 
 // @brief: This implementation interprets A and C as being laid out in row-major
@@ -79,9 +52,13 @@ void cublas_hgemm(int m, int n, int k, const __half* A, const __half* B,
     CublasCheck(cublasDestroy(handle));
 }
 
-template <typename Element, typename ElementAcc, typename WarpLayout,
+template <typename Element, typename ElementAcc,  //
           const int M, const int N, const int K>
 struct TestTraits {
+    using WarpLayout = tl::RowMajor<2, 2>;
+    static constexpr int warp_per_row = tl::num_rows<WarpLayout>;
+    static constexpr int warp_per_col = tl::num_cols<WarpLayout>;
+
     static const int kThreads = tl::get_numel<WarpLayout> * 32;
 
     // for global to shared memory copy using CuTe
@@ -95,10 +72,21 @@ struct TestTraits {
                                 false /*use swizzle*/>;
 
     // ============= shared to register loader =================
+    static constexpr int chunk_row = 32;
+    static constexpr int chunk_col = 32;
+    using ChunkShape = TileShape<chunk_row, chunk_col>;
+
+    static constexpr int reg_tile_row = 2;
+    static constexpr int reg_tile_col = 4;
+
     using SharedA = SharedTile<Element, tl::RowMajor<M, K>>;
     // [64, 128] is chunked by [32, 32], strip counts = [64/64, 128/32] = [1, 4]
-    using TileIteratorA = SharedTileIterator<SharedA, TileShape<32, 32>>;
-    using RegA = RegTile<Element, tl::RowMajor<2, 8>>;
+    using TileIteratorA = SharedTileIterator<SharedA, ChunkShape>;
+
+    static constexpr int rA_row = M / warp_per_row / 16 * reg_tile_row;
+    static constexpr int rA_col = K / 16 * reg_tile_col;
+
+    using RegA = RegTile<Element, tl::RowMajor<rA_row, rA_col>>;
     using LoadRegA =
         SharedToRegLoader<RegA, WarpLayout, WarpReuse::RowReuseCont,
                           CopyInst::LoadMat>;
@@ -106,19 +94,26 @@ struct TestTraits {
     // A row-major Tile with a shape of [N, K] is equivalent to a column-major
     // Tile with a shape of [K, N]
     using SharedB = SharedTile<Element, tl::ColMajor<K, N>>;  // 64, 128
-    using RegB = RegTile<Element, tl::RowMajor<2, 8>>;
+
+    static constexpr int rB_row = K / 16 * reg_tile_col;
+    static constexpr int rB_col = N / warp_per_col / 16 * reg_tile_row;
+
+    using RegB = RegTile<Element, tl::RowMajor<rB_col, rB_row>>;
     // [64, 128] is chunked by [32, 32], strip counts = [64/64, 128/32] = [1, 4]
-    using TileIteratorB = SharedTileIterator<SharedB, TileShape<32, 32>>;
+    using TileIteratorB = SharedTileIterator<SharedB, ChunkShape>;
     using LoadRegB =
         SharedToRegLoader<RegB, WarpLayout, WarpReuse::ColReuseCont,
                           CopyInst::LoadMat>;
 
-    static_assert(TileIteratorA::sc1 == TileIteratorB::sc1,
-                  "dimension mismatch!");
+    static_assert(TileIteratorA::sc1 == TileIteratorB::sc0,
+                  "mismatched K dimension!");
 
     // ============= register to shared storer =================
     using SharedC = SharedTile<ElementAcc, tl::RowMajor<M, N>>;  // 64, 64
-    using RegC = RegTile<ElementAcc, tl::RowMajor<2, 4>>;
+
+    static constexpr int rC_row = M / warp_per_row / 16 * reg_tile_row;
+    static constexpr int rC_col = N / warp_per_col / 16 * reg_tile_col;
+    using RegC = RegTile<ElementAcc, tl::RowMajor<rC_row, rC_col>>;
 
     using StoreRegC =
         RegToSharedStorer<RegC, WarpLayout, RegLayout::WMMA_m16n16k16,
@@ -139,7 +134,6 @@ __global__ void test_wmma(const Element* ga, const Element* gb, ElementAcc* gc,
     auto* shared_c = reinterpret_cast<ElementAcc*>(buf_);
     SharedC sC(shared_c);
 
-    // transfer tiles from global to shared memory
     copy_2d_tile_g2s(ga, shared_a, typename LoadSharedA::SrcLayout{},
                      typename LoadSharedA::DstLayout{},
                      typename LoadSharedA::TiledCopy{});
@@ -179,47 +173,30 @@ __global__ void test_wmma(const Element* ga, const Element* gb, ElementAcc* gc,
 
 namespace testing {
 
-// #define DEBUG
-
-template <const int M, const int N, const int K, typename WarpLayout>
-void run_test_gemm() {
+template <const int M, const int N, const int K>
+void run_test() {
     /// unittest for register-level gemm by calling into wmma PTX
     using Element = cutlass::half_t;
     using ElementAcc = float;
 
     // initialize data
     thrust::host_vector<Element> h_a(M * K);
-    for (int i = 0; i < h_a.size(); ++i) {
-#ifdef DEBUG
-        h_a[i] = static_cast<Element>(i % 2048);
-#else
+    for (int i = 0; i < h_a.size(); ++i)
         h_a[i] = static_cast<Element>(rand_float());
-#endif
-    }
 
     thrust::host_vector<Element> h_b(K * N);
-    for (int i = 0; i < h_b.size(); ++i) {
-#ifdef DEBUG
-        h_b[i] = static_cast<Element>(i % 2048);
-#else
+    for (int i = 0; i < h_b.size(); ++i)
         h_b[i] = static_cast<Element>(rand_float());
-#endif
-    }
+
     thrust::host_vector<ElementAcc> h_c(M * N);
     thrust::fill(h_c.begin(), h_c.end(), 0.);
-
-    thrust::host_vector<ElementAcc> h_naive(M * N);
-    thrust::fill(h_c.begin(), h_c.end(), 0.);
-
-    naive_gemm(M, N, K, reinterpret_cast<const __half*>(h_a.data()),
-               reinterpret_cast<const __half*>(h_b.data()), h_naive.data());
 
     thrust::device_vector<Element> d_a = h_a;
     thrust::device_vector<Element> d_b = h_b;
     thrust::device_vector<ElementAcc> d_c = h_c;
 
     /// define the configuration of the test
-    using config = TestTraits<Element, ElementAcc, WarpLayout, M, N, K>;
+    using config = TestTraits<Element, ElementAcc, M, N, K>;
 
     LOG(INFO) << "kThreads: " << config::kThreads << std::endl;
     LOG(INFO) << "TileIteratorA: [" << config::TileIteratorA::Tile::kRows
@@ -247,12 +224,14 @@ void run_test_gemm() {
     // TODO: Refine this code; there are too many template parameters, making it
     // messy.
     test_wmma<Element, ElementAcc, typename config::LoadSharedA,
-              typename config::LoadSharedB, typename config::StoreSharedC,
+              typename config::LoadSharedB, typename config::StoreSharedC,  //
               typename config::TileIteratorA, typename config::RegA,
-              typename config::LoadRegA, typename config::TileIteratorB,
-              typename config::RegB, typename config::LoadRegB,
+              typename config::LoadRegA,  //
+              typename config::TileIteratorB, typename config::RegB,
+              typename config::LoadRegB,  //
               typename config::SharedC, typename config::RegC,
-              typename config::StoreRegC><<<dim_grid, dim_block, shm_size>>>(
+              typename config::StoreRegC  //
+              ><<<dim_grid, dim_block, shm_size>>>(
         thrust::raw_pointer_cast(d_a.data()),
         thrust::raw_pointer_cast(d_b.data()),
         thrust::raw_pointer_cast(d_c.data()), load_rA, load_rB, store_rC);
@@ -281,19 +260,13 @@ void run_test_gemm() {
         reinterpret_cast<__half*>(thrust::raw_pointer_cast(d_cublas.data())),
         K /*lda*/, K /*ldb*/, N /*ldc*/);
 
-    thrust::host_vector<__half> h_groundtruth = d_cublas;
+    thrust::host_vector<__half> h_cublas = d_cublas;
 
-#ifndef DEBUG
-    check_correctness(thrust::raw_pointer_cast(h_groundtruth.data()),
-                      thrust::raw_pointer_cast(h_naive.data()),
+    check_correctness(thrust::raw_pointer_cast(h_cublas.data()),
                       thrust::raw_pointer_cast(h_c.data()), M * N);
-#endif
 }
 
-TEST(TestWmma, TestGemm) {
-    // M, N, K is this test is for shared memory tile
-    run_test_gemm<32, 32, 32, tl::RowMajor<2, 2>>();
-}
+TEST(TestWmma, TestGemm) { run_test<32, 32, 32>(); }
 
 }  // namespace testing
 }  // namespace tiledcuda

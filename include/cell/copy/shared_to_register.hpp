@@ -15,7 +15,7 @@ DEVICE void ldmatrix(const Element* src, Element* dst) {
     uint32_t smem_addr = static_cast<uint32_t>(__cvta_generic_to_shared(src));
     asm volatile(
         "ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, %3}, [%4];\n"
-        : "=r"(reg[0]), "=r"(reg[2]), "=r"(reg[1]), "=r"(reg[3])
+        : "=r"(reg[0]), "=r"(reg[1]), "=r"(reg[2]), "=r"(reg[3])
         : "r"(smem_addr));
 }
 
@@ -388,13 +388,14 @@ struct RegToSharedStorer<Reg_, WarpLayout_, RegLayout::WMMA_m16n16k16,
         // know the return type of WMMA.
         auto store_base_tile = [&](const DType* src, DType* dst) {
             int src_offset, dst_offset;
+
             for (int i = 0; i < 2; ++i) {
                 for (int j = 0; j < 2; ++j) {
                     src_offset = i * 4 + j * 2;
-                    dst_offset = i * rstride + j * cstride;
+                    dst_offset = j * rstride + i * cstride;
 
-                    (dst + dst_offset)[0] = (src + src_offset)[0];
-                    (dst + dst_offset)[1] = (src + src_offset)[1];
+                    dst[dst_offset] = src[src_offset];
+                    dst[dst_offset + 1] = src[src_offset + 1];
                 }
             }
         };
@@ -402,6 +403,7 @@ struct RegToSharedStorer<Reg_, WarpLayout_, RegLayout::WMMA_m16n16k16,
         int lane_row = lane_row_id<traits::ThreadWmma>();
         int lane_col = lane_col_id<traits::ThreadWmma>();
         DType* data;
+
         for (int i = 0; i < row_exec; ++i) {
             for (int j = 0; j < col_exec; ++j) {
                 // 2. advance pointer to the 16x128-bits `BaseTile` indexed by

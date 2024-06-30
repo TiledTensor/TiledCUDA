@@ -40,11 +40,7 @@ struct Gemm<RegTileA, RegTileB, RegTileC, InstShape<16, 16, 16>> {
         const uint32_t* rb = reinterpret_cast<const uint32_t*>(b.data());
         float* rc = c.mutable_data();
 
-        // the data distribution of this specific wmma instruction over thread's
-        // registers can be found in pp.19 of this document:
-        // https://developer.download.nvidia.com/video/gputechconf/gtc/2020/presentations/s21745-developing-cuda-kernels-to-push-tensor-cores-to-the-absolute-limit-on-nvidia-a100.pdf
-
-        auto base_tile_wmma = [=](const uint32_t* A, const uint32_t* B,
+        auto base_tile_wmma = [&](const uint32_t* A, const uint32_t* B,
                                   float* C) {
             asm volatile(
                 "mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 "
@@ -54,7 +50,8 @@ struct Gemm<RegTileA, RegTileB, RegTileC, InstShape<16, 16, 16>> {
                 "{%10, %11, %12, %13};\n"
                 : "=f"(C[0]), "=f"(C[1]), "=f"(C[2]), "=f"(C[3])
                 : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]),
-                  "r"(B[1]), "f"(0.f), "f"(0.f), "f"(0.f), "f"(0.f));
+                  "r"(B[2]), "f"(C[0]), "f"(C[1]), "f"(C[2]), "f"(C[3]));
+
             asm volatile(
                 "mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 "
                 "{%0,  %1,  %2,  %3},"
@@ -62,12 +59,12 @@ struct Gemm<RegTileA, RegTileB, RegTileC, InstShape<16, 16, 16>> {
                 "{%8,  %9},"
                 "{%10, %11, %12, %13};\n"
                 : "=f"(C[4]), "=f"(C[5]), "=f"(C[6]), "=f"(C[7])
-                : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[2]),
-                  "r"(B[3]), "f"(0.f), "f"(0.f), "f"(0.f), "f"(0.f));
+                : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[1]),
+                  "r"(B[3]), "f"(C[4]), "f"(C[5]), "f"(C[6]), "f"(C[7]));
         };
 
         for (int i = 0; i < sc0; ++i) {
-            for (int j = 0; j < sc1; ++j) {  // the k reduction dimension
+            for (int j = 0; j < sc1; ++j) {  // accumulate along the k dimension
                 base_tile_wmma(ra, rb, rc);
                 ra += 4;
                 rb += 4;
