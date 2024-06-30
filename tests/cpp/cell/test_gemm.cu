@@ -25,7 +25,26 @@ float rand_float(float a = 1e-3, float b = 1) {
     return a + r;
 }
 
-void check_correctness(const half* hc1, const float* hc2, int numel) {
+#define DEBUG_PRINT
+
+void check_correctness(const half* hc1, const float* hc2, int row, int col) {
+    int numel = row * col;
+
+#ifdef DEBUG_PRINT
+    printf("cublas:\n");
+    for (int i = 0; i < 128; i++) {
+        printf("%.2f, ", __half2float(hc1[i]));
+        if (i & (i + 1) % 8 == 0) printf("\n");
+    }
+
+    printf("\nours:\n");
+    for (int i = 0; i < 128; i++) {
+        printf("%.2f, ", hc2[i]);
+        if (i & (i + 1) % 8 == 0) printf("\n");
+    }
+    printf("\n");
+#endif
+
     bool pass_unittest = true;
     for (int i = 0; i < numel; ++i) {
         float diff = __half2float(hc1[i]) - hc2[i];
@@ -39,7 +58,18 @@ void check_correctness(const half* hc1, const float* hc2, int numel) {
 }
 
 // @brief: This implementation interprets A and C as being laid out in row-major
-//        order, while B is laid out in column-major order.
+//         order, while B is laid out in column-major order.
+//         Matrix A has a row-major layout with dimensions [M, K],
+//         Matrix B has a column-major layout with dimensions [K, N],
+//         and Matrix C has a row-major layout with dimensions [M, N].
+//
+//         This is equivalent to the following:
+//         Matrix A has a column-major layout with dimensions [K, M],
+//         Matrix B has a column-major layout with dimensions [K, N],
+//         and Matrix C has a column-major layout with dimensions [N, M].
+//         cuBlas is a Fortran-style(column-major) BLAS library,
+//         then we compute: C = B^T @ A
+//                     [N, M] = [N, K] @ [K, M]
 void cublas_hgemm(int m, int n, int k, const __half* A, const __half* B,
                   __half* C, int lda, int ldb, int ldc) {
     __half alf = 1.;
@@ -80,7 +110,6 @@ struct TestTraits {
     static constexpr int reg_tile_col = 4;
 
     using SharedA = SharedTile<Element, tl::RowMajor<M, K>>;
-    // [64, 128] is chunked by [32, 32], strip counts = [64/64, 128/32] = [1, 4]
     using TileIteratorA = SharedTileIterator<SharedA, ChunkShape>;
 
     static constexpr int rA_row = M / warp_per_row / 16 * reg_tile_row;
@@ -91,15 +120,13 @@ struct TestTraits {
         SharedToRegLoader<RegA, WarpLayout, WarpReuse::RowReuseCont,
                           CopyInst::LoadMat>;
 
-    // A row-major Tile with a shape of [N, K] is equivalent to a column-major
-    // Tile with a shape of [K, N]
-    using SharedB = SharedTile<Element, tl::ColMajor<K, N>>;  // 64, 128
+    using SharedB = SharedTile<Element, tl::ColMajor<K, N>>;
 
     static constexpr int rB_row = K / 16 * reg_tile_col;
     static constexpr int rB_col = N / warp_per_col / 16 * reg_tile_row;
 
     using RegB = RegTile<Element, tl::RowMajor<rB_col, rB_row>>;
-    // [64, 128] is chunked by [32, 32], strip counts = [64/64, 128/32] = [1, 4]
+
     using TileIteratorB = SharedTileIterator<SharedB, ChunkShape>;
     using LoadRegB =
         SharedToRegLoader<RegB, WarpLayout, WarpReuse::ColReuseCont,
@@ -109,7 +136,7 @@ struct TestTraits {
                   "mismatched K dimension!");
 
     // ============= register to shared storer =================
-    using SharedC = SharedTile<ElementAcc, tl::RowMajor<M, N>>;  // 64, 64
+    using SharedC = SharedTile<ElementAcc, tl::RowMajor<M, N>>;
 
     static constexpr int rC_row = M / warp_per_row / 16 * reg_tile_row;
     static constexpr int rC_col = N / warp_per_col / 16 * reg_tile_col;
@@ -242,17 +269,6 @@ void run_test() {
     thrust::device_vector<__half> d_cublas(M * N);
     thrust::fill(d_cublas.begin(), d_cublas.end(), 0.);
 
-    // Matrix A has a row-major layout with dimensions [M, K],
-    // Matrix B has a column-major layout with dimensions [K, N],
-    // and Matrix C has a row-major layout with dimensions [M, N].
-    //
-    // This is equivalent to the following:
-    // Matrix A has a column-major layout with dimensions [K, M],
-    // Matrix B has a column-major layout with dimensions [K, N],
-    // and Matrix C has a column-major layout with dimensions [N, M].
-    // cuBlas is a Fortran-style(column-major) BLAS library,
-    // then we compute: C = B^T @ A
-    //             [N, M] = [N, K] @ [K, M]
     cublas_hgemm(
         N, M, K,
         reinterpret_cast<const __half*>(thrust::raw_pointer_cast(d_b.data())),
@@ -263,7 +279,7 @@ void run_test() {
     thrust::host_vector<__half> h_cublas = d_cublas;
 
     check_correctness(thrust::raw_pointer_cast(h_cublas.data()),
-                      thrust::raw_pointer_cast(h_c.data()), M * N);
+                      thrust::raw_pointer_cast(h_c.data()), M, N);
 }
 
 TEST(TestWmma, TestGemm) { run_test<32, 32, 32>(); }
