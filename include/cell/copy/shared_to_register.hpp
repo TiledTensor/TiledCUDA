@@ -74,9 +74,9 @@ DEVICE int warp_col_id() {
 }
 
 // @brief This function returns the lane row of the current thread within a
-//        warp. NOTE: this function is only valid for the thread layout in
-//        `ldmatrix` or `stmatrix`. We assume that the threads in a warp are
-//        arranged as follows (a 16 x 2 column-major):
+//        warp.
+//        For an example, in ldmatrix, threads in a warp are arranged as follows
+//        (a 16 x 2 column-major):
 //        |  | 0 |  1|
 //        |--|---|---|
 //        |0 | 0 | 16|
@@ -84,7 +84,7 @@ DEVICE int warp_col_id() {
 //        |2 | 4 | 18|
 //        |  |...|...|
 //        |15| 15| 31|
-// Example: if threadIdx.x is 43, then its lane row is 8, lane col is 0.
+//        if threadIdx.x is 43, then its lane row is 8, lane col is 0.
 template <typename Layout>
 DEVICE int lane_row_id() {
     int lane_id = threadIdx.x % warpSize;  // thread index inside a warp
@@ -93,9 +93,7 @@ DEVICE int lane_row_id() {
 }
 
 // @brief This function returns the lane col of the current thread within a
-//        warp. NOTE: this function is only valid for the thread layout in
-//        `ldmatrix` or `stmatrix`. We assume that the threads in a warp are
-//        arranged as explained above.
+//        warp.
 template <typename Layout>
 DEVICE int lane_col_id() {
     int lane_id = threadIdx.x % warpSize;  // thread index inside a warp
