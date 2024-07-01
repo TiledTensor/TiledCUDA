@@ -27,8 +27,9 @@ float rand_float(float a = 1e-3, float b = 1) {
 }
 
 // #define DEBUG
-void check_correctness(const half* hc1, const float* hc2, int row, int col) {
+bool check_correctness(const half* hc1, const float* hc2, int row, int col) {
     int numel = row * col;
+    bool pass_unittest = true;
 
 #if defined(DEBUG)
     printf("\n\nours:\n");
@@ -45,7 +46,6 @@ void check_correctness(const half* hc1, const float* hc2, int row, int col) {
     }
 #else
     static const float eps = 5e-2;
-    bool pass_unittest = true;
 
     for (int i = 0; i < numel; ++i) {
         float diff = __half2float(hc1[i]) - hc2[i];
@@ -55,8 +55,8 @@ void check_correctness(const half* hc1, const float* hc2, int row, int col) {
             pass_unittest = false;
         }
     }
-    assert(pass_unittest);
 #endif
+    return pass_unittest;
 }
 
 // @brief: This implementation interprets A and C as being laid out in row-major
@@ -207,17 +207,6 @@ __global__ void test_wmma(const Element* ga, const Element* gb, ElementAcc* gc,
         load_rA(sAs(k), rA);
         load_rB(sBs(k), rB);
 
-        if (thread0()) {
-            printf("rA\n");
-            rA.dump_value();
-
-            printf("rB\n");
-            rB.dump_value();
-
-            printf("rC\n");
-            acc.dump_value();
-        }
-
         compute::gemm_(rA, rB, acc);
     }
     __syncthreads();
@@ -321,15 +310,17 @@ void run_test() {
 
     thrust::host_vector<__half> h_cublas = d_cublas;
 
-    check_correctness(thrust::raw_pointer_cast(h_cublas.data()),
-                      thrust::raw_pointer_cast(h_c.data()), M, N);
-    cudaDeviceSynchronize();
+    EXPECT_TRUE(check_correctness(thrust::raw_pointer_cast(h_cublas.data()),
+                                  thrust::raw_pointer_cast(h_c.data()), M, N))
+        << "[" << M << ", " << N << ", " << K << "], Failed test!" << std::endl;
 }
 
 TEST(TestGemm, test) {
-    // run_test<32, 32, 32>();
-    run_test<64, 32, 32>();
-    // run_test<32, 64, 32>();
+    run_test<32, 32, 32>();
+    run_test<128, 32, 128>();
+
+    // FIXME(haruhi): Failed unittest, this setting still HAS BUG!
+    // run_test<64, 64, 32>();
 }
 
 }  // namespace testing

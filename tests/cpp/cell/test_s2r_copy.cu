@@ -50,8 +50,7 @@ __global__ void run_test_load(Copy& copy) {
     copy(s_tile, r_tile);
 }
 
-#define DEBUG_PRITN
-
+#define DEBUG
 template <typename Shared, typename Reg, typename Loader, typename Storer>
 __global__ void run_test_store(Loader& loader, Storer& storer) {
     using DType = typename Shared::DType;
@@ -66,10 +65,12 @@ __global__ void run_test_store(Loader& loader, Storer& storer) {
     loader(s_tile, r_tile);  // load from shared to register
     __syncthreads();
 
+#if defined(DEBUG)
     if (thread0()) {
         printf("register tile:\n");
         r_tile.dump_value();
     }
+#endif
     memset(buf_, 0, Shared::kNumel * sizeof(DType));  // clean the shared memory
 
     // the reverse operation, store from register to shared

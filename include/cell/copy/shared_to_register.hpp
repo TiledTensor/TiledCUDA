@@ -128,11 +128,6 @@ DEVICE int get_warp_offset() {
             int warp_row = warp_row_id<WarpLayout>();
             int warp_col = warp_col_id<WarpLayout>();
             offset = warp_row * warp_rstride + warp_col * warp_cstride;
-
-            // if (thread(32)) {
-            //     printf("warp_row: %d, warp_col: %d, offset: %d\n", warp_row,
-            //            warp_col, offset);
-            // }
             break;
         }
         case WarpReuse::RowReuseCont: {
@@ -355,23 +350,12 @@ struct RegToSharedStorer<Reg_, WarpLayout_, RegLayout::WMMA_m16n16k16,
             row_exec_count<DType, Shared::kCols, tl::num_cols<WarpLayout>,
                            WarpReuse::Cont>();
 
-        // if (thread0()) {
-        //     printf("row_exec: %d, col_exec: %d\n", row_exec, col_exec);
-        // }
-
         // 1. advance the pointer to input data to the current warp according to
         // warp reuse mode. During the store process, threads do not write to
         // the same shared memory location, thus the warp reuse mode is set to
         // `Cont`.
         int offset = get_warp_offset<WarpReuse::Cont, Shared, WarpLayout>();
         dst_ptr += offset;
-
-        // strides to iterate over each 16x128-bits `Base Tile` in the shared
-        // memory
-        const int tile_rstride =  // row stride for a `Base Tile`
-            row_major ? BaseTileShape<DType>::row * Shared::kRowStride
-                      : BaseTileShape<DType>::row;
-        const int tile_cstride = row_major ? 16 : 16 * Shared::kColStride;
 
         // FIXME(haruhi): Try to find a better way to organize these
         // hardware-dependent magic numbers.
@@ -396,6 +380,7 @@ struct RegToSharedStorer<Reg_, WarpLayout_, RegLayout::WMMA_m16n16k16,
             for (int i = 0; i < 2; ++i) {
                 for (int j = 0; j < 2; ++j) {
                     src_offset = i * 4 + j * 2;
+                    // Be cautious, j and i are swapped here. DONOT change this
                     dst_offset = j * rstride + i * cstride;
 
                     dst[dst_offset] = src[src_offset];
@@ -404,25 +389,22 @@ struct RegToSharedStorer<Reg_, WarpLayout_, RegLayout::WMMA_m16n16k16,
             }
         };
 
-        int lane_row = lane_row_id<traits::ThreadWmma>();
-        int lane_col = lane_col_id<traits::ThreadWmma>();
+        // strides to iterate over each 16x128-bits `Base Tile` in the shared
+        // memory
+        const int tile_rstride =  // row stride for a `Base Tile`
+            row_major ? BaseTileShape<DType>::row * Shared::kRowStride
+                      : BaseTileShape<DType>::row;
+        const int tile_cstride = row_major ? 16 : 16 * Shared::kColStride;
 
-        DType* data;
+        // Given the lane position of the current thread, calculate the strides
+        // needed to address the data within the 16x128-bit `Base Tile` for the
+        // current thread.
         const int lane_rstride = row_major ? Shared::kRowStride : stride;
         const int lane_cstride = row_major ? stride : Shared::kColStride;
 
-        // if (thread(13)) {
-        //     printf("lane_pos = [%d, %d]\n", lane_row, lane_col);
-        //     printf("tile_rstride = %d, tile_cstride = %d\n", tile_rstride,
-        //            tile_cstride);
-        //     printf("tl::num_rows<ThreadWmma> = %d\n",
-        //     tl::num_rows<ThreadWmma>); printf("Shared::kRowStride = %d,
-        //     Shared::kColStride = %d\n",
-        //            Shared::kRowStride, Shared::kColStride);
-        //     printf("rstride = %d, cstride = %d\n", rstride, cstride);
-        //     printf("lane_rstride = %d, lane_cstride = %d\n\n", lane_rstride,
-        //            lane_cstride);
-        // }
+        DType* data;
+        int lane_row = lane_row_id<traits::ThreadWmma>();
+        int lane_col = lane_col_id<traits::ThreadWmma>();
 
         for (int i = 0; i < row_exec; ++i) {
             for (int j = 0; j < col_exec; ++j) {
@@ -436,7 +418,7 @@ struct RegToSharedStorer<Reg_, WarpLayout_, RegLayout::WMMA_m16n16k16,
                 // store the 16x128-bits `Base Tile` to shared memory
                 store_base_tile(src_ptr, data);
 
-                src_ptr += BaseTileShape<DType>::elem_per_thread;
+                src_ptr += 8;  // FIXME(haruhi): the magic number is dangerous.
             }
         }
     }

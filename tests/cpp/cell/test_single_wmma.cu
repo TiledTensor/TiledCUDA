@@ -32,8 +32,26 @@ __device__ void naive_gemm(int kM, int kN, int kK,  //
     }
 }
 
+#define DEBUG
 __device__ void check_results(const float* hc1, const float* hc2, int numel) {
     for (int i = 0; i < numel; ++i) assert(abs(hc1[i] - hc2[i]) < 1e-3);
+
+#if defined(DEBUG)
+    if (thread0()) {
+        printf("\n\nours:\n");
+        printf("%d:\t", 0);
+        for (int i = 0; i < numel; i++) {
+            printf("%.0f, ", hc1[i]);
+            if (i & (i + 1) % 32 == 0) printf("\n%d:\t", (i + 1) / 32);
+        }
+        printf("\nground-truth:\n");
+        printf("%d:\t", 0);
+        for (int i = 0; i < numel; i++) {
+            printf("%.0f, ", hc2[i]);
+            if (i & (i + 1) % 32 == 0) printf("\n%d:\t", (i + 1) / 32);
+        }
+    }
+#endif
 }
 
 template <typename Element, typename ElementAcc>
@@ -41,8 +59,8 @@ __device__ void init_values(Element* a, Element* b, ElementAcc* c, int M, int N,
                             int K) {
     if (!thread0()) return;
 
-    for (int i = 0; i < M * K; ++i) a[i] = static_cast<Element>(i / 100.);
-    for (int i = 0; i < K * N; ++i) b[i] = static_cast<Element>(i / 100.);
+    for (int i = 0; i < M * K; ++i) a[i] = static_cast<Element>(i);
+    for (int i = 0; i < K * N; ++i) b[i] = static_cast<Element>(i);
     for (int i = 0; i < M * N; ++i) c[i] = 0.;
 }
 
@@ -141,14 +159,6 @@ void run_test() {
 
     using config = TestTraits<Element, ElementAcc, M, N, K>;
 
-    LOG(INFO) << std::endl
-              << "RegA: [" << config::RegA::kRows << ", " << config::RegA::kCols
-              << "]" << std::endl
-              << "RegB: [" << config::RegB::kRows << ", " << config::RegB::kCols
-              << "]" << std::endl
-              << "RegC: [" << config::RegC::kRows << ", " << config::RegC::kCols
-              << "]" << std::endl;
-
     dim3 dim_grid(1, 1, 1);
     dim3 dim_block(config::kThreads, 1, 1);
     int size_ab = (M + N) * K * sizeof(Element);
@@ -167,10 +177,21 @@ void run_test() {
               typename config::StoreRegC>
         <<<dim_grid, dim_block, shm_size>>>(load_rA, load_rB, store_rC);
     cudaDeviceSynchronize();
+
+    LOG(INFO) << std::endl
+              << "[" << M << ", " << N << ", " << K << "]" << std::endl
+              << "RegA: [" << config::RegA::kRows << ", " << config::RegA::kCols
+              << "]" << std::endl
+              << "RegB: [" << config::RegB::kRows << ", " << config::RegB::kCols
+              << "]" << std::endl
+              << "RegC: [" << config::RegC::kRows << ", " << config::RegC::kCols
+              << "]" << std::endl
+              << "Test passed!" << std::endl;
 }
 
 TEST(TestWmma, test_m16n16k16_f) {
     // this unittest implements using a single warp to execute wmma instructions
+    run_test<16, 32, 16>();
     run_test<16, 16, 16>();
     run_test<96, 48, 80>();
     run_test<64, 128, 128>();
