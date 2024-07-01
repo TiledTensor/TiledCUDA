@@ -177,9 +177,8 @@ template <typename Element, typename ElementAcc,                              //
           typename TileIteratorA, typename RegA, typename LoadRegA,
           typename TileIteratorB, typename RegB, typename LoadRegB,
           typename SharedC, typename RegC, typename StoreRegC>
-__global__ void test_wmma(const Element* ga, const Element* gb, ElementAcc* gc,
-                          LoadRegA& load_rA, LoadRegB& load_rB,
-                          StoreRegC& store_rC) {
+__global__ void test_wmma(const Element* ga, const Element* gb,
+                          ElementAcc* gc) {
     extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
     auto* shared_a = reinterpret_cast<Element*>(buf_);
     auto* shared_b = shared_a + TileIteratorA::Tile::kNumel;
@@ -198,8 +197,13 @@ __global__ void test_wmma(const Element* ga, const Element* gb, ElementAcc* gc,
     TileIteratorA sAs(shared_a);
     TileIteratorB sBs(shared_b);
 
+    LoadRegA load_rA;
     RegA rA;
+
+    LoadRegB load_rB;
     RegB rB;
+
+    StoreRegC store_rC;
     RegC acc;
 
     for (int k = 0; k < TileIteratorA::sc1; ++k) {
@@ -275,10 +279,6 @@ void run_test() {
     int size_c = M * N * sizeof(ElementAcc);
     int shm_size = size_ab > size_c ? size_ab : size_c;
 
-    typename config::LoadRegA load_rA;
-    typename config::LoadRegB load_rB;
-    typename config::StoreRegC store_rC;
-
     // TODO: Refine this code; there are too many template parameters, making it
     // messy.
     test_wmma<Element, ElementAcc, typename config::LoadSharedA,
@@ -292,7 +292,7 @@ void run_test() {
               ><<<dim_grid, dim_block, shm_size>>>(
         thrust::raw_pointer_cast(d_a.data()),
         thrust::raw_pointer_cast(d_b.data()),
-        thrust::raw_pointer_cast(d_c.data()), load_rA, load_rB, store_rC);
+        thrust::raw_pointer_cast(d_c.data()));
     cudaDeviceSynchronize();
     h_c = d_c;
 

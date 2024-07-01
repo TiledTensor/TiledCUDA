@@ -56,6 +56,26 @@ struct Gemm<RegTileA, RegTileB, RegTileC, InstShape<16, 16, 16>> {
 
     static_assert(ms && ns && ks, "Invalid tile shapes for GEMM.");
 
+    DEVICE void operator()(const RegTileA& a, const RegTileB& b, RegTileC& c) {
+        const uint32_t* ra = reinterpret_cast<const uint32_t*>(a.data());
+        const uint32_t* rb = reinterpret_cast<const uint32_t*>(b.data());
+        float* rc = c.mutable_data();
+
+        int offset_a = 0, offset_b = 0, offset_c = 0;
+        for (int i = 0; i < ms; ++i) {
+            for (int j = 0; j < ns; ++j) {
+                offset_c = (i * ns + j) * 8;
+                for (int k = 0; k < ks; ++k) {
+                    offset_a = (i * ks + k) * 4;
+                    offset_b = (j * ks + k) * 4;
+
+                    tile_wmma(&ra[offset_a], &rb[offset_b], &rc[offset_c]);
+                }
+            }
+        }
+    }
+
+  private:
     DEVICE void tile_wmma(const uint32_t* A, const uint32_t* B, float* C) {
         asm volatile(
             "mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 "
@@ -76,25 +96,6 @@ struct Gemm<RegTileA, RegTileB, RegTileC, InstShape<16, 16, 16>> {
             : "=f"(C[4]), "=f"(C[5]), "=f"(C[6]), "=f"(C[7])
             : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[1]), "r"(B[3]),
               "f"(C[4]), "f"(C[5]), "f"(C[6]), "f"(C[7]));
-    }
-
-    DEVICE void operator()(const RegTileA& a, const RegTileB& b, RegTileC& c) {
-        const uint32_t* ra = reinterpret_cast<const uint32_t*>(a.data());
-        const uint32_t* rb = reinterpret_cast<const uint32_t*>(b.data());
-        float* rc = c.mutable_data();
-
-        int offset_a = 0, offset_b = 0, offset_c = 0;
-        for (int i = 0; i < ms; ++i) {
-            for (int j = 0; j < ns; ++j) {
-                offset_c = (i * ns + j) * 8;
-                for (int k = 0; k < ks; ++k) {
-                    offset_a = (i * ks + k) * 4;
-                    offset_b = (j * ks + k) * 4;
-
-                    tile_wmma(&ra[offset_a], &rb[offset_b], &rc[offset_c]);
-                }
-            }
-        }
     }
 };
 

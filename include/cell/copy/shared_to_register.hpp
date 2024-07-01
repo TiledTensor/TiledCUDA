@@ -9,15 +9,6 @@ namespace tiledcuda::cell::copy {
 using namespace tiledcuda::cell::traits;
 
 namespace {  // helper functions
-template <typename Element>
-DEVICE void ldmatrix(const Element* src, Element* dst) {
-    uint32_t* reg = reinterpret_cast<uint32_t*>(dst);
-    uint32_t smem_addr = static_cast<uint32_t>(__cvta_generic_to_shared(src));
-    asm volatile(
-        "ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, %3}, [%4];\n"
-        : "=r"(reg[0]), "=r"(reg[1]), "=r"(reg[2]), "=r"(reg[3])
-        : "r"(smem_addr));
-}
 
 // @brief the warp row that the current thread belongs to, based on the warp
 //        layout.
@@ -308,6 +299,18 @@ struct SharedToRegLoader<Reg_, WarpLayout_, kMode, CopyInst::LoadMat> {
             }
         }
     }
+
+  private:
+    template <typename Element>
+    DEVICE void ldmatrix(const Element* src, Element* dst) {
+        uint32_t* reg = reinterpret_cast<uint32_t*>(dst);
+        uint32_t smem_addr =
+            static_cast<uint32_t>(__cvta_generic_to_shared(src));
+        asm volatile(
+            "ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, %3}, [%4];\n"
+            : "=r"(reg[0]), "=r"(reg[1]), "=r"(reg[2]), "=r"(reg[3])
+            : "r"(smem_addr));
+    }
 };
 
 ///@brief A functor that implements threads in a CTA to cooperatively store a
@@ -369,24 +372,6 @@ struct RegToSharedStorer<Reg_, WarpLayout_, RegLayout::WMMA_m16n16k16,
             row_major ? stride * tl::num_cols<ThreadWmma>
                       : stride * tl::num_cols<ThreadWmma> * Shared::kColStride;
 
-        // TODO: Improve this is a naive implementation that does not use
-        // vectorized access in future. To use vectorized access, we need to
-        // know the return type of WMMA.
-        auto store_base_tile = [&](const DType* src, DType* dst) {
-            int src_offset, dst_offset;
-            // TODO(haruhi): comments the magic number
-            for (int i = 0; i < 2; ++i) {
-                for (int j = 0; j < 2; ++j) {
-                    src_offset = i * 4 + j * 2;
-                    // Be cautious, j and i are swapped here. DONOT change this
-                    dst_offset = j * rstride + i * cstride;
-
-                    dst[dst_offset] = src[src_offset];
-                    dst[dst_offset + 1] = src[src_offset + 1];
-                }
-            }
-        };
-
         // strides to iterate over each 16x128-bits `Base Tile` in the shared
         // memory
         const int tile_rstride =  // row stride for a `Base Tile`
@@ -414,9 +399,33 @@ struct RegToSharedStorer<Reg_, WarpLayout_, RegLayout::WMMA_m16n16k16,
                 data += (lane_row * lane_rstride + lane_col * lane_cstride);
 
                 // store the 16x128-bits `Base Tile` to shared memory
-                store_base_tile(src_ptr, data);
+                store_base_tile(src_ptr, data, rstride, cstride);
 
-                src_ptr += 8;  // FIXME(haruhi): the magic number is dangerous.
+                // FIXME(haruhi): The value 8 represents the number of elements
+                // stored in each thread's local register during a single
+                // execution of the WMMA instruction. Replace this magic number
+                // with a well-managed constant.
+                src_ptr += 8;
+            }
+        }
+    }
+
+  private:
+    // TODO: Improve this is a naive implementation that does not use
+    // vectorized access in future. To use vectorized access, we need to
+    // know the return type of WMMA.
+    DEVICE void store_base_tile(const DType* src, DType* dst, int row_stride,
+                                int col_stride) {
+        int src_offset, dst_offset;
+        // TODO(haruhi): comments the magic number
+        for (int i = 0; i < 2; ++i) {
+            for (int j = 0; j < 2; ++j) {
+                src_offset = i * 4 + j * 2;
+                // Be cautious, j and i are swapped here. DONOT change this
+                dst_offset = j * row_stride + i * col_stride;
+
+                dst[dst_offset] = src[src_offset];
+                dst[dst_offset + 1] = src[src_offset + 1];
             }
         }
     }
