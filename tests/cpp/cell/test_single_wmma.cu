@@ -32,7 +32,6 @@ __device__ void naive_gemm(int kM, int kN, int kK,  //
     }
 }
 
-#define DEBUG
 __device__ void check_results(const float* hc1, const float* hc2, int numel) {
     for (int i = 0; i < numel; ++i) assert(abs(hc1[i] - hc2[i]) < 1e-3);
 
