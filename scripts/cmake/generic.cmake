@@ -46,7 +46,7 @@ function(cuda_test TARGET_NAME)
 
   cuda_add_executable(${TARGET_NAME} ${UT_SRCS})
   target_link_libraries(${TARGET_NAME} ${nv_test_DEPS} gtest glog::glog)
-  add_dependencies(${TARGET_NAME} ${nv_test_DEPS} gtest glog::glog)
+  add_dependencies(${TARGET_NAME} gtest glog::glog)
 
   # add a unittest into ctest with the same name as the target
   add_test(${TARGET_NAME} ${TARGET_NAME})

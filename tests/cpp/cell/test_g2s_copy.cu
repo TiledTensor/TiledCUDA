@@ -84,9 +84,9 @@ TEST(TestG2ShmCopy, copy_2d_tile_g2s) {
     thrust::host_vector<Element> h_B(numel);
     h_B = d_B;
 
-    CheckResult(reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_A.data())),
-                reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_B.data())),
-                numel);
+    assert_equal(
+        reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_A.data())),
+        reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_B.data())), numel);
 }
 
 }  // namespace testing

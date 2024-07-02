@@ -4,7 +4,7 @@ namespace tiledcuda::testing {
 
 // FIXME(haruhi): A quick implementation to compare two __half arrays. Refine
 // the implementation of necessary unittest utilities.
-void CheckResult(const __half* v1, const __half* v2, int64_t numel) {
+void assert_equal(const __half* v1, const __half* v2, int64_t numel) {
     float epsilon = 1e-5;
 
     float a = 0.f;
