@@ -29,6 +29,7 @@ float rand_float(float a = 1e-3, float b = 1) {
 bool check_correctness(const half* hc1, const float* hc2, int row, int col) {
     int numel = row * col;
     bool pass_unittest = true;
+    static const float eps = 5e-2;
 
 #if defined(DEBUG)
     printf("\n\nours:\n");
@@ -43,8 +44,7 @@ bool check_correctness(const half* hc1, const float* hc2, int row, int col) {
         printf("%.1f, ", __half2float(hc1[i]));
         if (i & (i + 1) % 32 == 0) printf("\n%d:\t", (i + 1) / 32);
     }
-#else
-    static const float eps = 5e-2;
+#endif
 
     for (int i = 0; i < numel; ++i) {
         float diff = __half2float(hc1[i]) - hc2[i];
@@ -54,7 +54,6 @@ bool check_correctness(const half* hc1, const float* hc2, int row, int col) {
             pass_unittest = false;
         }
     }
-#endif
     return pass_unittest;
 }
 
@@ -83,17 +82,19 @@ void cublas_hgemm(int m, int n, int k, const __half* A, const __half* B,
     CublasCheck(cublasDestroy(handle));
 }
 
+// @param strided_k: chunk size to partition the k dimension of the shared
+//                   memory tile.
 template <typename Element, typename ElementAcc,  //
-          const int M, const int N, const int K>
+          const int M, const int N, const int K, typename WarpLayout_,
+          const int stride_k>
 struct TestTraits {
     using BaseShape = cell::traits::BaseTileShape<Element>;
 
     /// ======== 1. configurate threads and warp layout in a CTA ============
-    static constexpr int warp_per_row = 2;
-    static constexpr int warp_per_col = 2;
-    static const int kThreads = warp_per_col * warp_per_col * 32;
-
-    using WarpLayout = tl::RowMajor<warp_per_row, warp_per_col>;
+    using WarpLayout = WarpLayout_;
+    static constexpr int kThreads = tl::get_numel<WarpLayout> * 32;
+    static constexpr int warp_per_row = tl::num_rows<WarpLayout>;
+    static constexpr int warp_per_col = tl::num_cols<WarpLayout>;
 
     /// == 2. configurate tile transfer between global and shared using CuTe ==
     using LoadSharedA = traits::G2S2DCopyTraits<Element, M, K, M, K, kThreads,
@@ -107,7 +108,6 @@ struct TestTraits {
 
     /// === 3. configurate tile transfer between shared and register loader ===
     // shared tile for operand A
-    static constexpr int stride_k = 32;  // chunk the k dimension with stride 32
     using SharedA = SharedTile<Element, tl::RowMajor<M, K>>;
     using TileIteratorA = SharedTileIterator<SharedA, TileShape<M, stride_k>>;
 
@@ -118,9 +118,7 @@ struct TestTraits {
     static_assert(TileIteratorA::sc1 == TileIteratorB::sc0,
                   "mismatched K dimension!");
 
-    // register tile for operand A
-    // calculate register usage for operand A
-
+    // register tile for operand A, calculate register usage for operand A
     // warp tile shape for the operand A
     static constexpr int A_wm = M / warp_per_row;
     static constexpr int A_wk = K;
@@ -134,8 +132,7 @@ struct TestTraits {
                                        WarpReuse::RowReuseCont,  //
                                        CopyInst::LoadMat>;
 
-    // register tile for operand B
-    // calculate register usage for operand B
+    // register tile for operand B, calculate register usage for operand B
     static constexpr int B_wk = K;
     static constexpr int B_wN = N / warp_per_col;
 
@@ -226,7 +223,8 @@ __global__ void test_wmma(const Element* ga, const Element* gb,
 
 namespace testing {
 
-template <const int M, const int N, const int K>
+template <const int M, const int N, const int K, typename WarpLayout,
+          const int stride_k>
 void run_test() {
     /// unittest for register-level gemm by calling into wmma PTX
     using Element = cutlass::half_t;
@@ -249,7 +247,8 @@ void run_test() {
     thrust::device_vector<ElementAcc> d_c = h_c;
 
     /// define the configuration of the test
-    using config = TestTraits<Element, ElementAcc, M, N, K>;
+    using config =
+        TestTraits<Element, ElementAcc, M, N, K, WarpLayout, stride_k>;
 
     LOG(INFO) << "kThreads: " << config::kThreads << std::endl;
     LOG(INFO) << "TileIteratorA: [" << config::TileIteratorA::Tile::kRows
@@ -311,16 +310,25 @@ void run_test() {
 
     EXPECT_TRUE(check_correctness(thrust::raw_pointer_cast(h_cublas.data()),
                                   thrust::raw_pointer_cast(h_c.data()), M, N))
-        << "[" << M << ", " << N << ", " << K << "], Failed test!" << std::endl;
+        << "[" << M << ", " << N << ", " << K << "], warps: ["
+        << config::warp_per_row << ", " << config::warp_per_col
+        << "], k_chunk_size: " << stride_k << ", Failed test!" << std::endl;
 }
 
 TEST(TestGemm, test) {
-    run_test<32, 32, 32>();
-    run_test<64, 32, 32>();
+    // this is the minimal shape for 2x2 warp layout
+    run_test<32, 32, 32, tl::RowMajor<2, 2>, 32>();
+    run_test<64, 32, 32, tl::RowMajor<2, 2>, 32>();
+    run_test<32, 32, 128, tl::RowMajor<2, 2>, 64>();
 
-    // FIXME(haruhi): Failed unittest, this setting still HAS BUG!
-    // run_test<64, 64, 32>();
-    // run_test<64, 32, 128>();
+    // 64 threads per CTA
+    run_test<32, 32, 32, tl::RowMajor<1, 2>, 32>();
+
+    // FIXME(haruhi): Failed unittest, these settings still HAS BUG!
+    // run_test<32, 32, 32, tl::RowMajor<2, 1>, 32>();
+    // run_test<64, 64, 32, tl::RowMajor<2, 2>, 32>();
+    // run_test<64, 32, 128, tl::RowMajor<2, 2>, 32>();
+    // run_test<16, 32, 32, tl::RowMajor<1, 1>, 16>();
 }
 
 }  // namespace testing
