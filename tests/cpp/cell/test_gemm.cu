@@ -32,28 +32,48 @@ bool check_correctness(const half* hc1, const float* hc2, int row, int col) {
     static const float eps = 5e-2;
 
 #if defined(DEBUG)
-    printf("\n\nours:\n");
-    printf("%d:\t", 0);
-    for (int i = 0; i < 128; i++) {
-        printf("%.1f, ", hc2[i]);
-        if (i & (i + 1) % 32 == 0) printf("\n%d:\t", (i + 1) / 32);
-    }
-    printf("\ncublas:\n");
-    printf("%d:\t", 0);
-    for (int i = 0; i < 128; i++) {
-        printf("%.1f, ", __half2float(hc1[i]));
-        if (i & (i + 1) % 32 == 0) printf("\n%d:\t", (i + 1) / 32);
-    }
-#endif
-
+    std::stringstream ss;
+    ss << std::setprecision(2) << "ours:" << std::endl << 0 << ":\t";
     for (int i = 0; i < numel; ++i) {
-        float diff = __half2float(hc1[i]) - hc2[i];
-        if (diff > eps) {
-            printf("Error results [%d], Expected: %.3f, Got: %.3f\n", i,
-                   __half2float(hc1[i]), hc2[i]);
-            pass_unittest = false;
+        ss << hc2[i] << ", ";
+        if (i & (i + 1) % 32 == 0) {
+            ss << std::endl << (i + 1) / 32 << ":\t";
         }
     }
+
+    ss << std::endl << "cublas:" << std::endl << 0 << ":\t";
+    for (int i = 0; i < numel; ++i) {
+        ss << __half2float(hc1[i]) << ", ";
+        if (i & (i + 1) % 32 == 0) {
+            ss << std::endl << (i + 1) / 32 << "\t";
+        }
+    }
+    LOG(INFO) << ss.str();
+#endif
+
+    double total_diff = 0.;
+    double max_abs_diff = FLT_MIN;
+    double diff = 0.;
+
+    LOG(INFO) << std::endl;
+    for (int i = 0; i < numel; ++i) {
+        diff = abs(__half2float(hc1[i]) - hc2[i]);
+        max_abs_diff = max_abs_diff < diff ? diff : max_abs_diff;
+        total_diff += diff;
+
+        if (diff > eps) {
+            LOG(INFO) << i
+                      << "-th value has large numeric absolute diff: " << diff
+                      << ", Expected: " << __half2float(hc1[i])
+                      << "; Got: " << hc2[i] << std::endl;
+        }
+    }
+
+    double avg_diff = total_diff / numel;
+    LOG(INFO) << "Average absolute diff: " << avg_diff
+              << ", Max absolute diff: " << max_abs_diff << std::endl;
+    if (avg_diff > eps) pass_unittest = false;
+
     return pass_unittest;
 }
 
@@ -121,7 +141,7 @@ struct TestTraits {
     // register tile for operand A, calculate register usage for operand A
     // warp tile shape for the operand A
     static constexpr int A_wm = M / warp_per_row;
-    static constexpr int A_wk = K;
+    static constexpr int A_wk = stride_k;
 
     static constexpr int rA_row = A_wm / BaseShape::row * BaseShape::sub_row;
     static constexpr int rA_col = A_wk / BaseShape::col * BaseShape::sub_col;
@@ -133,7 +153,7 @@ struct TestTraits {
                                        CopyInst::LoadMat>;
 
     // register tile for operand B, calculate register usage for operand B
-    static constexpr int B_wk = K;
+    static constexpr int B_wk = stride_k;
     static constexpr int B_wN = N / warp_per_col;
 
     static constexpr int rB_row = B_wk / BaseShape::col * BaseShape::sub_col;
@@ -250,7 +270,12 @@ void run_test() {
     using config =
         TestTraits<Element, ElementAcc, M, N, K, WarpLayout, stride_k>;
 
-    LOG(INFO) << "kThreads: " << config::kThreads << std::endl;
+    LOG(INFO) << "[" << M << ", " << N << ", " << K << "], warps: ["
+              << config::warp_per_row << ", " << config::warp_per_col
+              << "], k_chunk_size: " << stride_k
+              << ", kThreads: " << config::kThreads << std::endl;
+
+#if defined(DEBUG)
     LOG(INFO) << "TileIteratorA: [" << config::TileIteratorA::Tile::kRows
               << ", " << config::TileIteratorA::Tile::kCols
               << "]; numel = " << config::TileIteratorA::Tile::kNumel
@@ -271,6 +296,7 @@ void run_test() {
               << "RegC: [" << config::RegC::kRows << ", " << config::RegC::kCols
               << "]" << std::endl
               << std::endl;
+#endif
 
     dim3 dim_grid(1, 1, 1);
     dim3 dim_block(config::kThreads, 1, 1);
@@ -278,8 +304,8 @@ void run_test() {
     int size_c = M * N * sizeof(ElementAcc);
     int shm_size = size_ab > size_c ? size_ab : size_c;
 
-    // TODO: Refine this code; there are too many template parameters, making it
-    // messy.
+    // TODO: Refine this code; there are too many template parameters,
+    // making it messy.
     test_wmma<Element, ElementAcc, typename config::LoadSharedA,
               typename config::LoadSharedB, typename config::StoreSharedC,  //
               typename config::TileIteratorA, typename config::RegA,
@@ -310,25 +336,27 @@ void run_test() {
 
     EXPECT_TRUE(check_correctness(thrust::raw_pointer_cast(h_cublas.data()),
                                   thrust::raw_pointer_cast(h_c.data()), M, N))
-        << "[" << M << ", " << N << ", " << K << "], warps: ["
-        << config::warp_per_row << ", " << config::warp_per_col
-        << "], k_chunk_size: " << stride_k << ", Failed test!" << std::endl;
+        << "Failed test!" << std::endl;
 }
 
 TEST(TestGemm, test) {
-    // this is the minimal shape for 2x2 warp layout
+    // minimal shape for 1 warp
+    run_test<16, 32, 32, tl::RowMajor<1, 1>, 16>();
+    run_test<32, 32, 64, tl::RowMajor<1, 1>, 16>();
+
+    // minimal shape for 2 warp
+    run_test<32, 32, 32, tl::RowMajor<1, 2>, 32>();
+
+    // minimal shape for 2x2 warp
     run_test<32, 32, 32, tl::RowMajor<2, 2>, 32>();
+    run_test<32, 32, 64, tl::RowMajor<2, 2>, 32>();
     run_test<64, 32, 32, tl::RowMajor<2, 2>, 32>();
     run_test<32, 32, 128, tl::RowMajor<2, 2>, 64>();
-
-    // 64 threads per CTA
-    run_test<32, 32, 32, tl::RowMajor<1, 2>, 32>();
 
     // FIXME(haruhi): Failed unittest, these settings still HAS BUG!
     // run_test<32, 32, 32, tl::RowMajor<2, 1>, 32>();
     // run_test<64, 64, 32, tl::RowMajor<2, 2>, 32>();
     // run_test<64, 32, 128, tl::RowMajor<2, 2>, 32>();
-    // run_test<16, 32, 32, tl::RowMajor<1, 1>, 16>();
 }
 
 }  // namespace testing
