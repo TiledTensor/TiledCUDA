@@ -280,22 +280,43 @@ struct SharedToRegLoader<Reg_, WarpLayout_, kMode, CopyInst::LoadMat> {
         }
 
         const DType* data;
-        for (int i = 0; i < row_exec; ++i) {
-            for (int j = 0; j < col_exec; ++j) {
-                // 2. advance pointer to the 16x128-bits `BaseTile` indexed by
-                // (i, j).
-                data = src_ptr + (i * tile_rstride + j * tile_cstride);
+        if (row_major) {
+            for (int i = 0; i < row_exec; ++i) {
+                for (int j = 0; j < col_exec; ++j) {
+                    // 2. advance pointer to the 16x128-bits `BaseTile` indexed
+                    // by (i, j).
+                    data = src_ptr + (i * tile_rstride + j * tile_cstride);
 
-                // 3. advance the pointer to data accessed by the current thread
-                // inside a 16x128-bits `Base Tile`.
-                data += (lane_row * lane_rstride + lane_col * lane_cstride);
+                    // 3. advance the pointer to data accessed by the current
+                    // thread inside a 16x128-bits `Base Tile`.
+                    data += (lane_row * lane_rstride + lane_col * lane_cstride);
 
-                // issue the hardware-backed memory access instruction
-                ldmatrix(data, dst_ptr);
+                    // issue the hardware-backed memory access instruction
+                    ldmatrix(data, dst_ptr);
 
-                // advance the pointer to store the next 16x128-bits
-                // `Base Tile`.
-                dst_ptr += BaseTileShape<DType>::elem_per_thread;
+                    // advance the pointer to store the next 16x128-bits
+                    // `Base Tile`.
+                    dst_ptr += BaseTileShape<DType>::elem_per_thread;
+                }
+            }
+        } else {
+            for (int i = 0; i < col_exec; ++i) {
+                for (int j = 0; j < row_exec; ++j) {
+                    // 2. advance pointer to the 16x128-bits `BaseTile` indexed
+                    // by (i, j).
+                    data = src_ptr + (j * tile_rstride + i * tile_cstride);
+
+                    // 3. advance the pointer to data accessed by the current
+                    // thread inside a 16x128-bits `Base Tile`.
+                    data += (lane_row * lane_rstride + lane_col * lane_cstride);
+
+                    // issue the hardware-backed memory access instruction
+                    ldmatrix(data, dst_ptr);
+
+                    // advance the pointer to store the next 16x128-bits
+                    // `Base Tile`.
+                    dst_ptr += BaseTileShape<DType>::elem_per_thread;
+                }
             }
         }
     }
