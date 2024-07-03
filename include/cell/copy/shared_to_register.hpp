@@ -380,7 +380,7 @@ struct RegToSharedStorer<Reg_, WarpLayout_, RegLayout::WMMA_m16n16k16,
         const int tile_cstride = row_major ? 16 : 16 * Shared::kColStride;
 
         // Given the lane position of the current thread, calculate the strides
-        // needed to address the data within the 16x128-bit `Base Tile` for the
+        // needed to address the data within the 16x128-bit `BaseTile` for the
         // current thread.
         const int lane_rstride = row_major ? Shared::kRowStride : stride;
         const int lane_cstride = row_major ? stride : Shared::kColStride;
