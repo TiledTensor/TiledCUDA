@@ -205,14 +205,118 @@ DEVICE static constexpr int col_exec_count() {
     return count;
 }
 
+template <typename Element>
+DEVICE void ldmatrix(const Element* src, Element* dst) {
+    uint32_t* reg = reinterpret_cast<uint32_t*>(dst);
+    uint32_t smem_addr = static_cast<uint32_t>(__cvta_generic_to_shared(src));
+    asm volatile(
+        "ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, %3}, [%4];\n"
+        : "=r"(reg[0]), "=r"(reg[1]), "=r"(reg[2]), "=r"(reg[3])
+        : "r"(smem_addr));
+}
+
 }  // namespace
+
+namespace detail {
+
+template <typename Shared, const bool isRowMajor>
+struct LoadTileImpl {
+    using DType = typename Shared::DType;
+
+    DEVICE void operator()(const DType* src, DType* dst, int row_exec,
+                           int col_exec);
+};
+
+/// @brief partial specialization for row-major shared memory tile.
+template <typename Shared>
+struct LoadTileImpl<Shared, true> {
+    using DType = typename Shared::DType;
+
+    // strides to iterate over each 16x128-bits `BaseTile`.
+    static constexpr int tile_rstride =
+        BaseTileShape<DType>::row * Shared::kRowStride;
+    static constexpr int tile_cstride = BaseTileShape<DType>::col;
+
+    // row stride and col stride for a thread in a warp
+    static constexpr int stride = traits::TraitsBase<DType>::kNumPerAccess;
+    static constexpr int lane_rstride = Shared::kRowStride;
+    static constexpr int lane_cstride = stride;
+
+    DEVICE void operator()(const DType* src, DType* dst, int row_exec,
+                           int col_exec) {
+        int lane_row = lane_row_id<traits::ThreadLdmatrix>();
+        int lane_col = lane_col_id<traits::ThreadLdmatrix>();
+
+        const DType* data;
+        for (int i = 0; i < row_exec; ++i) {
+            for (int j = 0; j < col_exec; ++j) {
+                // 2. advance pointer to the 16x128-bits `BaseTile` indexed by
+                // (i, j).
+                data = src + (i * tile_rstride + j * tile_cstride);
+
+                // 3. advance the pointer to data accessed by the current thread
+                // inside a 16x128-bits `BaseTile`.
+                data += (lane_row * lane_rstride + lane_col * lane_cstride);
+
+                // issue the hardware-backed memory access instruction.
+                ldmatrix(data, dst);
+
+                // advance the pointer to store the next 16x128-bits `BaseTile`.
+                dst += BaseTileShape<DType>::elem_per_thread;
+            }
+        }
+    }
+};
+
+/// @brief partial specialization for column-major shared memory tile.
+template <typename Shared>
+struct LoadTileImpl<Shared, false> {
+    using DType = typename Shared::DType;
+
+    // strides to iterate over each 16x128-bits `BaseTile`.
+    const int tile_rstride = BaseTileShape<DType>::row;
+    const int tile_cstride = BaseTileShape<DType>::col * Shared::kColStride;
+
+    // row stride and col stride for a thread in a warp
+    static constexpr int stride = traits::TraitsBase<DType>::kNumPerAccess;
+    const int lane_rstride = stride;
+    const int lane_cstride = Shared::kColStride;
+
+    DEVICE void operator()(const DType* src, DType* dst, int row_exec,
+                           int col_exec) {
+        // transpose the lane position if the shared memory is in column-major.
+        // 16 threads are mapped to the strided dimension of the data while the
+        // 2 threads are mapped to the contiguous dimension of the data.
+        int lane_row = lane_col_id<traits::ThreadLdmatrix>();
+        int lane_col = lane_row_id<traits::ThreadLdmatrix>();
+
+        const DType* data;
+        for (int i = 0; i < col_exec; ++i) {
+            for (int j = 0; j < row_exec; ++j) {
+                // 2. advance pointer to the 16x128-bits `BaseTile` indexed by
+                // (i, j).
+                data = src + (j * tile_rstride + i * tile_cstride);
+
+                // 3. advance the pointer to data accessed by the current
+                // thread inside a 16x128-bits `BaseTile`.
+                data += (lane_row * lane_rstride + lane_col * lane_cstride);
+
+                // issue the hardware-backed memory access instruction
+                ldmatrix(data, dst);
+
+                // advance the pointer to store the next 16x128-bits `BaseTile`.
+                dst += BaseTileShape<DType>::elem_per_thread;
+            }
+        }
+    }
+};
+
+}  // namespace  detail
 
 /// @brief The functor that copys data from shared memory to register file.
 ///        Shared memory tile is not declared as template parameter, because we
 ///        assume it is computed from runtime value by `TileIterator`.
-template <typename Reg,
-          typename WarpLayout,  //
-          WarpReuse kMode,      //
+template <typename Reg, typename WarpLayout, WarpReuse kMode,
           CopyInst kCopyInst>
 struct SharedToRegLoader {
     template <typename Shared>
@@ -238,9 +342,10 @@ struct SharedToRegLoader<Reg_, WarpLayout_, kMode, CopyInst::LoadMat> {
                       "The current implementation requires Shared::kCols must "
                       "be divisible by tl::num_cols<WarpLayout>");
 
-        const bool row_major = Shared::kIsRowMajor;
-        const DType* src_ptr = src.data();    // pointer for shared memory tile
-        DType* dst_ptr = dst.mutable_data();  // pointer for register tile
+        // 1. advance the pointer to input data to the current warp according to
+        // warp reuse mode.
+        const DType* src_ptr = src.data();
+        src_ptr += get_warp_offset<kMode, Shared, WarpLayout>();
 
         // how many times a `BaseTile` is executed along the row and column
         // direction.
@@ -249,88 +354,8 @@ struct SharedToRegLoader<Reg_, WarpLayout_, kMode, CopyInst::LoadMat> {
         int col_exec = col_exec_count<DType, Shared::kCols,
                                       tl::num_cols<WarpLayout>, kMode>();
 
-        // 1. advance the pointer to input data to the current warp according to
-        // warp reuse mode.
-        src_ptr += get_warp_offset<kMode, Shared, WarpLayout>();
-
-        // strides to iterate over each 16x128-bits `Base Tile`.
-        const int tile_rstride =  // row stride for a `Base Tile`
-            row_major ? BaseTileShape<DType>::row * Shared::kRowStride
-                      : BaseTileShape<DType>::row;
-        const int tile_cstride =  // col stride for a `Base Tile`
-            row_major ? BaseTileShape<DType>::col
-                      : BaseTileShape<DType>::col * Shared::kColStride;
-
-        // row stride and col stride for a thread in a warp
-        static constexpr int stride = traits::TraitsBase<DType>::kNumPerAccess;
-        const int lane_rstride = row_major ? Shared::kRowStride : stride;
-        const int lane_cstride = row_major ? stride : Shared::kColStride;
-
-        int lane_row = lane_row_id<traits::ThreadLdmatrix>();
-        int lane_col = lane_col_id<traits::ThreadLdmatrix>();
-
-        if (!row_major) {
-            // transpose the lane position if the shared memory is in
-            // column-major. 16 threads are mapped to the strided dimension of
-            // the data while the 2 threads are mapped to the contiguous
-            // dimension of the data.
-            int tmp = lane_row;
-            lane_row = lane_col;
-            lane_col = tmp;
-        }
-
-        const DType* data;
-        if (row_major) {
-            for (int i = 0; i < row_exec; ++i) {
-                for (int j = 0; j < col_exec; ++j) {
-                    // 2. advance pointer to the 16x128-bits `BaseTile` indexed
-                    // by (i, j).
-                    data = src_ptr + (i * tile_rstride + j * tile_cstride);
-
-                    // 3. advance the pointer to data accessed by the current
-                    // thread inside a 16x128-bits `Base Tile`.
-                    data += (lane_row * lane_rstride + lane_col * lane_cstride);
-
-                    // issue the hardware-backed memory access instruction
-                    ldmatrix(data, dst_ptr);
-
-                    // advance the pointer to store the next 16x128-bits
-                    // `Base Tile`.
-                    dst_ptr += BaseTileShape<DType>::elem_per_thread;
-                }
-            }
-        } else {
-            for (int i = 0; i < col_exec; ++i) {
-                for (int j = 0; j < row_exec; ++j) {
-                    // 2. advance pointer to the 16x128-bits `BaseTile` indexed
-                    // by (i, j).
-                    data = src_ptr + (j * tile_rstride + i * tile_cstride);
-
-                    // 3. advance the pointer to data accessed by the current
-                    // thread inside a 16x128-bits `Base Tile`.
-                    data += (lane_row * lane_rstride + lane_col * lane_cstride);
-
-                    // issue the hardware-backed memory access instruction
-                    ldmatrix(data, dst_ptr);
-
-                    // advance the pointer to store the next 16x128-bits
-                    // `Base Tile`.
-                    dst_ptr += BaseTileShape<DType>::elem_per_thread;
-                }
-            }
-        }
-    }
-
-  private:
-    template <typename Element>
-    DEVICE void ldmatrix(const Element* src, Element* dst) {
-        uint32_t* reg = reinterpret_cast<uint32_t*>(dst);
-        uint32_t smem_addr =
-            static_cast<uint32_t>(__cvta_generic_to_shared(src));
-        asm volatile(
-            "ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, %3}, [%4];\n"
-            : "=r"(reg[0]), "=r"(reg[1]), "=r"(reg[2]), "=r"(reg[3])
-            : "r"(smem_addr));
+        detail::LoadTileImpl<Shared, Shared::kIsRowMajor> loader;
+        loader(src_ptr, dst.mutable_data(), row_exec, col_exec);
     }
 };
 

@@ -32,23 +32,22 @@ bool check_correctness(const half* hc1, const float* hc2, int row, int col) {
     static const float eps = 5e-2;
 
 #if defined(DEBUG)
-    int print_cut = numel;
     std::stringstream ss;
     ss << std::setprecision(3) << std::endl
        << "ours:" << std::endl
        << 0 << ":\t";
-    for (int i = 0; i < print_cut; ++i) {
+    for (int i = 0; i < numel; ++i) {
         ss << hc2[i] << ", ";
-        if (i & (i + 1) % 16 == 0) {
-            ss << std::endl << (i + 1) / 16 << ":\t";
+        if (i & (i + 1) % 32 == 0) {
+            ss << std::endl << (i + 1) / 32 << ":\t";
         }
     }
 
     ss << std::endl << "cublas:" << std::endl << 0 << ":\t";
-    for (int i = 0; i < print_cut; ++i) {
+    for (int i = 0; i < numel; ++i) {
         ss << __half2float(hc1[i]) << ", ";
-        if (i & (i + 1) % 16 == 0) {
-            ss << std::endl << (i + 1) / 16 << "\t";
+        if (i & (i + 1) % 32 == 0) {
+            ss << std::endl << (i + 1) / 32 << "\t";
         }
     }
     LOG(INFO) << ss.str();
@@ -255,22 +254,12 @@ void run_test() {
 
     // initialize data
     thrust::host_vector<Element> h_a(M * K);
-    for (int i = 0; i < h_a.size(); ++i) {
-#if defined(DEBUG)
-        h_a[i] = static_cast<Element>(i % 2048);
-#else
+    for (int i = 0; i < h_a.size(); ++i)
         h_a[i] = static_cast<Element>(rand_float());
-#endif
-    }
 
     thrust::host_vector<Element> h_b(K * N);
-    for (int i = 0; i < h_b.size(); ++i) {
-#if defined(DEBUG)
-        h_b[i] = static_cast<Element>(i % 2048);
-#else
+    for (int i = 0; i < h_b.size(); ++i)
         h_b[i] = static_cast<Element>(rand_float());
-#endif
-    }
 
     thrust::host_vector<ElementAcc> h_c(M * N);
     thrust::fill(h_c.begin(), h_c.end(), 0.);
