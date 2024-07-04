@@ -147,7 +147,7 @@ struct TestTraits {
     using SharedC = SharedTile<ElementAcc, tl::RowMajor<M, N>>;
     using RegC = RegTile<ElementAcc, tl::RowMajor<ms * 2, ns * 4>>;
     using StoreRegC =
-        RegToSharedStorer<RegC, WarpLayout, RegLayout::WMMA_m16n16k16,
+        RegToSharedStorer<RegC, WarpLayout, tl::RegLayout::WMMA_m16n16k16,
                           CopyInst::LoadS32>;
 };
 

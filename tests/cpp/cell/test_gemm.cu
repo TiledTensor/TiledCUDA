@@ -187,7 +187,7 @@ struct TestTraits {
 
     // store RegTileC to shared
     using StoreRegC = RegToSharedStorer<RegC, WarpLayout,
-                                        RegLayout::WMMA_m16n16k16,  //
+                                        tl::RegLayout::WMMA_m16n16k16,  //
                                         CopyInst::LoadS32>;
 };
 
