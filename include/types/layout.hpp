@@ -18,6 +18,25 @@ namespace tile_layout {
 
 using namespace cute;
 
+// FIXME(haruhi): A quick implementation. Consider whether this enum should be
+// coupled with RegTile.
+enum class RegLayout {
+    Default = 0,
+    // Refer to this slide for details on how data is distributed in each
+    // thread's local register after the TCU's WMMA operation:
+    // https://developer.download.nvidia.com/video/gputechconf/gtc/2020/
+    // presentations/s21745-developing-cuda-kernels-to-push-tensor-cores-to-the-absolute-limit-on-nvidia-a100.pdf
+    // WMMA shape is "m16n16k16
+    WMMA_m16n16k16 = 1,
+};
+
+enum class Layout {
+    RowMajor = 0,  // Tile layout for shared memory.
+    ColMajor = 1,
+    SwizzledRowMajor = 2,
+    SwizzledColMajor = 3,
+};
+
 // In the row major layout, the contiguous dimension in memory is the
 // last dimension.
 template <const int row, const int col, const int stride = col>
@@ -45,11 +64,12 @@ static constexpr size_t col_stride = cute::size<1>(Layout_{}.layout().stride());
 template <typename Layout_>
 static constexpr size_t get_numel = int(size(Layout_{}));
 
-/// We wrap CuTe's `Layout`, which consists of `Shape` and `Stride`, into an
-/// intelligent row-major or column-major layout. In a row-major layout, the
-/// column stride is 1, whereas in a column-major layout, the row stride is 1.
+// We wrap CuTe's `Layout`, which consists of `Shape` and `Stride`, into an
+// intelligent row-major or column-major layout. In a row-major layout, the
+// column stride is 1, whereas in a column-major layout, the row stride is 1.
 template <typename Layout_>
-static constexpr bool is_rowmajor = col_stride<Layout_> == 1;
+static constexpr Layout layout_type =
+    col_stride<Layout_> == 1 ? Layout::RowMajor : Layout::ColMajor;
 
 template <const int Shape1, const int Shape2, const int Stride1,
           const int Stride2>

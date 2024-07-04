@@ -33,7 +33,9 @@ bool check_correctness(const half* hc1, const float* hc2, int row, int col) {
 
 #if defined(DEBUG)
     std::stringstream ss;
-    ss << std::setprecision(2) << "ours:" << std::endl << 0 << ":\t";
+    ss << std::setprecision(3) << std::endl
+       << "ours:" << std::endl
+       << 0 << ":\t";
     for (int i = 0; i < numel; ++i) {
         ss << hc2[i] << ", ";
         if (i & (i + 1) % 32 == 0) {
@@ -185,7 +187,7 @@ struct TestTraits {
 
     // store RegTileC to shared
     using StoreRegC = RegToSharedStorer<RegC, WarpLayout,
-                                        RegLayout::WMMA_m16n16k16,  //
+                                        tl::RegLayout::WMMA_m16n16k16,  //
                                         CopyInst::LoadS32>;
 };
 
@@ -343,20 +345,20 @@ TEST(TestGemm, test) {
     // minimal shape for 1 warp
     run_test<16, 32, 32, tl::RowMajor<1, 1>, 16>();
     run_test<32, 32, 64, tl::RowMajor<1, 1>, 16>();
+    run_test<32, 32, 32, tl::RowMajor<1, 1>, 32>();
 
-    // minimal shape for 2 warp
+    // minimal shape for 2 warps
     run_test<32, 32, 32, tl::RowMajor<1, 2>, 32>();
+    run_test<64, 32, 128, tl::RowMajor<2, 1>, 32>();
 
-    // minimal shape for 2x2 warp
+    // minimal shape for 2 x 2 warps
     run_test<32, 32, 32, tl::RowMajor<2, 2>, 32>();
     run_test<32, 32, 64, tl::RowMajor<2, 2>, 32>();
     run_test<64, 32, 32, tl::RowMajor<2, 2>, 32>();
     run_test<32, 32, 128, tl::RowMajor<2, 2>, 64>();
 
-    // FIXME(haruhi): Failed unittest, these settings still HAS BUG!
-    // run_test<32, 32, 32, tl::RowMajor<2, 1>, 32>();
-    // run_test<64, 64, 32, tl::RowMajor<2, 2>, 32>();
-    // run_test<64, 32, 128, tl::RowMajor<2, 2>, 32>();
+    run_test<64, 64, 32, tl::RowMajor<2, 2>, 32>();
+    run_test<64, 32, 128, tl::RowMajor<2, 2>, 32>();
 }
 
 }  // namespace testing

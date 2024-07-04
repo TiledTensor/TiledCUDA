@@ -13,6 +13,10 @@ class RegTile {
     using DType = Element_;
     using Layout = Layout_;
 
+    // FIXME: This member is not properly set in the current implementation.
+    // It exists to ensure that RegTile has a similar interface to SharedTile.
+    static constexpr tl::RegLayout type = tl::RegLayout::Default;
+
     static constexpr int kNumel = tl::get_numel<Layout>;
     static constexpr int kRows = tl::num_rows<Layout>;
     static constexpr int kCols = tl::num_cols<Layout>;

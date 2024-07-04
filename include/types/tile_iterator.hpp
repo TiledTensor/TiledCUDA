@@ -57,7 +57,7 @@ class SharedTileIterator {
                                           Tile::kColStride>());
         using NewTile = SharedTile<typename Tile::DType, TileLayout>;
 
-        int offset = Tile::kIsRowMajor
+        int offset = Tile::type == tl::Layout::RowMajor
                          ? x * (kStride0 * Tile::kRowStride) + y * kStride1
                          : x * kStride0 + y * (Tile::kColStride * kStride1);
 
@@ -75,7 +75,7 @@ class SharedTileIterator {
                                           Tile::kColStride>());
         using NewTile = SharedTile<typename Tile::DType, TileLayout>;
 
-        int offset = Tile::kIsRowMajor
+        int offset = Tile::type == tl::Layout::RowMajor
                          ? x * (kStride0 * Tile::kCols) + y * kStride1
                          : x * kStride0 + y * (Tile::kRows * kStride1);
         NewTile tile(data_ + offset);
@@ -97,8 +97,9 @@ class SharedTileIterator {
         static_assert(Iter::sc0 == 1);
 
         // advance pointer to the correct start position
-        int offset =
-            Tile::kIsRowMajor ? x * (kStride0 * Tile::kCols) : x * kStride0;
+        int offset = Tile::type == tl::Layout::RowMajor
+                         ? x * (kStride0 * Tile::kCols)
+                         : x * kStride0;
 
         Iter iter(data_ + offset);
         return iter;
@@ -118,8 +119,9 @@ class SharedTileIterator {
         static_assert(Iter::sc1 == 1);
 
         // advance pointer to the correct start position
-        int offset =
-            Tile::kIsRowMajor ? y * kStride1 : y * (Tile::kRows * kStride1);
+        int offset = Tile::type == tl::Layout::RowMajor
+                         ? y * kStride1
+                         : y * (Tile::kRows * kStride1);
 
         Iter iter(data_ + offset);
         return iter;

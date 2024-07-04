@@ -147,8 +147,9 @@ TEST(TestReg2Shared, operand_C) {
         SharedToRegLoader<Reg, WarpLayout, WarpReuse::Cont, CopyInst::LoadMat>;
     Loader loader;
 
-    using Storer = RegToSharedStorer<Reg, WarpLayout, RegLayout::WMMA_m16n16k16,
-                                     CopyInst::LoadS32>;
+    using Storer =
+        RegToSharedStorer<Reg, WarpLayout, tl::RegLayout::WMMA_m16n16k16,
+                          CopyInst::LoadS32>;
     Storer storer;
 
     dim3 dim_grid(1, 1, 1);

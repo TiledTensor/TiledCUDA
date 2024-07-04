@@ -11,19 +11,6 @@ enum class CopyInst {
     LoadS128 = 3   // ldsm128 for loading 128-bit data from shared memory.
 };
 
-// FIXME(haruhi): A quick implementation. Consider whether this enum should be
-// coupled with RegTile.
-enum class RegLayout {
-    FMA = 0,  // Tile layout for FMA.
-
-    // Refer to this slide for details on how data is distributed in each
-    // thread's local register after the TCU's WMMA operation:
-    // https://developer.download.nvidia.com/video/gputechconf/gtc/2020/
-    // presentations/s21745-developing-cuda-kernels-to-push-tensor-cores-to-the-absolute-limit-on-nvidia-a100.pdf
-    // WMMA shape is "m16n16k16
-    WMMA_m16n16k16 = 1,
-};
-
 enum class WarpReuse {
     // TODO(haruhi): It seems that Cir/RowReuseCir/ColReuseCir are not ncessary,
     // thus the reuse mode can be simplified.
