@@ -1,5 +1,4 @@
 #include "cell/copy/mod.hpp"
-#include "cell/traits/copy.hpp"
 #include "common/test_utils.hpp"
 #include "types/mod.hpp"
 
@@ -12,9 +11,6 @@ using namespace cell;
 
 template <typename Element, tl::Layout type, size_t height, size_t width>
 __global__ void copy_g2r(const Element* src, const int row_stride) {
-    // RegTile<RegTile<Element, tl::RowMajor<2, 4>>, tl::RowMajor<height,
-    // width>>
-    //     RegTile dst;
     using DstTile = RegTile<RegTile<Element, tl::RowMajor<2, 4>>,
                             tl::RowMajor<height, width>>;
     DstTile dst;
@@ -39,13 +35,6 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r) {
     const int height = 1;
     const int width = 1;
 
-    // static constexpr int WARP_SIZE = 32;
-    // static constexpr int SUB_TILE_SIZE = 16;
-
-    // using G2RTraits =
-    //     traits::G2RCopyTraits<Element, WARP_SIZE, SUB_TILE_SIZE,
-    //                           tile_layout::GlobalLayout::RowMajor>;
-
     int numel = height * width * 16 * 16;
     thrust::host_vector<Element> h_src(numel);
     for (int i = 0; i < numel; ++i) {
@@ -65,13 +54,6 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r_2) {
 
     const int height = 2;
     const int width = 2;
-
-    // static constexpr int WARP_SIZE = 32;
-    // static constexpr int SUB_TILE_SIZE = 16;
-
-    // using G2RTraits =
-    //     traits::G2RCopyTraits<Element, WARP_SIZE, SUB_TILE_SIZE,
-    //                           tile_layout::GlobalLayout::RowMajor>;
 
     int numel = height * width * 16 * 16;
     thrust::host_vector<Element> h_src(numel);

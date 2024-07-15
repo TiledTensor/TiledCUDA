@@ -37,12 +37,6 @@ enum class Layout {
     SwizzledColMajor = 3,
 };
 
-// Tile Layout for Global Memory.
-enum class GlobalLayout {
-    RowMajor = 0,
-    ColMajor = 1,
-};
-
 // In the row major layout, the contiguous dimension in memory is the
 // last dimension.
 template <const int row, const int col, const int stride = col>
