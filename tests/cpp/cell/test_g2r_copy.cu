@@ -37,7 +37,9 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r) {
     static constexpr int WARP_SIZE = 32;
     static constexpr int SUB_TILE_SIZE = 16;
 
-    using G2RTraits = traits::G2RCopyTraits<Element, WARP_SIZE, SUB_TILE_SIZE>;
+    using G2RTraits =
+        traits::G2RCopyTraits<Element, WARP_SIZE, SUB_TILE_SIZE,
+                              tile_layout::GlobalLayout::RowMajor>;
 
     int numel = height * width * 16 * 16;
     thrust::host_vector<Element> h_src(numel);

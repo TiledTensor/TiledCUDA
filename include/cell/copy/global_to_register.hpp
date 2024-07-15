@@ -27,31 +27,34 @@ DEVICE void copy_2d_tile_g2r(
     int tile_size = sub_tile_size;
     int row_offset = rows * warp_id;
 
-    // RegTile<T, tl::RowMajor<2, 4>> subtile_reg;
-    // RegTile<RegTile<T, tl::RowMajor<2, 4>>, tl::RowMajor<height, width>>
-    //     dst_reg;
-
-    // Load data from global memory to register.
-    // References:
-    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html?highlight=ldmatrix#warp-level-matrix-load-instruction-ldmatrix
+    switch (G2RTraits::GLOBAL_LAYOUT) {
+        case tile_layout::GlobalLayout::RowMajor: {
+            // Load data from global memory to register.
+            // References:
+            // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html?highlight=ldmatrix#warp-level-matrix-load-instruction-ldmatrix
 #pragma unroll
-    for (int i = 0; i < height; ++i) {
-        int row = row_offset + i * tile_size + (lane_id / 4);
+            for (int i = 0; i < height; ++i) {
+                int row = row_offset + i * tile_size + (lane_id / 4);
 #pragma unroll
-        for (int j = 0; j < width; ++j) {
-            int col = j * tile_size + (lane_id % 4);
-            dst(i, j)(0, 0) = src[(row + 0) * row_stride + col + 0];
-            dst(i, j)(0, 1) = src[(row + 0) * row_stride + col + 1];
-            dst(i, j)(1, 0) = src[(row + 0) * row_stride + col + 8];
-            dst(i, j)(1, 1) = src[(row + 0) * row_stride + col + 9];
+                for (int j = 0; j < width; ++j) {
+                    int col = j * tile_size + (lane_id % 4);
+                    dst(i, j)(0, 0) = src[(row + 0) * row_stride + col + 0];
+                    dst(i, j)(0, 1) = src[(row + 0) * row_stride + col + 1];
+                    dst(i, j)(1, 0) = src[(row + 0) * row_stride + col + 8];
+                    dst(i, j)(1, 1) = src[(row + 0) * row_stride + col + 9];
+                }
+#pragma unroll
+                for (int j = 0; j < width; ++j) {
+                    int col = j * tile_size + (lane_id % 4);
+                    dst(i, j)(0, 2) = src[(row + 8) * row_stride + col + 0];
+                    dst(i, j)(0, 3) = src[(row + 8) * row_stride + col + 1];
+                    dst(i, j)(1, 2) = src[(row + 8) * row_stride + col + 8];
+                    dst(i, j)(1, 3) = src[(row + 8) * row_stride + col + 9];
+                }
+            }
         }
-#pragma unroll
-        for (int j = 0; j < width; ++j) {
-            int col = j * tile_size + (lane_id % 4);
-            dst(i, j)(0, 2) = src[(row + 8) * row_stride + col + 0];
-            dst(i, j)(0, 3) = src[(row + 8) * row_stride + col + 1];
-            dst(i, j)(1, 2) = src[(row + 8) * row_stride + col + 8];
-            dst(i, j)(1, 3) = src[(row + 8) * row_stride + col + 9];
+        case tile_layout::GlobalLayout::ColMajor: {
+            break;
         }
     }
 }
