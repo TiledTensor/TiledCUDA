@@ -130,15 +130,13 @@ struct TestTraits {
     using TileIteratorA = SharedTileIterator<SharedA, TileShape<M, K>>;
     using RegA = RegTile<Element, tl::RowMajor<ms * 2, ks * 4>>;
     using LoadRegA =
-        SharedToRegLoader<RegA, WarpLayout, WarpReuse::RowReuseCont,
-                          CopyInst::LoadMat>;
+        SharedToRegLoader<RegA, WarpLayout, WarpReuse::RowReuseCont>;
 
     using SharedB = SharedTile<Element, tl::ColMajor<K, N>>;
     using RegB = RegTile<Element, tl::RowMajor<ks * 4, ns * 2>>;
     using TileIteratorB = SharedTileIterator<SharedB, TileShape<K, N>>;
     using LoadRegB =
-        SharedToRegLoader<RegB, WarpLayout, WarpReuse::ColReuseCont,
-                          CopyInst::LoadMat>;
+        SharedToRegLoader<RegB, WarpLayout, WarpReuse::ColReuseCont>;
 
     static_assert(TileIteratorA::sc1 == TileIteratorB::sc0,
                   "dimension mismatch!");
@@ -146,9 +144,7 @@ struct TestTraits {
     // ============= register to shared storer =================
     using SharedC = SharedTile<ElementAcc, tl::RowMajor<M, N>>;
     using RegC = RegTile<ElementAcc, tl::RowMajor<ms * 2, ns * 4>>;
-    using StoreRegC =
-        RegToSharedStorer<RegC, WarpLayout, tl::RegLayout::WMMA_m16n16k16,
-                          CopyInst::LoadS32>;
+    using StoreRegC = RegToSharedStorer<RegC, WarpLayout>;
 };
 
 template <const int M, const int N, const int K>

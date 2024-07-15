@@ -47,7 +47,4 @@ struct BaseTileShape : public Base {
     static constexpr int sub_numel = sub_row * sub_col;
 };
 
-using ThreadLdmatrix = tile_layout::ColMajor<16, 2>;
-using ThreadWmma = tile_layout::RowMajor<8, 4>;
-
 }  // namespace tiledcuda::cell::traits

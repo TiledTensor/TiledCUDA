@@ -28,7 +28,7 @@ set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} -std=c++20)
 set(CUDA_NVCC_FLAGS_DEBUG ${CUDA_NVCC_FLAGS_DEBUG} -std=c++20 -O0)
 set(CUDA_NVCC_FLAGS_RELEASE ${CUDA_NVCC_FLAGS_RELEASE} -std=c++20 -O3)
 
-find_package(PythonInterp 3 REQUIRED COMPONENTS Interpreter)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 message(STATUS "Python interpreter path: ${PYTHON_EXECUTABLE}")
 
 message(STATUS "TiledCUDA: CUDA detected: " ${CUDA_VERSION})
