@@ -15,6 +15,14 @@ __global__ void copy_g2r(const Element* src, const int row_stride) {
         dst;
     cell::copy::copy_2d_tile_g2r<Element, height, width>(src, dst, row_stride);
     __syncthreads();
+
+    if (threadIdx.x == 0) {
+        for (int i = 0; i < height; ++i) {
+            for (int j = 0; j < width; ++j) {
+                dst(i, j).dump_value();
+            }
+        }
+    }
 }
 
 namespace testing {
