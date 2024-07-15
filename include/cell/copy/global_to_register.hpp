@@ -19,11 +19,9 @@ DEVICE void copy_2d_tile_g2r(
     static constexpr int WARP_SIZE = G2RTraits::WARP_SIZE;
     const int sub_tile_size = G2RTraits::SubTileSize;
     const int sub_rows = sub_tile_size;
-    const int sub_cols = sub_tile_size;
     int lane_id = threadIdx.x % WARP_SIZE;
     int warp_id = threadIdx.x / WARP_SIZE;
     int rows = height * sub_rows;
-    int cols = width * sub_cols;
     int tile_size = sub_tile_size;
     int row_offset = rows * warp_id;
 
@@ -59,5 +57,60 @@ DEVICE void copy_2d_tile_g2r(
         }
     }
 }
+
+namespace details {
+
+template <typename Reg, const tl::Layout type>
+struct LoadImpl {
+    using DType = typename Reg::DType;
+
+    DEVICE void operator()(const DType* src, Reg& dst, const int stride);
+};
+
+template <typename Reg>
+struct LoadImpl<Reg, tl::Layout::RowMajor> {
+    using DType = typename Reg::DType;
+    static constexpr int Height = Reg::kRows;
+    static constexpr int Width = Reg::kCols;
+    static constexpr int SUB_TILE_SIZE = 16;
+
+    DEVICE void operator()(const DType* src, Reg& dst, const int stride) {
+        int lane_id = threadIdx.x % warpSize;
+        int warp_id = threadIdx.x / warpSize;
+        const int tile_size = SUB_TILE_SIZE;
+        int rows = Height * SUB_TILE_SIZE;
+        int row_offset = rows * warp_id;
+
+        // Load data from global memory to register.
+        // References:
+        // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html?highlight=ldmatrix#warp-level-matrix-load-instruction-ldmatrix
+#pragma unroll
+        for (int i = 0; i < Height; ++i) {
+            int row = row_offset + i * tile_size + (lane_id / 4);
+#pragma unroll
+            for (int j = 0; j < Width; ++j) {
+                int col = j * tile_size + (lane_id % 4);
+                dst(i, j)(0, 0) = src[(row + 0) * stride + col + 0];
+                dst(i, j)(0, 1) = src[(row + 0) * stride + col + 1];
+                dst(i, j)(1, 0) = src[(row + 0) * stride + col + 8];
+                dst(i, j)(1, 1) = src[(row + 0) * stride + col + 9];
+            }
+#pragma unroll
+            for (int j = 0; j < Width; ++j) {
+                int col = j * tile_size + (lane_id % 4);
+                dst(i, j)(0, 2) = src[(row + 8) * stride + col + 0];
+                dst(i, j)(0, 3) = src[(row + 8) * stride + col + 1];
+                dst(i, j)(1, 2) = src[(row + 8) * stride + col + 8];
+                dst(i, j)(1, 3) = src[(row + 8) * stride + col + 9];
+            }
+        }
+    }
+};
+
+// TODO(KuangjuX): Implement LoadImpl for ColMajor layout.
+template <typename Reg>
+struct LoadImpl<Reg, tl::Layout::ColMajor> {};
+
+}  // namespace details
 
 }  // namespace tiledcuda::cell::copy
