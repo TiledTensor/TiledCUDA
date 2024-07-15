@@ -6,7 +6,7 @@
 namespace tiledcuda::cell::copy {
 
 /**
- * @brief Copy a row-major 2D tile from global memory to register tile
+ * @brief Copy a 2D tile from global memory to register tile
  * @param src[in] source data in global memory.
  * @param dst[out] destination data in register tile.
  * @param row_stride[in] row stride of source data.

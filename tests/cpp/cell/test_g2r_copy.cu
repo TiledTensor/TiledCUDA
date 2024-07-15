@@ -54,6 +54,33 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r) {
     copy_g2r<Element, G2RTraits, height, width>
         <<<1, 32>>>(d_src.data().get(), row_stride);
 }
+
+TEST(TestG2RegCopy, copy_2d_tile_g2r_2) {
+    using Element = float;
+
+    const int height = 2;
+    const int width = 2;
+
+    static constexpr int WARP_SIZE = 32;
+    static constexpr int SUB_TILE_SIZE = 16;
+
+    using G2RTraits =
+        traits::G2RCopyTraits<Element, WARP_SIZE, SUB_TILE_SIZE,
+                              tile_layout::GlobalLayout::RowMajor>;
+
+    int numel = height * width * 16 * 16;
+    thrust::host_vector<Element> h_src(numel);
+    for (int i = 0; i < numel; ++i) {
+        h_src[i] = (float)i;
+    }
+
+    thrust::device_vector<Element> d_src = h_src;
+
+    int row_stride = width * 16;
+
+    copy_g2r<Element, G2RTraits, height, width>
+        <<<1, 32>>>(d_src.data().get(), row_stride);
+}
 }  // namespace testing
 
 }  // namespace tiledcuda
