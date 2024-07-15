@@ -5,14 +5,15 @@
 
 namespace tiledcuda::cell::copy {
 
-template <typename T, typename Layout>
-struct GlobalToRegLoader {
-    DEVICE void operator()(const T* global, RegTile<T, Layout>& dst);
-}
-
+/**
+ * @brief Copy a row-major 2D tile from global memory to register tile
+ * @param src[in] source data in global memory.
+ * @param dst[out] destination data in register tile.
+ * @param row_stride[in] row stride of source data.
+ */
 template <typename T, size_t height, size_t width>
-DEVICE void load_global_to_reg(
-    T* src,
+DEVICE void copy_2d_tile_g2r(
+    const T* src,
     RegTile<RegTile<T, tl::RowMajor<2, 4>>, tl::RowMajor<height, width>>& dst,
     const int row_stride) {
     // TODO: Fix constants.
@@ -24,14 +25,16 @@ DEVICE void load_global_to_reg(
     int warp_id = threadIdx.x / WARP_SIZE;
     int rows = height * sub_rows;
     int cols = width * sub_cols;
-    int sub_tile = sub_tile_size;
+    int tile_size = sub_tile_size;
     int row_offset = rows * warp_id;
 
     // RegTile<T, tl::RowMajor<2, 4>> subtile_reg;
     // RegTile<RegTile<T, tl::RowMajor<2, 4>>, tl::RowMajor<height, width>>
     //     dst_reg;
 
-// Load data from global memory to register.
+    // Load data from global memory to register.
+    // References:
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html?highlight=ldmatrix#warp-level-matrix-load-instruction-ldmatrix
 #pragma unroll
     for (int i = 0; i < height; ++i) {
         int row = row_offset + i * tile_size + (lane_id / 4);
