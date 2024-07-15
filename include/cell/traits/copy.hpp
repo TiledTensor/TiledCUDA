@@ -95,4 +95,15 @@ struct S2G2DCopyTraits : public Base {
         Copy_Atom<DefaultCopy, Element>{}, ThreadLayout{}, ValueLayout{}));
 };
 
+template <typename Element_, const int WARP_SIZE_, const int SubTileSize_,
+          typename Base = TraitsBase<Element_>>
+struct G2RCopyTraits : public Base {
+    using Element = Element_;
+
+    static constexpr int WARP_SIZE = WARP_SIZE_;
+    static constexpr int SubTileSize = SubTileSize_;
+    static constexpr int SubTileRows = SubTileSize_;
+    static constexpr int SubTileCols = SubTileSize_;
+};
+
 }  // namespace tiledcuda::cell::traits

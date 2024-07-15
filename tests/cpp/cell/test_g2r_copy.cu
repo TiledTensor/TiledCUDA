@@ -1,4 +1,5 @@
 #include "cell/copy/mod.hpp"
+#include "cell/traits/copy.hpp"
 #include "common/test_utils.hpp"
 #include "types/mod.hpp"
 
@@ -9,11 +10,12 @@ namespace tiledcuda {
 
 using namespace cell;
 
-template <typename Element, size_t height, size_t width>
+template <typename Element, typename G2RTraits, size_t height, size_t width>
 __global__ void copy_g2r(const Element* src, const int row_stride) {
     RegTile<RegTile<Element, tl::RowMajor<2, 4>>, tl::RowMajor<height, width>>
         dst;
-    cell::copy::copy_2d_tile_g2r<Element, height, width>(src, dst, row_stride);
+    cell::copy::copy_2d_tile_g2r<Element, G2RTraits, height, width>(src, dst,
+                                                                    row_stride);
     __syncthreads();
 
     if (threadIdx.x == 0) {
@@ -28,8 +30,14 @@ __global__ void copy_g2r(const Element* src, const int row_stride) {
 namespace testing {
 TEST(TestG2RegCopy, copy_2d_tile_g2r) {
     using Element = float;
-    const size_t height = 1;
-    const size_t width = 1;
+
+    const int height = 1;
+    const int width = 1;
+
+    static constexpr int WARP_SIZE = 32;
+    static constexpr int SUB_TILE_SIZE = 16;
+
+    using G2RTraits = traits::G2RCopyTraits<Element, WARP_SIZE, SUB_TILE_SIZE>;
 
     int numel = height * width * 16 * 16;
     thrust::host_vector<Element> h_src(numel);
@@ -41,7 +49,8 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r) {
 
     int row_stride = width * 16;
 
-    copy_g2r<Element, height, width><<<1, 32>>>(d_src.data().get(), row_stride);
+    copy_g2r<Element, G2RTraits, height, width>
+        <<<1, 32>>>(d_src.data().get(), row_stride);
 }
 }  // namespace testing
 

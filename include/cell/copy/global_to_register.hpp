@@ -11,14 +11,13 @@ namespace tiledcuda::cell::copy {
  * @param dst[out] destination data in register tile.
  * @param row_stride[in] row stride of source data.
  */
-template <typename T, size_t height, size_t width>
+template <typename T, typename G2RTraits, size_t height, size_t width>
 DEVICE void copy_2d_tile_g2r(
     const T* src,
     RegTile<RegTile<T, tl::RowMajor<2, 4>>, tl::RowMajor<height, width>>& dst,
     const int row_stride) {
-    // TODO: Fix constants.
-    const int WARP_SIZE = 32;
-    const int sub_tile_size = 16;
+    static constexpr int WARP_SIZE = G2RTraits::WARP_SIZE;
+    const int sub_tile_size = G2RTraits::SubTileSize;
     const int sub_rows = sub_tile_size;
     const int sub_cols = sub_tile_size;
     int lane_id = threadIdx.x % WARP_SIZE;
