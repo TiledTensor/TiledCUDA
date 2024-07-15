@@ -54,6 +54,7 @@ DEVICE void copy_2d_tile_g2r(
             }
         }
         case tile_layout::GlobalLayout::ColMajor: {
+            // TODO: Add support for ColMajor layout.
             break;
         }
     }
