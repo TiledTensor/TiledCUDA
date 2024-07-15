@@ -10,12 +10,17 @@ namespace tiledcuda {
 
 using namespace cell;
 
-template <typename Element, typename G2RTraits, size_t height, size_t width>
+template <typename Element, tl::Layout type, size_t height, size_t width>
 __global__ void copy_g2r(const Element* src, const int row_stride) {
-    RegTile<RegTile<Element, tl::RowMajor<2, 4>>, tl::RowMajor<height, width>>
-        dst;
-    cell::copy::copy_2d_tile_g2r<Element, G2RTraits, height, width>(src, dst,
-                                                                    row_stride);
+    // RegTile<RegTile<Element, tl::RowMajor<2, 4>>, tl::RowMajor<height,
+    // width>>
+    //     RegTile dst;
+    using DstTile = RegTile<RegTile<Element, tl::RowMajor<2, 4>>,
+                            tl::RowMajor<height, width>>;
+    DstTile dst;
+
+    cell::copy::GlobalToRegLoader<Element, DstTile, type> loader;
+    loader(src, dst, row_stride);
     __syncthreads();
 
     if (threadIdx.x == 0) {
@@ -34,12 +39,12 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r) {
     const int height = 1;
     const int width = 1;
 
-    static constexpr int WARP_SIZE = 32;
-    static constexpr int SUB_TILE_SIZE = 16;
+    // static constexpr int WARP_SIZE = 32;
+    // static constexpr int SUB_TILE_SIZE = 16;
 
-    using G2RTraits =
-        traits::G2RCopyTraits<Element, WARP_SIZE, SUB_TILE_SIZE,
-                              tile_layout::GlobalLayout::RowMajor>;
+    // using G2RTraits =
+    //     traits::G2RCopyTraits<Element, WARP_SIZE, SUB_TILE_SIZE,
+    //                           tile_layout::GlobalLayout::RowMajor>;
 
     int numel = height * width * 16 * 16;
     thrust::host_vector<Element> h_src(numel);
@@ -51,7 +56,7 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r) {
 
     int row_stride = width * 16;
 
-    copy_g2r<Element, G2RTraits, height, width>
+    copy_g2r<Element, tl::Layout::RowMajor, height, width>
         <<<1, 32>>>(d_src.data().get(), row_stride);
 }
 
@@ -61,12 +66,12 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r_2) {
     const int height = 2;
     const int width = 2;
 
-    static constexpr int WARP_SIZE = 32;
-    static constexpr int SUB_TILE_SIZE = 16;
+    // static constexpr int WARP_SIZE = 32;
+    // static constexpr int SUB_TILE_SIZE = 16;
 
-    using G2RTraits =
-        traits::G2RCopyTraits<Element, WARP_SIZE, SUB_TILE_SIZE,
-                              tile_layout::GlobalLayout::RowMajor>;
+    // using G2RTraits =
+    //     traits::G2RCopyTraits<Element, WARP_SIZE, SUB_TILE_SIZE,
+    //                           tile_layout::GlobalLayout::RowMajor>;
 
     int numel = height * width * 16 * 16;
     thrust::host_vector<Element> h_src(numel);
@@ -78,7 +83,7 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r_2) {
 
     int row_stride = width * 16;
 
-    copy_g2r<Element, G2RTraits, height, width>
+    copy_g2r<Element, tl::Layout::RowMajor, height, width>
         <<<1, 32>>>(d_src.data().get(), row_stride);
 }
 }  // namespace testing

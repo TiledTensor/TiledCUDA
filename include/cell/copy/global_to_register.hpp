@@ -60,16 +60,16 @@ DEVICE void copy_2d_tile_g2r(
 
 namespace details {
 
-template <typename Reg, const tl::Layout type>
-struct LoadImpl {
-    using DType = typename Reg::DType;
+template <typename Element, typename Reg, const tl::Layout type>
+struct LoadTileImpl {
+    using DType = Element;
 
     DEVICE void operator()(const DType* src, Reg& dst, const int stride);
 };
 
-template <typename Reg>
-struct LoadImpl<Reg, tl::Layout::RowMajor> {
-    using DType = typename Reg::DType;
+template <typename Element, typename Reg>
+struct LoadTileImpl<Element, Reg, tl::Layout::RowMajor> {
+    using DType = Element;
     static constexpr int Height = Reg::kRows;
     static constexpr int Width = Reg::kCols;
     static constexpr int SUB_TILE_SIZE = 16;
@@ -108,9 +108,20 @@ struct LoadImpl<Reg, tl::Layout::RowMajor> {
 };
 
 // TODO(KuangjuX): Implement LoadImpl for ColMajor layout.
-template <typename Reg>
-struct LoadImpl<Reg, tl::Layout::ColMajor> {};
+template <typename Element, typename Reg>
+struct LoadTileImpl<Element, Reg, tl::Layout::ColMajor> {};
 
 }  // namespace details
+
+template <typename Element, typename Reg_, tl::Layout type_>
+struct GlobalToRegLoader {
+    using Reg = Reg_;
+    using DType = Element;
+
+    DEVICE void operator()(const DType* src, Reg& dst, const int stride) {
+        details::LoadTileImpl<DType, Reg, type_> loader;
+        loader(src, dst, stride);
+    }
+};
 
 }  // namespace tiledcuda::cell::copy
