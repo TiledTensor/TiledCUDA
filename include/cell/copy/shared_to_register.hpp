@@ -10,6 +10,37 @@ using namespace tiledcuda::cell::traits;
 
 namespace detail {
 
+namespace {  // anonymous namespace for helper functions
+template <const WarpReuse kMode>
+DEVICE int warp_offset_impl(int warp_row, int warp_col, int warp_rstride,
+                            int warp_cstride) {
+    assert(false && "Not implemented yet.");
+    return -1;
+};
+
+template <>
+DEVICE int warp_offset_impl<WarpReuse::Cont>(int warp_row, int warp_col,
+                                             int warp_rstride,
+                                             int warp_cstride) {
+    return warp_row * warp_rstride + warp_col * warp_cstride;
+}
+
+template <>
+DEVICE int warp_offset_impl<WarpReuse::ColReuseCont>(int warp_row, int warp_col,
+                                                     int warp_rstride,
+                                                     int warp_cstride) {
+    return warp_col * warp_cstride;
+}
+
+template <>
+DEVICE int warp_offset_impl<WarpReuse::RowReuseCont>(int warp_row, int warp_col,
+                                                     int warp_rstride,
+                                                     int warp_cstride) {
+    return warp_row * warp_rstride;
+}
+
+}  // namespace
+
 template <typename WarpLayout_, const WarpReuse kMode_>
 struct CopyBase {
     static constexpr WarpReuse kMode = kMode_;
@@ -21,58 +52,35 @@ struct CopyBase {
     template <typename Shared>
     DEVICE int get_warp_offset() {
         // Tile shape for a single warp
-        constexpr static int warp_shape_row =
+        constexpr static int kWarpShapeRow =
             Shared::kRows / tl::num_rows<WarpLayout>;
-        constexpr static int warp_shape_col =
+        constexpr static int kWarpShapeCol =
             Shared::kCols / tl::num_cols<WarpLayout>;
 
-        constexpr static int warp_rstride =
+        constexpr static int kWarpRstride =
             Shared::type == tl::Layout::RowMajor
-                ? Shared::kRowStride * warp_shape_row
-                : warp_shape_row;
-        constexpr static int warp_cstride =
+                ? Shared::kRowStride * kWarpShapeRow
+                : kWarpShapeRow;
+        constexpr static int kWarpCstride =
             Shared::type == tl::Layout::RowMajor
-                ? warp_shape_col
-                : Shared::kColStride * warp_shape_col;
+                ? kWarpShapeCol
+                : Shared::kColStride * kWarpShapeCol;
 
-        switch (kMode) {
-            case WarpReuse::Cont: {
-                // In 'Cont' mode, all warps evenly divide the large data tiles
-                // and load the data without repeated loads.
-                int warp_row = warp_row_id();
-                int warp_col = warp_col_id();
-                return warp_row * warp_rstride + warp_col * warp_cstride;
-            }
-            case WarpReuse::RowReuseCont: {
-                // In the `RowReuseCont` mode, warps in a same row repeatedly
-                // load the same data, and each warp loads a continuous chunks
-                // of data.
-                int warp_row = warp_row_id();
-                return warp_row * warp_rstride;
-            }
-            case WarpReuse::ColReuseCont: {
-                // In the `ColReuseCont` mode, warps in a same column repeatedly
-                // load the same data, and each warp loads a continuous chunks
-                // of data.
-                int warp_col = warp_col_id();
-                return warp_col * warp_cstride;
-            }
-            default:
-                assert(false && "Not implemented yet.");
-                return -1;
-        }
+        return warp_offset_impl<kMode>(warp_row_id(), warp_col_id(),
+                                       kWarpRstride, kWarpCstride);
     }
 
     // @brief This function returns the number of times a `BaseTile` is executed
     //        along the direction of the shared memory row.
-    template <typename Element, const int rows>
+    template <typename Element, const int kRows>
     DEVICE static constexpr int row_exec_count() {
-        const int warps_per_row = tl::num_rows<WarpLayout>;
-        const int base_tile_row = BaseTileShape<Element>::row;
+        const int kWarpsPerRow = tl::num_rows<WarpLayout>;
+        const int kBaseTileRow = BaseTileShape<Element>::row;
 
-        assert(rows % base_tile_row == 0 &&
-               "The current implementation requires that the number of shared "
-               "memory rows be divisible by the base tile row.\n");
+        static_assert(
+            kRows % kBaseTileRow == 0,
+            "The current implementation requires that the number of shared "
+            "memory rows be divisible by the base tile row.\n");
 
         int count = 0;
         switch (kMode) {
@@ -81,10 +89,10 @@ struct CopyBase {
             // by warps_per_row.
             case WarpReuse::ColReuseCont:
             case WarpReuse::ColReuseCir:
-                count = rows / base_tile_row;
+                count = kRows / kBaseTileRow;
                 break;
             default:  // Cont, Cir, RowReuseCont, RowReuseCir hit this case.
-                count = rows / base_tile_row / warps_per_row;
+                count = kRows / kBaseTileRow / kWarpsPerRow;
                 break;
         }
 
@@ -96,13 +104,15 @@ struct CopyBase {
         return count;
     }
 
-    template <typename Element, const int cols>
+    template <typename Element, const int kCols>
     DEVICE static constexpr int col_exec_count() {
-        const int warps_per_col = tl::num_cols<WarpLayout>;
-        const int base_tile_col = BaseTileShape<Element>::col;
+        const int kWarpsPerCol = tl::num_cols<WarpLayout>;
+        // FIXME(haruhi): This is a hotfix that 16 is a magic number for wmma
+        // tile. Address these isolated magic numbers.
+        const int kBaseTileCol = 16;
 
-        assert(
-            cols % base_tile_col == 0 &&
+        static_assert(
+            kCols % kBaseTileCol == 0,
             "The number of shared memory columns must be divisible by the base "
             "tile column.\n");
 
@@ -113,11 +123,10 @@ struct CopyBase {
             // by `warps_per_col`.
             case WarpReuse::RowReuseCont:
             case WarpReuse::RowReuseCir:
-                count = cols / base_tile_col;
+                count = kCols / kBaseTileCol;
                 break;
             default:  // Cont, Cir, ColReuseCont, ColReuseCir hit this case.
-                // FIXME(hotfix): 16 is a magic number for wmma tile
-                count = cols / 16 / warps_per_col;
+                count = kCols / kBaseTileCol / kWarpsPerCol;
                 break;
         }
 
@@ -201,14 +210,6 @@ struct CopyBase {
     }
 };
 
-template <typename Shared, const tl::Layout type, CopyInst kCopyInst>
-struct LoadTileImpl {
-    using DType = typename Shared::DType;
-
-    DEVICE void operator()(const DType* src, DType* dst, int row_exec,
-                           int col_exec);
-};
-
 struct LoadMatBase {
     using ThreadLdmatrix = tile_layout::ColMajor<16, 2>;
 
@@ -233,6 +234,7 @@ struct LoadMatBase {
         return lane_id / tl::num_rows<ThreadLdmatrix>;
     }
 
+    /// @brief a thin wrapper for executing a single ldmatrix instruction.
     template <typename Element>
     DEVICE void ldmatrix(const Element* src, Element* dst) {
         uint32_t* reg = reinterpret_cast<uint32_t*>(dst);
@@ -245,37 +247,48 @@ struct LoadMatBase {
     }
 };
 
+template <typename Shared, const int kRowExec, const int kColExec,
+          const tl::Layout kType, CopyInst kCopyInst>
+struct SharedToRegLoaderImpl {
+    using DType = typename Shared::DType;
+
+    DEVICE void operator()(const DType* src, DType* dst, int row_exec,
+                           int col_exec);
+};
+
 /// @brief partial specialization for row-major shared memory tile.
-template <typename Shared>
-struct LoadTileImpl<Shared, tl::Layout::RowMajor, CopyInst::LoadMat>
-    : public LoadMatBase {
+template <typename Shared, const int kRowExec_, const int kColExec_>
+struct SharedToRegLoaderImpl<Shared, kRowExec_, kColExec_, tl::Layout::RowMajor,
+                             CopyInst::LoadMat> : public LoadMatBase {
     using DType = typename Shared::DType;
 
     // strides to iterate over each 16x128-bits `BaseTile`.
-    static constexpr int tile_rstride =
+    static constexpr int kTileRstride =
         BaseTileShape<DType>::row * Shared::kRowStride;
-    static constexpr int tile_cstride = BaseTileShape<DType>::col;
+    static constexpr int kTileCstride = BaseTileShape<DType>::col;
 
     // row stride and col stride for a thread in a warp
-    static constexpr int stride = traits::TraitsBase<DType>::kNumPerAccess;
-    static constexpr int lane_rstride = Shared::kRowStride;
-    static constexpr int lane_cstride = stride;
+    static constexpr int kStride = traits::TraitsBase<DType>::kNumPerAccess;
+    static constexpr int kLaneRstride = Shared::kRowStride;
+    static constexpr int kLaneCstride = kStride;
 
-    DEVICE void operator()(const DType* src, DType* dst, int row_exec,
-                           int col_exec) {
+    static constexpr int kRowExec = kRowExec_;
+    static constexpr int kColExec = kColExec_;
+
+    DEVICE void operator()(const DType* src, DType* dst) {
         int lane_row = lane_row_id();
         int lane_col = lane_col_id();
 
         const DType* data;
-        for (int i = 0; i < row_exec; ++i) {
-            for (int j = 0; j < col_exec; ++j) {
+        for (int i = 0; i < kRowExec; ++i) {
+            for (int j = 0; j < kColExec; ++j) {
                 // 2. advance pointer to the 16x128-bits `BaseTile` indexed by
                 // (i, j).
-                data = src + (i * tile_rstride + j * tile_cstride);
+                data = src + (i * kTileRstride + j * kTileCstride);
 
                 // 3. advance the pointer to data accessed by the current thread
                 // inside a 16x128-bits `BaseTile`.
-                data += (lane_row * lane_rstride + lane_col * lane_cstride);
+                data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
 
                 // issue the hardware-backed memory access instruction.
                 LoadMatBase::template ldmatrix<DType>(data, dst);
@@ -288,22 +301,24 @@ struct LoadTileImpl<Shared, tl::Layout::RowMajor, CopyInst::LoadMat>
 };
 
 /// @brief partial specialization for column-major shared memory tile.
-template <typename Shared>
-struct LoadTileImpl<Shared, tl::Layout::ColMajor, CopyInst::LoadMat>
-    : public LoadMatBase {
+template <typename Shared, const int kRowExec_, const int kColExec_>
+struct SharedToRegLoaderImpl<Shared, kRowExec_, kColExec_, tl::Layout::ColMajor,
+                             CopyInst::LoadMat> : public LoadMatBase {
     using DType = typename Shared::DType;
 
     // strides to iterate over each 16x128-bits `BaseTile`.
-    const int tile_rstride = BaseTileShape<DType>::row;
-    const int tile_cstride = BaseTileShape<DType>::col * Shared::kColStride;
+    const int kTileRstride = BaseTileShape<DType>::row;
+    const int kTileCstride = BaseTileShape<DType>::col * Shared::kColStride;
 
     // row stride and col stride for a thread in a warp
-    static constexpr int stride = traits::TraitsBase<DType>::kNumPerAccess;
-    const int lane_rstride = stride;
-    const int lane_cstride = Shared::kColStride;
+    static constexpr int kStride = traits::TraitsBase<DType>::kNumPerAccess;
+    const int kLaneRstride = kStride;
+    const int kLaneCstride = Shared::kColStride;
 
-    DEVICE void operator()(const DType* src, DType* dst, int row_exec,
-                           int col_exec) {
+    static constexpr int kRowExec = kRowExec_;
+    static constexpr int kColExec = kColExec_;
+
+    DEVICE void operator()(const DType* src, DType* dst) {
         // transpose the lane position if the shared memory is in column-major.
         // 16 threads are mapped to the strided dimension of the data while the
         // 2 threads are mapped to the contiguous dimension of the data.
@@ -311,15 +326,15 @@ struct LoadTileImpl<Shared, tl::Layout::ColMajor, CopyInst::LoadMat>
         int lane_col = lane_row_id();
 
         const DType* data;
-        for (int i = 0; i < col_exec; ++i) {
-            for (int j = 0; j < row_exec; ++j) {
+        for (int i = 0; i < kColExec; ++i) {
+            for (int j = 0; j < kRowExec; ++j) {
                 // 2. advance pointer to the 16x128-bits `BaseTile` indexed by
                 // (i, j).
-                data = src + (j * tile_rstride + i * tile_cstride);
+                data = src + (j * kTileRstride + i * kTileCstride);
 
                 // 3. advance the pointer to data accessed by the current
                 // thread inside a 16x128-bits `BaseTile`.
-                data += (lane_row * lane_rstride + lane_col * lane_cstride);
+                data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
 
                 // issue the hardware-backed memory access instruction
                 LoadMatBase::template ldmatrix<DType>(data, dst);
@@ -331,70 +346,72 @@ struct LoadTileImpl<Shared, tl::Layout::ColMajor, CopyInst::LoadMat>
     }
 };
 
-template <typename Shared, CopyInst kCopyInst>
-struct StoreTileImpl {
+template <typename Shared, const int kRowExec_, const int kColExec_,
+          CopyInst kCopyInst>
+struct RegToSharedStorerImpl {
     using DType = typename Shared::DType;
 
-    DEVICE void operator()(const DType* src, DType* dst, int row_exec,
-                           int col_exec);
+    DEVICE void operator()(const DType* src, DType* dst);
 };
 
-template <typename Shared>
-struct StoreTileImpl<Shared, CopyInst::LoadS32> {
+template <typename Shared, const int kRowExec_, const int kColExec_>
+struct RegToSharedStorerImpl<Shared, kRowExec_, kColExec_, CopyInst::LoadS32> {
     using DType = typename Shared::DType;
+    static constexpr int kRowExec = kRowExec_;
+    static constexpr int kColExec = kColExec_;
 
     using ThreadWmma = tile_layout::RowMajor<8, 4>;
 
     // FIXME(haruhi): Try to find a better way to organize these
     // hardware-dependent magic numbers.
     // The number 2 is interpreted as follows: 8x8 block is a fundamental
-    // unit of a TCU instruction. Regardless of the output precision, a
-    // single execution of WMMA stores 2 elements in each thread's local
-    // register.
-    static constexpr int stride = 2;
-    static constexpr int rstride =
+    // unit of a TCU instruction. Regardless of the output precision, a single
+    // execution of WMMA stores 2 elements in each thread's local register.
+    static constexpr int kStride = 2;
+    static constexpr int kRstride =
         Shared::type == tl::Layout::RowMajor
             ? tl::num_rows<ThreadWmma> * Shared::kRowStride
             : tl::num_rows<ThreadWmma>;
-    static constexpr int cstride =
+    static constexpr int kCstride =
         Shared::type == tl::Layout::RowMajor
-            ? stride * tl::num_cols<ThreadWmma>
-            : stride * tl::num_cols<ThreadWmma> * Shared::kColStride;
+            ? kStride * tl::num_cols<ThreadWmma>
+            : kStride * tl::num_cols<ThreadWmma> * Shared::kColStride;
 
-    // strides to iterate over each 16x128-bits `Base Tile` in the shared
-    // memory
-    static constexpr int tile_rstride =  // row stride for a `Base Tile`
+    // strides to iterate over each 16x128-bits `BaseTile` in the shared memory
+    static constexpr int kTileRstride =  // row stride for a `BaseTile`
         Shared::type == tl::Layout::RowMajor
             ? BaseTileShape<DType>::row * Shared::kRowStride
             : BaseTileShape<DType>::row;
-    static constexpr int tile_cstride =
+
+    // FIXME(haruhi): 16 is the magic number for wmma tile. Address these
+    // isolated magic numbers.
+    static constexpr int kTileCstride =
         Shared::type == tl::Layout::RowMajor ? 16 : 16 * Shared::kColStride;
 
     // Given the lane position of the current thread, calculate the strides
     // needed to address the data within the 16x128-bit `BaseTile` for the
     // current thread.
-    static constexpr int lane_rstride =
-        Shared::type == tl::Layout::RowMajor ? Shared::kRowStride : stride;
-    static constexpr int lane_cstride =
-        Shared::type == tl::Layout::RowMajor ? stride : Shared::kColStride;
+    static constexpr int kLaneRstride =
+        Shared::type == tl::Layout::RowMajor ? Shared::kRowStride : kStride;
+    static constexpr int kLaneCstride =
+        Shared::type == tl::Layout::RowMajor ? kStride : Shared::kColStride;
 
-    DEVICE void operator()(const DType* src, DType* dst, int row_exec,
-                           int col_exec) {
+    DEVICE void operator()(const DType* src, DType* dst) {
         DType* data;
         int lane_row = lane_row_id();
         int lane_col = lane_col_id();
 
-        for (int i = 0; i < row_exec; ++i) {
-            for (int j = 0; j < col_exec; ++j) {
+        for (int i = 0; i < kRowExec; ++i) {
+            for (int j = 0; j < kColExec; ++j) {
                 // 2. advance pointer to the 16x128-bits `BaseTile` indexed by
                 // (i, j).
-                data = dst + (i * tile_rstride + j * tile_cstride);
+                data = dst + (i * kTileRstride + j * kTileCstride);
                 // 3. advance the pointer to data accessed by the current thread
                 // inside a 16x128-bits `Base Tile`.
-                data += (lane_row * lane_rstride + lane_col * lane_cstride);
+                data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
 
-                // store the 16x128-bits `Base Tile` to shared memory
-                store_base_tile(src, data, rstride, cstride);
+                // store the 16x128-bits `BaseTile` to shared memory
+                store_base_tile(src, data);
 
                 // FIXME(haruhi): The value 8 represents the number of elements
                 // stored in each thread's local register during a single
@@ -409,15 +426,14 @@ struct StoreTileImpl<Shared, CopyInst::LoadS32> {
     // TODO: Improve this is a naive implementation that does not use
     // vectorized access in future. To use vectorized access, we need to
     // know the return type of WMMA.
-    DEVICE void store_base_tile(const DType* src, DType* dst, int row_stride,
-                                int col_stride) {
+    DEVICE void store_base_tile(const DType* src, DType* dst) {
         int src_offset, dst_offset;
         // TODO(haruhi): comments the magic number
         for (int i = 0; i < 2; ++i) {
             for (int j = 0; j < 2; ++j) {
                 src_offset = i * 4 + j * 2;
                 // Be cautious, j and i are swapped here. DONOT change this
-                dst_offset = j * row_stride + i * col_stride;
+                dst_offset = j * kRstride + i * kCstride;
 
                 dst[dst_offset] = src[src_offset];
                 dst[dst_offset + 1] = src[src_offset + 1];
@@ -465,11 +481,16 @@ struct SharedToRegLoader : public Base {
 
         // how many times a `BaseTile` is executed along the row and column
         // direction.
-        int row_exec = Base::template row_exec_count<DType, Shared::kRows>();
-        int col_exec = Base::template col_exec_count<DType, Shared::kCols>();
+        static constexpr int kRowExec =
+            Base::template row_exec_count<DType, Shared::kRows>();
+        static constexpr int kColExec =
+            Base::template col_exec_count<DType, Shared::kCols>();
 
-        detail::LoadTileImpl<Shared, Shared::type, CopyInst::LoadMat> loader;
-        loader(src_ptr, dst.mutable_data(), row_exec, col_exec);
+        using Loader =
+            detail::SharedToRegLoaderImpl<Shared, kRowExec, kColExec,
+                                          Shared::type, CopyInst::LoadMat>;
+        Loader loader;
+        loader(src_ptr, dst.mutable_data());
     }
 };
 
@@ -491,8 +512,10 @@ struct RegToSharedStorer : public Base {
 
         DType* dst_ptr = dst.mutable_data();  // pointer for shared memory tile
 
-        int row_exec = Base::template row_exec_count<DType, Shared::kRows>();
-        int col_exec = Base::template col_exec_count<DType, Shared::kCols>();
+        static constexpr int kRowExec =
+            Base::template row_exec_count<DType, Shared::kRows>();
+        static constexpr int kColExec =
+            Base::template col_exec_count<DType, Shared::kCols>();
 
         // 1. advance the pointer to input data to the current warp according to
         // warp reuse mode. During the store process, threads do not write to
@@ -501,8 +524,10 @@ struct RegToSharedStorer : public Base {
         int offset = Base::template get_warp_offset<Shared>();
         dst_ptr += offset;
 
-        detail::StoreTileImpl<Shared, CopyInst::LoadS32> storer;
-        storer(src.data(), dst_ptr, row_exec, col_exec);
+        using Storer = detail::RegToSharedStorerImpl<Shared, kRowExec, kColExec,
+                                                     CopyInst::LoadS32>;
+        Storer storer;
+        storer(src.data(), dst_ptr);
     }
 };
 
