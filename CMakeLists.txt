@@ -12,7 +12,10 @@ if(WITH_TESTING)
   enable_testing()
 endif()
 
-find_package(CUDA REQUIRED)
+find_package(CUDAToolkit QUIET REQUIRED)
+enable_language(CUDA)
+set(CMAKE_CUDA on)
+
 find_package(Torch REQUIRED)
 
 include(scripts/cmake/generic.cmake)

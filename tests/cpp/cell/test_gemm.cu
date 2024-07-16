@@ -150,9 +150,8 @@ struct TestTraits {
     using RegA = RegTile<Element, tl::RowMajor<rA_row, rA_col>>;
 
     // load RegTileA from shared
-    using LoadRegA = SharedToRegLoader<RegA, WarpLayout,
-                                       WarpReuse::RowReuseCont,  //
-                                       CopyInst::LoadMat>;
+    using LoadRegA =
+        SharedToRegLoader<RegA, WarpLayout, WarpReuse::RowReuseCont>;
 
     // register tile for operand B, calculate register usage for operand B
     static constexpr int B_wk = stride_k;
@@ -167,9 +166,8 @@ struct TestTraits {
     using RegB = RegTile<Element, tl::RowMajor<rB_row, rB_col>>;
 
     // load RegTileB from shared
-    using LoadRegB = SharedToRegLoader<RegB, WarpLayout,
-                                       WarpReuse::ColReuseCont,  //
-                                       CopyInst::LoadMat>;
+    using LoadRegB =
+        SharedToRegLoader<RegB, WarpLayout, WarpReuse::ColReuseCont>;
 
     // shared tile for output C
     using SharedC = SharedTile<ElementAcc, tl::RowMajor<M, N>>;
@@ -186,9 +184,7 @@ struct TestTraits {
     using RegC = RegTile<ElementAcc, tl::RowMajor<rC_row, rC_col>>;
 
     // store RegTileC to shared
-    using StoreRegC = RegToSharedStorer<RegC, WarpLayout,
-                                        tl::RegLayout::WMMA_m16n16k16,  //
-                                        CopyInst::LoadS32>;
+    using StoreRegC = RegToSharedStorer<RegC, WarpLayout>;
 };
 
 template <typename Element, typename ElementAcc,                              //

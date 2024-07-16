@@ -96,8 +96,7 @@ TEST(TestShared2Reg, operand_A) {
 
     using Shared = SharedTile<Element, tl::RowMajor<64, 32>>;
     using Reg = RegTile<Element, tl::RowMajor<4, 8>>;
-    using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::RowReuseCont,
-                                   CopyInst::LoadMat>;
+    using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::RowReuseCont>;
     Copy copy;
 
     dim3 dim_grid(1, 1, 1);
@@ -121,8 +120,7 @@ TEST(TestShared2Reg, operand_B) {
 
     using Reg = RegTile<Element, tl::RowMajor<4, 8>>;
 
-    using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::ColReuseCont,
-                                   CopyInst::LoadMat>;
+    using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::ColReuseCont>;
     Copy copy;
 
     dim3 dim_grid(1, 1, 1);
@@ -143,13 +141,10 @@ TEST(TestReg2Shared, operand_C) {
     using Shared = SharedTile<Element, tl::RowMajor<16, 16>>;
     using Reg = RegTile<Element, tl::RowMajor<2, 4>>;
 
-    using Loader =
-        SharedToRegLoader<Reg, WarpLayout, WarpReuse::Cont, CopyInst::LoadMat>;
+    using Loader = SharedToRegLoader<Reg, WarpLayout, WarpReuse::Cont>;
     Loader loader;
 
-    using Storer =
-        RegToSharedStorer<Reg, WarpLayout, tl::RegLayout::WMMA_m16n16k16,
-                          CopyInst::LoadS32>;
+    using Storer = RegToSharedStorer<Reg, WarpLayout>;
     Storer storer;
 
     dim3 dim_grid(1, 1, 1);
