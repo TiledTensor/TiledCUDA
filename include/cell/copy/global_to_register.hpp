@@ -18,7 +18,7 @@ struct GlobalToRegLoaderImpl {
 };
 
 /// @brief Load tile from global memory to register tile in RowMajor layout.
-/// @tparam Element Data type of the elements.
+/// @tparam Global Global tile type.
 /// @tparam Reg Register tile type.
 template <typename Global, typename Reg>
 struct GlobalToRegLoaderImpl<Global, Reg, tl::Layout::RowMajor> {
@@ -61,7 +61,7 @@ struct GlobalToRegLoaderImpl<Global, Reg, tl::Layout::RowMajor> {
 };
 
 /// @brief Load tile from global memory to register tile in ColMajor layout.
-/// @tparam Element Data type of the elements.
+/// @tparam Global Global tile type.
 /// @tparam Reg Register tile type.
 // TODO(KuangjuX): Implement LoadImpl for ColMajor layout.
 template <typename Global, typename Reg>
