@@ -1,6 +1,7 @@
 #pragma once
 
 #include "types/device_array.hpp"
+#include "types/global.hpp"
 #include "types/layout.hpp"
 #include "types/register.hpp"
 #include "types/shared.hpp"
