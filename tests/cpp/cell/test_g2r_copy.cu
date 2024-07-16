@@ -45,8 +45,6 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r) {
 
     thrust::device_vector<Element> d_src = h_src;
 
-    // int row_stride = width * 16;
-
     copy_g2r<Element, tl::Layout::RowMajor, height, width>
         <<<1, 32>>>(d_src.data().get());
 }
@@ -64,8 +62,6 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r_2) {
     }
 
     thrust::device_vector<Element> d_src = h_src;
-
-    // int row_stride = width * 16;
 
     copy_g2r<Element, tl::Layout::RowMajor, height, width>
         <<<1, 32>>>(d_src.data().get());

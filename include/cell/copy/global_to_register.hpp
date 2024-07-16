@@ -43,10 +43,6 @@ struct GlobalToRegLoaderImpl<Global, Reg, tl::Layout::RowMajor> {
 #pragma unroll
             for (int j = 0; j < kWidth; ++j) {
                 int col = j * tile_size + (lane_id % 4);
-                // dst(i, j)(0, 0) = src[(row + 0) * stride + col + 0];
-                // dst(i, j)(0, 1) = src[(row + 0) * stride + col + 1];
-                // dst(i, j)(1, 0) = src[(row + 0) * stride + col + 8];
-                // dst(i, j)(1, 1) = src[(row + 0) * stride + col + 9];
                 dst(i, j)(0, 0) = src(row + 0, col + 0);
                 dst(i, j)(0, 1) = src(row + 0, col + 1);
                 dst(i, j)(1, 0) = src(row + 0, col + 8);
@@ -55,10 +51,6 @@ struct GlobalToRegLoaderImpl<Global, Reg, tl::Layout::RowMajor> {
 #pragma unroll
             for (int j = 0; j < kWidth; ++j) {
                 int col = j * tile_size + (lane_id % 4);
-                // dst(i, j)(0, 2) = src[(row + 8) * stride + col + 0];
-                // dst(i, j)(0, 3) = src[(row + 8) * stride + col + 1];
-                // dst(i, j)(1, 2) = src[(row + 8) * stride + col + 8];
-                // dst(i, j)(1, 3) = src[(row + 8) * stride + col + 9];
                 dst(i, j)(0, 2) = src(row + 8, col + 0);
                 dst(i, j)(0, 3) = src(row + 8, col + 1);
                 dst(i, j)(1, 2) = src(row + 8, col + 8);
