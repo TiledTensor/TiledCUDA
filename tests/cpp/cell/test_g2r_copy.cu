@@ -10,19 +10,21 @@ namespace tiledcuda {
 using namespace cell;
 
 template <typename Element, tl::Layout type, size_t height, size_t width>
-__global__ void copy_g2r(const Element* src, const int row_stride) {
+__global__ void copy_g2r(Element* src, const int row_stride) {
+    using SrcTile = GlobalTile<Element, tl::RowMajor<16 * height, 16 * width>>;
     using DstTile = RegTile<RegTile<Element, tl::RowMajor<2, 4>>,
                             tl::RowMajor<height, width>>;
-    DstTile dst;
+    SrcTile src_tile(src);
+    DstTile dst_tile;
 
-    cell::copy::GlobalToRegLoader<Element, DstTile, type> loader;
-    loader(src, dst, row_stride);
+    cell::copy::GlobalToRegLoader<SrcTile, DstTile, type> loader;
+    loader(src_tile, dst_tile, row_stride);
     __syncthreads();
 
     if (threadIdx.x == 0) {
         for (int i = 0; i < height; ++i) {
             for (int j = 0; j < width; ++j) {
-                dst(i, j).dump_value();
+                dst_tile(i, j).dump_value();
             }
         }
     }
