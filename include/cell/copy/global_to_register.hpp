@@ -8,8 +8,11 @@ namespace tiledcuda::cell::copy {
 namespace details {
 
 template <typename Element, typename Reg, const tl::Layout type>
-struct LoadTileImpl {
+struct GlobalToRegLoaderImpl {
     using DType = Element;
+    static constexpr int kHeight = Reg::kRows;
+    static constexpr int kWidth = Reg::kCols;
+    static constexpr int kSubTileSize = 16;
 
     DEVICE void operator()(const DType* src, Reg& dst, const int stride);
 };
@@ -18,7 +21,7 @@ struct LoadTileImpl {
 /// @tparam Element Data type of the elements.
 /// @tparam Reg Register tile type.
 template <typename Element, typename Reg>
-struct LoadTileImpl<Element, Reg, tl::Layout::RowMajor> {
+struct GlobalToRegLoaderImpl<Element, Reg, tl::Layout::RowMajor> {
     using DType = Element;
     static constexpr int kHeight = Reg::kRows;
     static constexpr int kWidth = Reg::kCols;
@@ -62,7 +65,7 @@ struct LoadTileImpl<Element, Reg, tl::Layout::RowMajor> {
 /// @tparam Reg Register tile type.
 // TODO(KuangjuX): Implement LoadImpl for ColMajor layout.
 template <typename Element, typename Reg>
-struct LoadTileImpl<Element, Reg, tl::Layout::ColMajor> {};
+struct GlobalToRegLoaderImpl<Element, Reg, tl::Layout::ColMajor> {};
 
 }  // namespace details
 
@@ -72,7 +75,7 @@ struct GlobalToRegLoader {
     using DType = Element;
 
     DEVICE void operator()(const DType* src, Reg& dst, const int stride) {
-        details::LoadTileImpl<DType, Reg, type_> loader;
+        details::GlobalToRegLoaderImpl<DType, Reg, type_> loader;
         loader(src, dst, stride);
     }
 };
