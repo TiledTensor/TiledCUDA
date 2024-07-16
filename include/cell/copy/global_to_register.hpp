@@ -14,7 +14,7 @@ struct GlobalToRegLoaderImpl {
     static constexpr int kWidth = Reg::kCols;
     static constexpr int kSubTileSize = 16;
 
-    DEVICE void operator()(const Global& src, Reg& dst, const int stride);
+    DEVICE void operator()(const Global& src, Reg& dst);
 };
 
 /// @brief Load tile from global memory to register tile in RowMajor layout.
@@ -27,7 +27,7 @@ struct GlobalToRegLoaderImpl<Global, Reg, tl::Layout::RowMajor> {
     static constexpr int kWidth = Reg::kCols;
     static constexpr int kSubTileSize = 16;
 
-    DEVICE void operator()(const Global& src, Reg& dst, const int stride) {
+    DEVICE void operator()(const Global& src, Reg& dst) {
         int lane_id = threadIdx.x % warpSize;
         int warp_id = threadIdx.x / warpSize;
         const int tile_size = kSubTileSize;
@@ -83,9 +83,9 @@ struct GlobalToRegLoader {
     using Reg = Reg_;
     using DType = typename Global::DType;
 
-    DEVICE void operator()(const Global& src, Reg& dst, const int stride) {
+    DEVICE void operator()(const Global& src, Reg& dst) {
         details::GlobalToRegLoaderImpl<Global, Reg, type_> loader;
-        loader(src, dst, stride);
+        loader(src, dst);
     }
 };
 

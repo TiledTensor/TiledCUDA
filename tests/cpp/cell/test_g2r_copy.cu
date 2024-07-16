@@ -10,7 +10,7 @@ namespace tiledcuda {
 using namespace cell;
 
 template <typename Element, tl::Layout type, size_t height, size_t width>
-__global__ void copy_g2r(Element* src, const int row_stride) {
+__global__ void copy_g2r(Element* src) {
     using SrcTile = GlobalTile<Element, tl::RowMajor<16 * height, 16 * width>>;
     using DstTile = RegTile<RegTile<Element, tl::RowMajor<2, 4>>,
                             tl::RowMajor<height, width>>;
@@ -18,7 +18,7 @@ __global__ void copy_g2r(Element* src, const int row_stride) {
     DstTile dst_tile;
 
     cell::copy::GlobalToRegLoader<SrcTile, DstTile, type> loader;
-    loader(src_tile, dst_tile, row_stride);
+    loader(src_tile, dst_tile);
     __syncthreads();
 
     if (threadIdx.x == 0) {
@@ -45,10 +45,10 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r) {
 
     thrust::device_vector<Element> d_src = h_src;
 
-    int row_stride = width * 16;
+    // int row_stride = width * 16;
 
     copy_g2r<Element, tl::Layout::RowMajor, height, width>
-        <<<1, 32>>>(d_src.data().get(), row_stride);
+        <<<1, 32>>>(d_src.data().get());
 }
 
 TEST(TestG2RegCopy, copy_2d_tile_g2r_2) {
@@ -65,10 +65,10 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r_2) {
 
     thrust::device_vector<Element> d_src = h_src;
 
-    int row_stride = width * 16;
+    // int row_stride = width * 16;
 
     copy_g2r<Element, tl::Layout::RowMajor, height, width>
-        <<<1, 32>>>(d_src.data().get(), row_stride);
+        <<<1, 32>>>(d_src.data().get());
 }
 }  // namespace testing
 
