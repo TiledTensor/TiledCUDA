@@ -31,7 +31,7 @@ __global__ void copy_g2r(Element* src) {
 }
 
 namespace testing {
-TEST(TestG2RegCopy, copy_2d_tile_g2r) {
+TEST(TestG2RegCopy, copy_2d_tile_g2r_row_major_0) {
     using Element = float;
 
     const int height = 1;
@@ -49,7 +49,7 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r) {
         <<<1, 32>>>(d_src.data().get());
 }
 
-TEST(TestG2RegCopy, copy_2d_tile_g2r_2) {
+TEST(TestG2RegCopy, copy_2d_tile_g2r_row_major_1) {
     using Element = float;
 
     const int height = 2;

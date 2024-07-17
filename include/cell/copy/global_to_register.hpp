@@ -65,7 +65,14 @@ struct GlobalToRegLoaderImpl<Global, Reg, tl::Layout::RowMajor> {
 /// @tparam Reg Register tile type.
 // TODO(KuangjuX): Implement LoadImpl for ColMajor layout.
 template <typename Global, typename Reg>
-struct GlobalToRegLoaderImpl<Global, Reg, tl::Layout::ColMajor> {};
+struct GlobalToRegLoaderImpl<Global, Reg, tl::Layout::ColMajor> {
+    using DType = typename Global::DType;
+    static constexpr int kHeight = Reg::kRows;
+    static constexpr int kWidth = Reg::kCols;
+    static constexpr int kSubTileSize = 16;
+
+    DEVICE void operator()(const Global& src, Reg& dst) {}
+};
 
 }  // namespace details
 
