@@ -1,7 +1,5 @@
 #pragma once
 
-#include <type_traits>
-
 namespace tiledcuda::cell {
 
 template <typename Element>
@@ -9,8 +7,8 @@ struct BaseTile {
     using DType = Element;
 
     static_assert(std::is_same_v<DType, float> ||
-                      std::is_same_v<DType, __half> ||
-                      std::is_same_v<DType, __bf16>,
+                      std::is_same_v<DType, cutlass::half_t> ||
+                      std::is_same_v<DType, __half>,
                   "Unsupported type.");
 
     static constexpr int kTileSize = 16;
@@ -22,9 +20,15 @@ struct BaseTile {
 
     // 4 registers used in half/bf16, 8 registers used in float.
     static constexpr int kRegsPerThread =
-        sizeof(DType) * kNumelPerThread / sizeof(uint32);
+        sizeof(DType) * kNumelPerThread / sizeof(uint32_t);
 
-    DType data[kNumelPerThread];
+    // for write access
+    DEVICE DType& operator()(int x) { return data_[x]; }
+
+    // for read access
+    DEVICE const DType& operator()(int x) const { return data_[x]; }
+
+    DType data_[kNumelPerThread];
 };
 
 }  // namespace tiledcuda::cell
