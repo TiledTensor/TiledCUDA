@@ -71,7 +71,38 @@ struct GlobalToRegLoaderImpl<Global, Reg, tl::Layout::ColMajor> {
     static constexpr int kWidth = Reg::kCols;
     static constexpr int kSubTileSize = 16;
 
-    DEVICE void operator()(const Global& src, Reg& dst) {}
+    DEVICE void operator()(const Global& src, Reg& dst) {
+        int lane_id = threadIdx.x % warpSize;
+        int warp_id = threadIdx.x / warpSize;
+        const int tile_size = kSubTileSize;
+        int cols = kWidth * kSubTileSize;
+        int col_offset = cols * warp_id;
+
+#pragma unroll
+        for (int i = 0; i < kWidth; ++i) {
+            int col = col_offset + i * tile_size + (lane_id / 4);
+#pragma unroll
+            for (int j = 0; j < kHeight; ++j) {
+                int row = j * tile_size + (lane_id % 4);
+                dst(j, i)(0, 0) = src(row + 0, col + 0);
+                dst(j, i)(1, 0) = src(row + 1, col + 0);
+                dst(j, i)(0, 1) = src(row + 8, col + 0);
+                dst(j, i)(1, 1) = src(row + 9, col + 0);
+            }
+        }
+
+#pragma unroll
+        for (int i = 0; i < kWidth; ++i) {
+            int col = col_offset + i * tile_size + (lane_id / 4);
+            for (int j = 0; j < kHeight; ++j) {
+                int row = j * tile_size + (lane_id % 4);
+                dst(j, i)(2, 0) = src(row + 0, col + 8);
+                dst(j, i)(3, 0) = src(row + 1, col + 8);
+                dst(j, i)(2, 1) = src(row + 8, col + 8);
+                dst(j, i)(3, 1) = src(row + 9, col + 8);
+            }
+        }
+    }
 };
 
 }  // namespace details
