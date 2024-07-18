@@ -142,7 +142,7 @@ struct GlobalToRegWarpLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
 #pragma unroll
             for (int j = 0; j < kColExec; ++j) {
                 // TODO: magic number.
-                int col = j * 16 + lane_id % 4;
+                int col = j * 16 + (lane_id % 4) * 2;
                 dst(i, j)(0, 0) =
                     data[(row + 0) * Global::kRowStride + col + 0];
                 dst(i, j)(0, 1) =
