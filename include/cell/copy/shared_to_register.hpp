@@ -115,8 +115,8 @@ struct SharedToRegLoaderImpl<Shared, kRowExec_, kColExec_, tl::Layout::ColMajor,
                 // (i, j).
                 data = src + (j * kTileRstride + i * kTileCstride);
 
-                // 3. advance the pointer to data accessed by the current thread
-                // inside a 16x128-bits `BaseTile`.
+                // 3. advance the pointer to data accessed by the current
+                // thread inside a 16x128-bits `BaseTile`.
                 data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
 
                 // issue the hardware-backed memory access instruction
@@ -181,8 +181,8 @@ struct RegToSharedStorerImpl<Shared, kRowExec_, kColExec_,
                 // 2. advance pointer to the 16x128-bits `BaseTile` indexed by
                 // (i, j).
                 data = dst + (i * kTileRstride + j * kTileCstride);
-                // 3. advance the pointer to data accessed by the current
-                // thread inside a 16x128-bits `Base Tile`.
+                // 3. advance the pointer to data accessed by the current thread
+                // inside a 16x128-bits `Base Tile`.
                 data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
 
                 // store the 16x16 `BaseTile` to shared memory
@@ -198,18 +198,12 @@ struct RegToSharedStorerImpl<Shared, kRowExec_, kColExec_,
 ///        register file using `ldmatrix`.
 template <typename Reg_, typename WarpLayout_, const WarpReuse kMode_,
           typename Base = warp::CopyBase<WarpLayout_, kMode_>>
+requires RegTileElemType<typename Reg_::DType>
 struct SharedToRegLoader : public Base {
     using Reg = Reg_;
 
-    static_assert(
-        std::is_same_v<typename Reg::DType, BaseHalfTileRowMajor> ||
-            std::is_same_v<typename Reg::DType, BaseHalfTileColMajor> ||
-            std::is_same_v<typename Reg::DType, BaseFloatTileRowMajor> ||
-            std::is_same_v<typename Reg::DType, BaseFloatTileColMajor>,
-        "unsupported data type for register file.");
-
     using DType = typename Reg::DType::DType;  // the element data type
-    using BaseTile = BaseTileShape<DType>;
+    using BaseShape = BaseTileShape<DType>;
 
     using WarpLayout = WarpLayout_;
     static constexpr WarpReuse kMode = kMode_;
@@ -233,9 +227,9 @@ struct SharedToRegLoader : public Base {
         // how many times a `BaseTile` is executed along the row and column
         // direction.
         static constexpr int kRowExec =
-            Base::template row_exec_count<BaseTile, Shared::kRows>();
+            Base::template row_exec_count<BaseShape, Shared::kRows>();
         static constexpr int kColExec =
-            Base::template col_exec_count<BaseTile, Shared::kCols>();
+            Base::template col_exec_count<BaseShape, Shared::kCols>();
 
         if (thread0()) {
             printf("kRowExec: %d, kColExec: %d\n", kRowExec, kColExec);
@@ -249,21 +243,18 @@ struct SharedToRegLoader : public Base {
     }
 };
 
-///@brief partial specialization for wmma 16x16x16, and LDSM32
+///@brief partial specialization for 16x16x16 wmma's output, and st.shared.f32
+///       to revert the data distrubution into an comphrehensive row-major
+///       matrix.
 template <typename Reg_, typename WarpLayout_,
           typename Base = warp::CopyBase<WarpLayout_, WarpReuse::Cont>>
+requires RegTileElemType<typename Reg_::DType>
 struct RegToSharedStorer : public Base {
     using Reg = Reg_;
 
-    static_assert(
-        std::is_same_v<typename Reg::DType, BaseHalfTileRowMajor> ||
-            std::is_same_v<typename Reg::DType, BaseHalfTileColMajor> ||
-            std::is_same_v<typename Reg::DType, BaseFloatTileRowMajor> ||
-            std::is_same_v<typename Reg::DType, BaseFloatTileColMajor>,
-        "unsupported data type for register file.");
-
-    using DType = typename Reg::DType::DType;  // the elementary data type
-    using BaseTile = BaseTileShape<DType>;
+    // get the elementary data type stored in the register tile.
+    using DType = typename Reg::DType::DType;
+    using BaseShape = BaseTileShape<DType>;
 
     using WarpLayout = WarpLayout_;
 
@@ -279,9 +270,9 @@ struct RegToSharedStorer : public Base {
         DType* dst_ptr = dst.mutable_data();  // pointer for shared memory tile
 
         static constexpr int kRowExec =
-            Base::template row_exec_count<BaseTile, Shared::kRows>();
+            Base::template row_exec_count<BaseShape, Shared::kRows>();
         static constexpr int kColExec =
-            Base::template col_exec_count<BaseTile, Shared::kCols>();
+            Base::template col_exec_count<BaseShape, Shared::kCols>();
 
         // 1. advance the pointer to input data to the current warp according to
         // warp reuse mode. During the store process, threads do not write to

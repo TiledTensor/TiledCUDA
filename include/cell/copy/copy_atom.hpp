@@ -1,6 +1,7 @@
 /**
  * @file copy_atom.hpp
- * @brief This file contains thin wrappers for hardware-baked copy instruction.
+ * @brief This file contains lightweight wrappers for hardware-accelerated copy
+ *        instructions.
  */
 #pragma once
 
