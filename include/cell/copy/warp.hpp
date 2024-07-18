@@ -1,13 +1,17 @@
+/**
+ * @file warp.hpp
+ * @brief This file contains **Warp** related operations for copy.
+ */
 #pragma once
 
 #include "cell/copy/constants.hpp"
 #include "cell/traits/base.hpp"
+#include "types/mod.hpp"
 
-namespace tiledcuda::cell::copy {
+namespace tiledcuda::cell::copy::warp {
 
 using namespace tiledcuda::cell::traits;
 
-namespace {  // anonymous namespace for helper functions
 template <const WarpReuse kMode>
 DEVICE int warp_offset_impl(int warp_row, int warp_col, int warp_rstride,
                             int warp_cstride) {
@@ -35,8 +39,6 @@ DEVICE int warp_offset_impl<WarpReuse::RowReuseCont>(int warp_row, int warp_col,
                                                      int warp_cstride) {
     return warp_row * warp_rstride;
 }
-
-}  // namespace
 
 template <typename WarpLayout_, const WarpReuse kMode_>
 struct CopyBase {
@@ -69,12 +71,13 @@ struct CopyBase {
 
     // @brief This function returns the number of times a `BaseTile` is executed
     //        along the direction of the shared memory row.
-    template <typename BaseTile, const int kRows>
+    template <typename Element, const int kRows>
     DEVICE static constexpr int row_exec_count() {
         const int kWarpsPerRow = tl::num_rows<WarpLayout>;
+        const int kBaseTileRow = BaseTileShape<Element>::row;
 
         static_assert(
-            kRows % BaseTile::kRows == 0,
+            kRows % kBaseTileRow == 0,
             "The current implementation requires that the number of shared "
             "memory rows be divisible by the base tile row.\n");
 
@@ -85,10 +88,10 @@ struct CopyBase {
             // by warps_per_row.
             case WarpReuse::ColReuseCont:
             case WarpReuse::ColReuseCir:
-                count = kRows / BaseTile::kRows;
+                count = kRows / kBaseTileRow;
                 break;
             default:  // Cont, Cir, RowReuseCont, RowReuseCir hit this case.
-                count = kRows / BaseTile::kRows / kWarpsPerRow;
+                count = kRows / kBaseTileRow / kWarpsPerRow;
                 break;
         }
 
@@ -100,12 +103,15 @@ struct CopyBase {
         return count;
     }
 
-    template <typename BaseTile, const int kCols>
+    template <typename Element, const int kCols>
     DEVICE static constexpr int col_exec_count() {
         const int kWarpsPerCol = tl::num_cols<WarpLayout>;
+        // FIXME(haruhi): This is a hotfix that 16 is a magic number for wmma
+        // tile. Address these isolated magic numbers.
+        const int kBaseTileCol = 16;
 
         static_assert(
-            kCols % BaseTile::kCols == 0,
+            kCols % kBaseTileCol == 0,
             "The number of shared memory columns must be divisible by the base "
             "tile column.\n");
 
@@ -116,10 +122,10 @@ struct CopyBase {
             // by `warps_per_col`.
             case WarpReuse::RowReuseCont:
             case WarpReuse::RowReuseCir:
-                count = kCols / BaseTile::kCols;
+                count = kCols / kBaseTileCol;
                 break;
             default:  // Cont, Cir, ColReuseCont, ColReuseCir hit this case.
-                count = kCols / BaseTile::kCols / kWarpsPerCol;
+                count = kCols / kBaseTileCol / kWarpsPerCol;
                 break;
         }
 
@@ -203,4 +209,4 @@ struct CopyBase {
     }
 };
 
-}  // namespace tiledcuda::cell::copy
+}  // namespace tiledcuda::cell::copy::warp

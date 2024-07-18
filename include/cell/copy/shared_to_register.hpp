@@ -1,7 +1,7 @@
 #pragma once
 
 #include "cell/copy/constants.hpp"
-#include "cell/copy/tile_transfer_base.hpp"
+#include "cell/copy/warp.hpp"
 #include "cell/traits/base.hpp"
 #include "types/mod.hpp"
 
@@ -48,7 +48,8 @@ struct LoadMatBase {
         uint32_t smem_addr =
             static_cast<uint32_t>(__cvta_generic_to_shared(src));
         asm volatile(
-            "ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, %3}, [%4];\n"
+            "ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, %3}, "
+            "[%4];\n"
             : "=r"(reg[0]), "=r"(reg[1]), "=r"(reg[2]), "=r"(reg[3])
             : "r"(smem_addr));
     }
@@ -89,11 +90,12 @@ struct SharedToRegLoaderImpl<Shared, kRowExec_, kColExec_, tl::Layout::RowMajor,
         const SrcType* data;
         for (int i = 0; i < kRowExec; ++i) {
             for (int j = 0; j < kColExec; ++j) {
-                // 2. advance pointer to the 16x16 `BaseTile` indexed by (i, j).
+                // 2. advance pointer to the 16x16 `BaseTile` indexed by (i,
+                // j).
                 data = src + (i * kTileRstride + j * kTileCstride);
 
-                // 3. advance the pointer to data accessed by the current thread
-                // inside a 16x16 `BaseTile`.
+                // 3. advance the pointer to data accessed by the current
+                // thread inside a 16x16 `BaseTile`.
                 data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
 
                 // issue the hardware-backed memory access instruction.
@@ -125,16 +127,18 @@ struct SharedToRegLoaderImpl<Shared, kRowExec_, kColExec_, tl::Layout::ColMajor,
 
     template <typename SrcType, typename DstType>
     DEVICE void operator()(const SrcType* src, DstType* dst) {
-        // transpose the lane position if the shared memory is in column-major.
-        // 16 threads are mapped to the strided dimension of the data while the
-        // 2 threads are mapped to the contiguous dimension of the data.
+        // transpose the lane position if the shared memory is in
+        // column-major. 16 threads are mapped to the strided dimension of
+        // the data while the 2 threads are mapped to the contiguous
+        // dimension of the data.
         int lane_row = this->lane_col_id();
         int lane_col = this->lane_row_id();
 
         const SrcType* data;
         for (int i = 0; i < kColExec; ++i) {
             for (int j = 0; j < kRowExec; ++j) {
-                // 2. advance pointer to the 16x16 `BaseTile` indexed by (i, j).
+                // 2. advance pointer to the 16x16 `BaseTile` indexed by (i,
+                // j).
                 data = src + (j * kTileRstride + i * kTileCstride);
 
                 // 3. advance the pointer to data accessed by the current
@@ -168,8 +172,9 @@ struct RegToSharedStorerImpl<Shared, kRowExec_, kColExec_, CopyInst::LoadS32> {
     // FIXME(haruhi): Try to find a better way to organize these
     // hardware-dependent magic numbers.
     // The number 2 is interpreted as follows: 8x8 block is a fundamental
-    // unit of a TCU instruction. Regardless of the output precision, a single
-    // execution of WMMA stores 2 elements in each thread's local register.
+    // unit of a TCU instruction. Regardless of the output precision, a
+    // single execution of WMMA stores 2 elements in each thread's local
+    // register.
     static constexpr int kStride = 2;
     static constexpr int kRstride =
         Shared::type == tl::Layout::RowMajor
@@ -209,11 +214,11 @@ struct RegToSharedStorerImpl<Shared, kRowExec_, kColExec_, CopyInst::LoadS32> {
 
         for (int i = 0; i < kRowExec; ++i) {
             for (int j = 0; j < kColExec; ++j) {
-                // 2. advance pointer to the 16x128-bits `BaseTile` indexed by
-                // (i, j).
+                // 2. advance pointer to the 16x128-bits `BaseTile` indexed
+                // by (i, j).
                 data = dst + (i * kTileRstride + j * kTileCstride);
-                // 3. advance the pointer to data accessed by the current thread
-                // inside a 16x128-bits `Base Tile`.
+                // 3. advance the pointer to data accessed by the current
+                // thread inside a 16x128-bits `Base Tile`.
                 data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
 
                 // store the 16x16 `BaseTile` to shared memory
@@ -255,7 +260,7 @@ struct RegToSharedStorerImpl<Shared, kRowExec_, kColExec_, CopyInst::LoadS32> {
 /// @brief partial specialization for loading data from shared memory to
 ///        register file using `ldmatrix`.
 template <typename Reg_, typename WarpLayout_, const WarpReuse kMode_,
-          typename Base = CopyBase<WarpLayout_, kMode_>>
+          typename Base = warp::CopyBase<WarpLayout_, kMode_>>
 struct SharedToRegLoader : public Base {
     using Reg = Reg_;
 
@@ -283,8 +288,8 @@ struct SharedToRegLoader : public Base {
                       "The current implementation requires Shared::kCols must "
                       "be divisible by tl::num_cols<WarpLayout>");
 
-        // 1. advance the pointer to input data to the current warp according to
-        // warp reuse mode.
+        // 1. advance the pointer to input data to the current warp
+        // according to warp reuse mode.
         const DType* src_ptr = src.data();
         src_ptr += Base::template get_warp_offset<Shared>();
 
@@ -309,7 +314,7 @@ struct SharedToRegLoader : public Base {
 
 ///@brief partial specialization for wmma 16x16x16, and LDSM32
 template <typename Reg_, typename WarpLayout_,
-          typename Base = CopyBase<WarpLayout_, WarpReuse::Cont>>
+          typename Base = warp::CopyBase<WarpLayout_, WarpReuse::Cont>>
 struct RegToSharedStorer : public Base {
     using Reg = Reg_;
 
@@ -341,10 +346,10 @@ struct RegToSharedStorer : public Base {
         static constexpr int kColExec =
             Base::template col_exec_count<BaseTile, Shared::kCols>();
 
-        // 1. advance the pointer to input data to the current warp according to
-        // warp reuse mode. During the store process, threads do not write
-        // to the same shared memory location, thus the warp reuse mode is
-        // set to `Cont`.
+        // 1. advance the pointer to input data to the current warp
+        // according to warp reuse mode. During the store process, threads
+        // do not write to the same shared memory location, thus the warp
+        // reuse mode is set to `Cont`.
         int offset = Base::template get_warp_offset<Shared>();
         dst_ptr += offset;
 
