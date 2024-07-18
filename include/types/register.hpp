@@ -47,4 +47,11 @@ using BaseHalfTileColMajor = RegTile<cutlass::half_t, tl::ColMajor<4, 2>>;
 
 using BaseFloatTileRowMajor = RegTile<float, tl::RowMajor<2, 4>>;
 using BaseFloatTileColMajor = RegTile<float, tl::ColMajor<4, 2>>;
+
+template <typename Element>
+using BaseTileRowMajor = RegTile<Element, tl::RowMajor<2, 4>>;
+
+template <typename Element>
+using BaseTileColMajor = RegTile<Element, tl::ColMajor<4, 2>>;
+
 }  // namespace tiledcuda::cell
