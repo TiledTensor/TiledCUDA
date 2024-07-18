@@ -27,8 +27,8 @@ __global__ void copy_g2r_row_major(Element* src) {
 
     if (threadIdx.x == 0) {
         printf("thread 0:\n");
-        for (int i = 0; i < kHeight; ++i) {
-            for (int j = 0; j < kWidth; ++j) {
+        for (int i = 0; i < DstTile::kRows; ++i) {
+            for (int j = 0; j < DstTile::kCols; ++j) {
                 dst_tile(i, j).dump_value();
             }
         }
@@ -36,8 +36,19 @@ __global__ void copy_g2r_row_major(Element* src) {
 
     if (threadIdx.x == 1) {
         printf("thread 1:\n");
-        for (int i = 0; i < kHeight; ++i) {
-            for (int j = 0; j < kWidth; ++j) {
+        for (int i = 0; i < DstTile::kRows; ++i) {
+            for (int j = 0; j < DstTile::kCols; ++j) {
+                dst_tile(i, j).dump_value();
+            }
+        }
+    }
+
+    __syncthreads();
+
+    if (threadIdx.x == 32) {
+        printf("thread 32:\n");
+        for (int i = 0; i < DstTile::kRows; ++i) {
+            for (int j = 0; j < DstTile::kCols; ++j) {
                 dst_tile(i, j).dump_value();
             }
         }
@@ -102,7 +113,7 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r_row_major_2) {
 
     copy_g2r_row_major<Element, tl::Layout::RowMajor, WarpLayout,
                        tl::RowMajor<1, 1>, copy::WarpReuse::RowReuseCont,
-                       height, width><<<1, 32>>>(d_src.data().get());
+                       height, width><<<1, 32 * 4>>>(d_src.data().get());
 }
 
 }  // namespace testing
