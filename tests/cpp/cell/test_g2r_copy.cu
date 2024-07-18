@@ -55,23 +55,25 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r_row_major_0) {
         <<<1, 32>>>(d_src.data().get());
 }
 
-// TEST(TestG2RegCopy, copy_2d_tile_g2r_row_major_1) {
-//     using Element = float;
+TEST(TestG2RegCopy, copy_2d_tile_g2r_row_major_1) {
+    using Element = float;
+    using WarpLayout = tl::RowMajor<1, 1>;
 
-//     const int height = 2;
-//     const int width = 2;
+    const int height = 2;
+    const int width = 2;
 
-//     int numel = height * width * 16 * 16;
-//     thrust::host_vector<Element> h_src(numel);
-//     for (int i = 0; i < numel; ++i) {
-//         h_src[i] = (float)i;
-//     }
+    int numel = height * width * 16 * 16;
+    thrust::host_vector<Element> h_src(numel);
+    for (int i = 0; i < numel; ++i) {
+        h_src[i] = (float)i;
+    }
 
-//     thrust::device_vector<Element> d_src = h_src;
+    thrust::device_vector<Element> d_src = h_src;
 
-//     copy_g2r_row_major<Element, tl::Layout::RowMajor, height, width>
-//         <<<1, 32>>>(d_src.data().get());
-// }
+    copy_g2r_row_major<Element, tl::Layout::RowMajor, WarpLayout,
+                       copy::WarpReuse::RowReuseCont, height, width>
+        <<<1, 32>>>(d_src.data().get());
+}
 
 }  // namespace testing
 
