@@ -59,7 +59,7 @@ __global__ void run_test_load(Copy& copy) {
     }
 }
 
-#define DEBUG
+// #define DEBUG
 template <typename Shared, typename Reg, typename Loader, typename Storer>
 __global__ void run_test_store(Loader& loader, Storer& storer) {
     using DType = typename Shared::DType;
