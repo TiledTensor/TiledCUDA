@@ -8,33 +8,44 @@ namespace cell {
 
 namespace tl = tile_layout;
 
-// TODO: a naive implementation for printing a tile.
-// improve it to be pretty printing and be compatible with more data types.
-template <typename DType, typename Layout>
-DEVICE void print_tile(const DType* data, const Layout& layout) {
+/// @brief Print a tile of single-precision floating point numbers. NOTE: when
+// use print in the device function, do add (if(thread0())) to avoid printing
+// multiple times by multiple threads. usage:
+// if(thread0()) {
+//   print_tile(data, layout);
+// }
+template <typename Layout>
+DEVICE void print_tile(const float* data, const Layout& layout) {
     for (int i = 0; i < tl::num_rows<Layout>; ++i) {
         for (int j = 0; j < tl::num_cols<Layout>; ++j) {
-            printf("%.1f, ", static_cast<float>(data[layout(i, j)]));
+            printf("%.1f, ", data[layout(i, j)]);
         }
         printf("\n");
     }
 }
 
-// @brief Print a tile of half-precision floating point numbers. NOTE: when use
-// print in the device function, do add (if(thread0())) to avoid printing
-// multiple times by multiple threads. usage:
-// if(thread0()) {
-//   print_tile(data, layout);
-// }
+/// @brief Print a tile of half-precision floating point numbers.
 template <typename Layout>
 DEVICE void print_tile(const cutlass::half_t* data, const Layout& layout) {
     const half* data_ = reinterpret_cast<const half*>(data);
 
     for (int i = 0; i < tl::num_rows<Layout>; ++i) {
         for (int j = 0; j < tl::num_cols<Layout>; ++j) {
-            printf("%.1f, ", __half2float(data_[layout(i, j)]));
+            printf("%.0f, ", __half2float(data_[layout(i, j)]));
         }
         printf("\n");
+    }
+}
+
+/// @brief Print a tile of RegTile. Since register tile is a nested array-like
+///        structure. print resigter tile hit this function.
+template <typename DType, typename Layout>
+DEVICE void print_tile(const DType* data, const Layout& layout) {
+    for (int i = 0; i < tl::num_rows<Layout>; ++i) {
+        for (int j = 0; j < tl::num_cols<Layout>; ++j) {
+            auto tile = data[layout(i, j)];
+            print_tile(tile.data(), tile.layout());
+        }
     }
 }
 
