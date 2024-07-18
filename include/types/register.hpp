@@ -46,4 +46,7 @@ class RegTile {
     Layout layout_;
 };
 
+using BaseTileHalfRowMajor = RegTile<cutlass::half_t, tl::RowMajor<2, 4>>;
+using BaseTileHAlfColMajor = RegTile<float, tl::ColMajor<4, 2>>;
+
 }  // namespace tiledcuda::cell
