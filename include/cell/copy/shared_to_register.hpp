@@ -15,7 +15,7 @@ template <typename Element>
 struct LoadMatBase {
     using DType = Element;
 
-    using ThreadLdmatrix = tile_layout::ColMajor<16, 2>;
+    using ThreadLayout = tile_layout::ColMajor<16, 2>;
 
     static constexpr int kAccessInBits = 128;  // 128 bits
     static constexpr int kElmentBits = sizeof(DType) * 8;
@@ -33,24 +33,35 @@ struct LoadMatBase {
     //        if threadIdx.x is 43, then its lane row is 8, lane col is 0.
     DEVICE int lane_row_id() {
         int lane_id = threadIdx.x % warpSize;
-        return lane_id % tl::num_rows<ThreadLdmatrix>;
+        return lane_id % tl::num_rows<ThreadLayout>;
     }
 
     // @brief returns the lane col of the current thread within a warp.
     DEVICE int lane_col_id() {
         int lane_id = threadIdx.x % warpSize;
-        return lane_id / tl::num_rows<ThreadLdmatrix>;
+        return lane_id / tl::num_rows<ThreadLayout>;
     }
 
     /// @brief a thin wrapper for executing a single ldmatrix instruction.
+    template <const int kRows, const int kCols>
     DEVICE void ldmatrix(const DType* src, DType* dst) {
         uint32_t* reg = reinterpret_cast<uint32_t*>(dst);
         uint32_t smem_addr =
             static_cast<uint32_t>(__cvta_generic_to_shared(src));
-        asm volatile(
-            "ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, %3}, [%4];\n"
-            : "=r"(reg[0]), "=r"(reg[1]), "=r"(reg[2]), "=r"(reg[3])
-            : "r"(smem_addr));
+
+        for (int i = 0; i < kRows; ++i) {
+            for (int j = 0; j < kCols; ++j) {
+                asm volatile(
+                    "ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, "
+                    "%3}, "
+                    "[%4];\n"
+                    : "=r"(reg[0]), "=r"(reg[1]), "=r"(reg[2]), "=r"(reg[3])
+                    : "r"(smem_addr));
+
+                reg += 4;
+                smem_addr += 1;
+            }
+        }
     }
 };
 
@@ -58,7 +69,7 @@ template <typename Shared, const int kRowExec, const int kColExec,
           const tl::Layout kType, CopyInst kCopyInst>
 struct SharedToRegLoaderImpl {
     template <typename SrcType, typename DstType>
-    DEVICE void operator()(const SrcType* src, DstType* dst);
+    DEVICE void operator()(const SrcType* src, DstType& dst);
 };
 
 /// @brief partial specialization for row-major shared memory tile.
@@ -69,12 +80,15 @@ struct SharedToRegLoaderImpl<Shared, kRowExec_, kColExec_, tl::Layout::RowMajor,
     using SrcType = Shared::DType;
     using BaseShape = BaseTileShape<SrcType>;
 
+    // get name alias for base class
+    using LoadMat = LoadMatBase<typename Shared::DType>;
+
     // strides to iterate over each 16x16 `BaseTile`.
     static constexpr int kTileRstride = BaseShape::kRows * Shared::kRowStride;
     static constexpr int kTileCstride = BaseShape::kCols;
 
     // row stride and col stride for a thread in a warp
-    static constexpr int kStride = LoadMatBase<SrcType>::kNumPerAccess;
+    static constexpr int kStride = LoadMat::kNumPerAccess;
     static constexpr int kLaneRstride = Shared::kRowStride;
     static constexpr int kLaneCstride = kStride;
 
@@ -85,6 +99,16 @@ struct SharedToRegLoaderImpl<Shared, kRowExec_, kColExec_, tl::Layout::RowMajor,
     DEVICE void operator()(const SrcType* src, DstType& dst) {
         int lane_row = this->lane_row_id();
         int lane_col = this->lane_col_id();
+
+        static constexpr int kRowScale =
+            BaseShape::kRows / tl::num_rows<typename LoadMat::ThreadLayout>;
+        static constexpr int kColScale =
+            BaseShape::kCols / (LoadMat::kNumPerAccess *
+                                tl::num_cols<typename LoadMat::ThreadLayout>);
+
+        if (thread0()) {
+            printf("kRowScale: %d, kColScale: %d\n", kRowScale, kColScale);
+        }
 
         const SrcType* data;
         for (int i = 0; i < kRowExec; ++i) {
@@ -97,7 +121,8 @@ struct SharedToRegLoaderImpl<Shared, kRowExec_, kColExec_, tl::Layout::RowMajor,
                 data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
 
                 // issue the hardware-backed memory access instruction.
-                this->ldmatrix(data, dst(i, j).mutable_data());
+                this->ldmatrix<kRowScale, kColScale>(data,
+                                                     dst(i, j).mutable_data());
             }
         }
     }
@@ -111,20 +136,29 @@ struct SharedToRegLoaderImpl<Shared, kRowExec_, kColExec_, tl::Layout::ColMajor,
     using SrcType = Shared::DType;
     using BaseShape = BaseTileShape<SrcType>;
 
+    // get name alias for base class
+    using LoadMat = LoadMatBase<typename Shared::DType>;
+
     // strides to iterate over each 16x128-bits `BaseTile`.
     const int kTileRstride = BaseShape::kRows;
     const int kTileCstride = BaseShape::kCols * Shared::kColStride;
 
     // row stride and col stride for a thread in a warp
-    static constexpr int kStride = LoadMatBase<SrcType>::kNumPerAccess;
+    static constexpr int kStride = LoadMat::kNumPerAccess;
     const int kLaneRstride = kStride;
     const int kLaneCstride = Shared::kColStride;
 
     static constexpr int kRowExec = kRowExec_;
     static constexpr int kColExec = kColExec_;
 
+    static constexpr int kRowScale =
+        BaseShape::kRows /
+        (LoadMat::kNumPerAccess * tl::num_cols<typename LoadMat::ThreadLayout>);
+    static constexpr int kColScale =
+        BaseShape::kCols / tl::num_rows<typename LoadMat::ThreadLayout>;
+
     template <typename SrcType, typename DstType>
-    DEVICE void operator()(const SrcType* src, DstType* dst) {
+    DEVICE void operator()(const SrcType* src, DstType& dst) {
         // transpose the lane position if the shared memory is in column-major.
         // 16 threads are mapped to the strided dimension of the data while the
         // 2 threads are mapped to the contiguous dimension of the data.
@@ -138,12 +172,13 @@ struct SharedToRegLoaderImpl<Shared, kRowExec_, kColExec_, tl::Layout::ColMajor,
                 // (i, j).
                 data = src + (j * kTileRstride + i * kTileCstride);
 
-                // 3. advance the pointer to data accessed by the current thread
-                // inside a 16x128-bits `BaseTile`.
+                // 3. advance the pointer to data accessed by the current
+                // thread inside a 16x128-bits `BaseTile`.
                 data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
 
                 // issue the hardware-backed memory access instruction
-                this->ldmatrix(data, dst(i, j).mutable_data());
+                this->ldmatrix<kRowScale, kColScale>(data,
+                                                     dst(i, j).mutable_data());
             }
         }
     }

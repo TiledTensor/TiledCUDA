@@ -8,7 +8,6 @@ namespace tiledcuda {
 
 using namespace cell;
 using namespace copy;
-
 namespace tl = tile_layout;
 namespace traits = cell::traits;
 
@@ -97,21 +96,14 @@ __global__ void run_test_store(Loader& loader, Storer& storer) {
 
 namespace testing {
 
-TEST(TestShared2Reg, operand_A) {
-    // the load mode for loading operand A in gemm
+TEST(TestShared2Reg, operand_A) {  // load mode for loading operand A in gemm
     using Element = cutlass::half_t;
 
     using WarpLayout = tl::RowMajor<2, 2>;
     const int kThreads = tl::get_numel<WarpLayout> * 32;
 
     using Shared = SharedTile<Element, tl::RowMajor<64, 32>>;
-
-    // Execute the 16x16 BaseTile two times along the row dimension and once
-    // along the column dimension. The resulting warp tile has a shape of
-    // [32, 16].
-    // Since there are two warps in a thread block, the shared memory tile shape
-    // is [64, 32].
-    using Reg = RegTile<BaseHalfTileRowMajor, tl::RowMajor<2, 1>>;
+    using Reg = RegTile<BaseHalfTileRowMajor, tl::RowMajor<2, 2>>;
 
     using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::RowReuseCont>;
     Copy copy;
@@ -125,8 +117,7 @@ TEST(TestShared2Reg, operand_A) {
     cudaDeviceSynchronize();
 }
 
-TEST(TestShared2Reg, operand_B) {
-    // the load mode for loading operand B in gemm
+TEST(TestShared2Reg, operand_B) {  // load mode for loading operand B in gemm
     using Element = cutlass::half_t;
 
     using WarpLayout = tl::RowMajor<2, 2>;
@@ -134,13 +125,7 @@ TEST(TestShared2Reg, operand_B) {
 
     // a 32x64 row-major shared tile is equivalent to a 64x32 col-major tile
     using Shared = SharedTile<Element, tl::RowMajor<32, 64>>;
-
-    // Execute the 16x16 BaseTile two times along the row dimension and once
-    // along the column dimension. The resulting warp tile has a shape of
-    // [32, 16].
-    // Since there are two warps in a thread block, the shared memory tile shape
-    // is [64, 32].
-    using Reg = RegTile<BaseHalfTileColMajor, tl::ColMajor<2, 1>>;
+    using Reg = RegTile<BaseHalfTileColMajor, tl::ColMajor<2, 2>>;
 
     using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::ColReuseCont>;
     Copy copy;
