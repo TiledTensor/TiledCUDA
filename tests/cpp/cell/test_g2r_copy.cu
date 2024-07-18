@@ -20,8 +20,7 @@ __global__ void copy_g2r_row_major(Element* src) {
     SrcTile src_tile(src);
     DstTile dst_tile;
 
-    cell::copy::GlobalToRegWarpLoader<SrcTile, DstTile, WarpLayout, kMode>
-        loader;
+    cell::copy::GlobalToRegLoader<SrcTile, DstTile, WarpLayout, kMode> loader;
     loader(src_tile, dst_tile);
     __syncthreads();
 
