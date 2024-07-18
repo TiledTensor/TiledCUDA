@@ -25,6 +25,8 @@ class RegTile {
 
     DEVICE const DType* data() const { return (DType*)data_; }
 
+    DEVICE const Layout& layout() const { return layout_; }
+
     // for write access
     DEVICE DType& operator()(int x, int y) { return data_[layout_(x, y)]; }
 
