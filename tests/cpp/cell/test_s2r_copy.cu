@@ -108,8 +108,9 @@ TEST(TestShared2Reg, operand_A) {
 
     // Execute the 16x16 BaseTile two times along the row dimension and once
     // along the column dimension. The resulting warp tile has a shape of
-    // [32, 16]. Since there are two warps in a thread block, the shared memory
-    // tile shape is [64, 32].
+    // [32, 16].
+    // Since there are two warps in a thread block, the shared memory tile shape
+    // is [64, 32].
     using Reg = RegTile<BaseHalfTileRowMajor, tl::RowMajor<2, 1>>;
 
     using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::RowReuseCont>;
@@ -136,8 +137,9 @@ TEST(TestShared2Reg, operand_B) {
 
     // Execute the 16x16 BaseTile two times along the row dimension and once
     // along the column dimension. The resulting warp tile has a shape of
-    // [32, 16]. Since there are two warps in a thread block, the shared memory
-    // tile shape is [64, 32].
+    // [32, 16].
+    // Since there are two warps in a thread block, the shared memory tile shape
+    // is [64, 32].
     using Reg = RegTile<BaseHalfTileColMajor, tl::ColMajor<2, 1>>;
 
     using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::ColReuseCont>;
@@ -152,29 +154,29 @@ TEST(TestShared2Reg, operand_B) {
     cudaDeviceSynchronize();
 }
 
-// TEST(TestReg2Shared, operand_C) {
-//     // using Element = cutlass::half_t;
+TEST(TestReg2Shared, operand_C) {
+    using Element = cutlass::half_t;
 
-//     using WarpLayout = tl::RowMajor<1, 1>;
-//     const int kThreads = tl::get_numel<WarpLayout> * 32;
+    using WarpLayout = tl::RowMajor<1, 1>;
+    const int kThreads = tl::get_numel<WarpLayout> * 32;
 
-//     using Shared = SharedTile<Element, tl::RowMajor<16, 16>>;
-//     using Reg = RegTile<Element, tl::RowMajor<2, 4>>;
+    using Shared = SharedTile<Element, tl::RowMajor<16, 16>>;
+    using Reg = RegTile<BaseHalfTileRowMajor, tl::RowMajor<1, 1>>;
 
-//     using Loader = SharedToRegLoader<Reg, WarpLayout, WarpReuse::Cont>;
-//     Loader loader;
+    using Loader = SharedToRegLoader<Reg, WarpLayout, WarpReuse::Cont>;
+    Loader loader;
 
-//     using Storer = RegToSharedStorer<Reg, WarpLayout>;
-//     Storer storer;
+    using Storer = RegToSharedStorer<Reg, WarpLayout>;
+    Storer storer;
 
-//     dim3 dim_grid(1, 1, 1);
-//     dim3 dim_block(kThreads, 1, 1);
-//     int shm_size = Shared::kNumel * sizeof(Element);
+    dim3 dim_grid(1, 1, 1);
+    dim3 dim_block(kThreads, 1, 1);
+    int shm_size = Shared::kNumel * sizeof(Element);
 
-//     run_test_store<Shared, Reg, Loader, Storer>
-//         <<<dim_grid, dim_block, shm_size>>>(loader, storer);
-//     cudaDeviceSynchronize();
-// }
+    run_test_store<Shared, Reg, Loader, Storer>
+        <<<dim_grid, dim_block, shm_size>>>(loader, storer);
+    cudaDeviceSynchronize();
+}
 
 }  // namespace testing
 }  // namespace tiledcuda
