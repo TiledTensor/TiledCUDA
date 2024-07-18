@@ -37,8 +37,8 @@ DEVICE void print_tile(const cutlass::half_t* data, const Layout& layout) {
     }
 }
 
-/// @brief Print a tile of RegTile. Since register tile is a nested array-like
-///        structure. print resigter tile hit this function.
+/// @brief Print a register tile. Since register tile is a nested array-like
+///        structure. printing resigter tile hits this function.
 template <typename DType, typename Layout>
 DEVICE void print_tile(const DType* data, const Layout& layout) {
     for (int i = 0; i < tl::num_rows<Layout>; ++i) {
