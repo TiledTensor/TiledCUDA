@@ -14,7 +14,6 @@ namespace tl = tiledcuda::cell::tile_layout;
 template <typename Element>
 struct LoadMatBase {
     using DType = Element;
-
     using ThreadLayout = tile_layout::ColMajor<16, 2>;
 
     static constexpr int kAccessInBits = 128;  // 128 bits

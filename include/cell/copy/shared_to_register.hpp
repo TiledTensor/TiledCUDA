@@ -216,10 +216,6 @@ struct SharedToRegLoader : public Base {
         static constexpr int kColExec =
             Base::template col_exec_count<BaseShape, Shared::kCols>();
 
-        if (thread0()) {
-            printf("kRowExec: %d, kColExec: %d\n", kRowExec, kColExec);
-        }
-
         using Loader =
             detail::SharedToRegLoaderImpl<Shared, Reg, kRowExec, kColExec,
                                           Shared::type, CopyInst::kLoadMat>;
