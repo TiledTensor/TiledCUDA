@@ -87,6 +87,7 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
     static constexpr int kTileRstride =
         BaseTileShape<DType>::row * Global::kRowStride;
     static constexpr int kTileCstride = BaseTileShape<DType>::col;
+    static constexpr int kTileSize = BaseTileShape<DType>::kTileSize;
 
     // row stride and col stride for a thread in a warp
     static constexpr int kStride = traits::TraitsBase<DType>::kNumPerAccess;
@@ -103,11 +104,11 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
 #pragma unroll
         for (int i = 0; i < kRowExec; ++i) {
             // TODO: magic number.
-            int row = i * 16 + lane_id / 4;
+            int row = i * kTileSize + lane_id / 4;
 #pragma unroll
             for (int j = 0; j < kColExec; ++j) {
                 // TODO: magic number.
-                int col = j * 16 + (lane_id % 4) * 2;
+                int col = j * kTileSize + (lane_id % 4) * 2;
 
                 data = src + row * Global::kRowStride + col;
                 using Loader = GlobalToRegMatLoader<Global, BaseTile,
@@ -180,7 +181,6 @@ struct GlobalToRegLoader : public Base {
         static constexpr int kColExec =
             Base::template col_exec_count<BaseTile, Global::kCols>();
 
-        // TODO: Load data from global memory to register.
         using Loader = GlobalToRegLoaderImpl<Global, Reg, kRowExec, kColExec,
                                              Global::type>;
         Loader loader;
