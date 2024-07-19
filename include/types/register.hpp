@@ -44,12 +44,6 @@ class RegTile {
     Layout layout_;
 };
 
-using BaseHalfTileRowMajor = RegTile<cutlass::half_t, tl::RowMajor<2, 4>>;
-using BaseHalfTileColMajor = RegTile<cutlass::half_t, tl::ColMajor<4, 2>>;
-
-using BaseFloatTileRowMajor = RegTile<float, tl::RowMajor<2, 4>>;
-using BaseFloatTileColMajor = RegTile<float, tl::ColMajor<4, 2>>;
-
 template <typename Element>
 using BaseTileRowMajor = RegTile<Element, tl::RowMajor<2, 4>>;
 
