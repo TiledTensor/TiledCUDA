@@ -6,6 +6,7 @@
 
 #include "cell/copy/constants.hpp"
 #include "cell/traits/base.hpp"
+#include "types/mod.hpp"
 
 namespace tiledcuda::cell::copy::warp {
 
