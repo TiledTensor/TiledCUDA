@@ -9,6 +9,7 @@ namespace tiledcuda::cell::copy {
 
 using namespace tiledcuda::cell::traits;
 using namespace tiledcuda::cell::copy::atom;
+namespace tl = tile_layout;
 
 namespace detail {
 
@@ -53,10 +54,6 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
         static constexpr int kColScale =
             BaseShape::kCols / (LoadMat::kNumPerAccess *
                                 tl::num_cols<typename LoadMat::ThreadLayout>);
-
-        if (thread0()) {
-            printf("kRowScale: %d, kColScale: %d\n", kRowScale, kColScale);
-        }
 
         const DType* data;
         for (int i = 0; i < kRowExec; ++i) {
@@ -145,7 +142,8 @@ template <typename Shared, typename Reg_, const int kRowExec_,
 struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
                              CopyInst::kStoreShared32>
     : public StoreMmmaBase<Shared> {
-    using StoreBase = StoreMmmaBase<Shared>;
+    using Base = StoreMmmaBase<Shared>;
+
     using Reg = Reg_;
     using DType = typename Shared::DType;
     using BaseShape = BaseTileShape<DType>;
@@ -165,13 +163,13 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
 
     // Given the lane position of the current thread, calculate the strides
     // needed to address the data within the 16x16 `BaseTile` for the current
-    // thread. Thes strides corresponds to the thread layout and specific
+    // thread. These strides corresponds to the thread layout and specific
     // instruction used.
     static constexpr int kLaneRstride = Shared::type == tl::Layout::RowMajor
                                             ? Shared::kRowStride
-                                            : StoreBase::kStride;
+                                            : Base::kElemPerSeg;
     static constexpr int kLaneCstride = Shared::type == tl::Layout::RowMajor
-                                            ? StoreBase::kStride
+                                            ? Base::kElemPerSeg
                                             : Shared::kColStride;
 
     DEVICE void operator()(const Reg& src, DType* dst) {
@@ -189,7 +187,7 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
                 data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
 
                 // store the 16x16 `BaseTile` to shared memory
-                this->store_base_tile(src(i, j).data(), data);
+                this->store_base_tile(src(i, j), data);
             }
         }
     };
@@ -246,9 +244,9 @@ struct SharedToRegLoader : public Base {
     }
 };
 
-///@brief partial specialization for 16x16x16 wmma's output, and st.shared.f32
-///       to revert the data distrubution into an comphrehensive row-major
-///       matrix.
+/// @brief partial specialization for 16x16x16 wmma's output, and st.shared.f32
+///        to revert the data distrubution into an comphrehensive row-major
+///        matrix.
 template <typename Reg_, typename WarpLayout_,
           typename Base = warp::CopyBase<WarpLayout_, WarpReuse::Cont>>
 requires RegTileElemType<typename Reg_::DType>

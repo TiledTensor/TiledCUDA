@@ -9,7 +9,6 @@ namespace tiledcuda {
 using namespace cell;
 using namespace copy;
 namespace tl = tile_layout;
-namespace traits = cell::traits;
 
 namespace {
 
@@ -49,17 +48,8 @@ __global__ void run_test_load(Copy& copy) {
     Reg r_tile;
 
     copy(s_tile, r_tile);
-
-    if (thread0()) {
-        // printf("shared tile:\n");
-        // s_tile.dump_value();
-
-        printf("register tile:\n");
-        r_tile.dump_value();
-    }
 }
 
-// #define DEBUG
 template <typename Shared, typename Reg, typename Loader, typename Storer>
 __global__ void run_test_store(Loader& loader, Storer& storer) {
     using DType = typename Shared::DType;

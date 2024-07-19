@@ -21,28 +21,32 @@ struct LoadMatBase {
     static constexpr int kElmentBits = sizeof(DType) * 8;
     static constexpr int kNumPerAccess = kAccessInBits / kElmentBits;
 
-    // @brief returns the lane row of the current thread within a warp.
-    //        For an example, in ldmatrix, threads in a warp are arranged as
-    //        follows (a 16 x 2 column-major): |  | 0 |  1|
-    //        |--|---|---|
-    //        |0 | 0 | 16|
-    //        |1 | 2 | 17|
-    //        |2 | 4 | 18|
-    //        |  |...|...|
-    //        |15| 15| 31|
-    //        if threadIdx.x is 43, then its lane row is 8, lane col is 0.
+    /// @brief returns the lane row of the current thread within a warp.
+    //         For an example, in ldmatrix, threads in a warp are arranged as
+    //         follows (a 16 x 2 column-major):
+    //
+    // .       |  | 0 |  1|
+    //         |--|---|---|
+    //         |0 | 0 | 16|
+    //         |1 | 2 | 17|
+    //         |2 | 4 | 18|
+    //         |  |...|...|
+    //         |15| 15| 31|
+    //
+    //         if threadIdx.x is 43, then its lane row is 8, lane col is 0.
     DEVICE int lane_row_id() {
         int lane_id = threadIdx.x % warpSize;
         return lane_id % tl::num_rows<ThreadLayout>;
     }
 
-    // @brief returns the lane col of the current thread within a warp.
+    /// @brief returns the lane col of the current thread within a warp.
     DEVICE int lane_col_id() {
         int lane_id = threadIdx.x % warpSize;
         return lane_id / tl::num_rows<ThreadLayout>;
     }
 
-    /// @brief a thin wrapper for executing a single ldmatrix instruction.
+    /// @brief a thin wrapper for executing ldmatrix instruction to load a
+    ///        `16x16` tile to register.
     template <const int kRows, const int kCols>
     DEVICE void ldmatrix(const DType* src, DType* dst) {
         uint32_t* reg = reinterpret_cast<uint32_t*>(dst);
@@ -67,22 +71,29 @@ struct LoadMatBase {
 template <typename Shared>
 struct StoreMmmaBase {
     using DType = Shared::DType;
+
+    // the thread layout for wmma's output tile.
     using ThreadLayout = tile_layout::RowMajor<8, 4>;
 
-    // FIXME(haruhi): Try to find a better way to organize these
-    // hardware-dependent magic numbers.
-    // The number 2 is interpreted as follows: 8x8 block is a fundamental
-    // unit of a TCU instruction. Regardless of the output precision, a single
-    // execution of WMMA stores 2 elements in each thread's local register.
-    static constexpr int kStride = 2;
+    // in the output of a wmma tile, each thread stores four segments in 2x2
+    // layout, and each fragment contains 2 elements
+    static constexpr int kElemPerSeg = 2;
+    static constexpr int kSegRows = 2;
+    static constexpr int kSegCols = 2;
+    static constexpr int kElemPerRow = kElemPerSeg * kSegCols;
+
+    // Each thread stores 8 numbers in a 16x16 `BaseTile`. These 8 numbers are
+    // split into 4 segments, with each segment containing 2 numbers. `kRStride`
+    // and `kCStride` calculate the row and column strides, respectively, when
+    // iterating over these 4 segments in shared memory.
     static constexpr int kRstride =
         Shared::type == tl::Layout::RowMajor
             ? tl::num_rows<ThreadLayout> * Shared::kRowStride
             : tl::num_rows<ThreadLayout>;
     static constexpr int kCstride =
         Shared::type == tl::Layout::RowMajor
-            ? kStride * tl::num_cols<ThreadLayout>
-            : kStride * tl::num_cols<ThreadLayout> * Shared::kColStride;
+            ? kElemPerSeg * tl::num_cols<ThreadLayout>
+            : kElemPerSeg * tl::num_cols<ThreadLayout> * Shared::kColStride;
 
     DEVICE int lane_row_id() {
         return (threadIdx.x % warpSize) / tl::num_cols<ThreadLayout>;
@@ -92,20 +103,25 @@ struct StoreMmmaBase {
         return (threadIdx.x % warpSize) % tl::num_cols<ThreadLayout>;
     }
 
-    // TODO: Improve this is a naive implementation that does not use
-    // vectorized access in future. To use vectorized access, we need to
-    // know the return type of WMMA.
-    DEVICE void store_base_tile(const DType* src, DType* dst) {
+    /// @brief: Store the `16x16` tensor core WMMA output register tile and
+    ///         convert it into a comprehensive shared memory layout (row-major
+    ///         or column-major).
+    template <typename RegTile>
+    DEVICE void store_base_tile(const RegTile& src, DType* dst) {
+        const DType* data = src.data();
+
         int src_offset, dst_offset;
-        // TODO(haruhi): comments the magic number
-        for (int i = 0; i < 2; ++i) {
-            for (int j = 0; j < 2; ++j) {
-                src_offset = i * 4 + j * 2;
+        for (int i = 0; i < kSegRows; ++i) {
+            for (int j = 0; j < kSegCols; ++j) {
+                src_offset = RegTile::kType == tl::Layout::RowMajor
+                                 ? i * kElemPerRow + j * kElemPerSeg
+                                 : j * kElemPerRow + i * kElemPerSeg;
+
                 // Be cautious, j and i are swapped here. DONOT change this
                 dst_offset = j * kRstride + i * kCstride;
 
-                dst[dst_offset] = src[src_offset];
-                dst[dst_offset + 1] = src[src_offset + 1];
+                dst[dst_offset] = data[src_offset];
+                dst[dst_offset + 1] = data[src_offset + 1];
             }
         }
     }

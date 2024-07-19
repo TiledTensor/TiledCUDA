@@ -17,6 +17,8 @@ class RegTile {
     static constexpr int kRows = tl::num_rows<Layout>;
     static constexpr int kCols = tl::num_cols<Layout>;
 
+    static constexpr tl::Layout kType = tl::layout_type<Layout>;
+
     DEVICE RegTile() : layout_(Layout{}) {
         memset((void*)data_, 0, sizeof(data_));
     }
