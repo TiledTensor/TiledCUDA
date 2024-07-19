@@ -50,7 +50,6 @@ __global__ void run_test_load(Copy& copy) {
     copy(s_tile, r_tile);
 }
 
-#define DEBUG
 template <typename Shared, typename Reg, typename Loader, typename Storer>
 __global__ void run_test_store(Loader& loader, Storer& storer) {
     using DType = typename Shared::DType;
@@ -87,15 +86,21 @@ __global__ void run_test_store(Loader& loader, Storer& storer) {
 
 namespace testing {
 
-TEST(TestShared2Reg, operand_A) {
-    // the load mode for loading operand B in gemm
+TEST(TestShared2Reg, operand_A) {  // load mode for loading operand A in gemm
     using Element = cutlass::half_t;
 
     using WarpLayout = tl::RowMajor<2, 2>;
     const int kThreads = tl::get_numel<WarpLayout> * 32;
 
     using Shared = SharedTile<Element, tl::RowMajor<64, 32>>;
-    using Reg = RegTile<Element, tl::RowMajor<4, 8>>;
+    // Each thread accesses 2x4 elements (the shape of `BaseHalfTileRowMajor`)
+    // within a 16x16 `BaseTile`. These 2x4 elements are accessed 2x2 times
+    // along each dimension, contributing to the final register tile handled by
+    // a single thread.
+    using Reg = RegTile<BaseTileRowMajor<Element>, tl::RowMajor<2, 2>>;
+
+    // In the `RowReuseCont` mode, warps in the same row repeatedly access the
+    // same data.
     using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::RowReuseCont>;
     Copy copy;
 
@@ -108,8 +113,7 @@ TEST(TestShared2Reg, operand_A) {
     cudaDeviceSynchronize();
 }
 
-TEST(TestShared2Reg, operand_B) {
-    // the load mode for loading operand B in gemm
+TEST(TestShared2Reg, operand_B) {  // load mode for loading operand B in gemm
     using Element = cutlass::half_t;
 
     using WarpLayout = tl::RowMajor<2, 2>;
@@ -118,8 +122,13 @@ TEST(TestShared2Reg, operand_B) {
     // a 32x64 row-major shared tile is equivalent to a 64x32 col-major tile
     using Shared = SharedTile<Element, tl::RowMajor<32, 64>>;
 
-    using Reg = RegTile<Element, tl::RowMajor<4, 8>>;
-
+    // Each thread accesses 4x2 elements (the shape of `BaseHalfTileRowMajor`)
+    // within a 16x16 `BaseTile`. These 4x2 elements are accessed 2x2 times
+    // along each dimension, contributing to the final register tile handled by
+    // a single thread.
+    using Reg = RegTile<BaseTileColMajor<Element>, tl::ColMajor<2, 2>>;
+    // In the `ColReuseCont` mode, warps in the same column repeatedly access
+    // the same data.
     using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::ColReuseCont>;
     Copy copy;
 
@@ -139,7 +148,7 @@ TEST(TestReg2Shared, operand_C) {
     const int kThreads = tl::get_numel<WarpLayout> * 32;
 
     using Shared = SharedTile<Element, tl::RowMajor<16, 16>>;
-    using Reg = RegTile<Element, tl::RowMajor<2, 4>>;
+    using Reg = RegTile<BaseTileRowMajor<Element>, tl::RowMajor<1, 1>>;
 
     using Loader = SharedToRegLoader<Reg, WarpLayout, WarpReuse::Cont>;
     Loader loader;

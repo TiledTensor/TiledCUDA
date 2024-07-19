@@ -17,6 +17,8 @@ class RegTile {
     static constexpr int kRows = tl::num_rows<Layout>;
     static constexpr int kCols = tl::num_cols<Layout>;
 
+    static constexpr tl::Layout kType = tl::layout_type<Layout>;
+
     DEVICE RegTile() : layout_(Layout{}) {
         memset((void*)data_, 0, sizeof(data_));
     }
@@ -49,5 +51,4 @@ using BaseTileRowMajor = RegTile<Element, tl::RowMajor<2, 4>>;
 
 template <typename Element>
 using BaseTileColMajor = RegTile<Element, tl::ColMajor<4, 2>>;
-
 }  // namespace tiledcuda::cell

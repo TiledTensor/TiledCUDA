@@ -15,11 +15,6 @@ if(WITH_TESTING)
       continue() # the unittest for gemm requires extra dependencies
     endif()
 
-    # FIXME(haruhi): recover these commented unittest after refactor.
-    if("${TEST_NAME}" STREQUAL "test_s2r_copy")
-      continue() # the unittest for gemm requires extra dependencies
-    endif()
-
     cuda_test(${TEST_NAME} SRCS "${CMAKE_CURRENT_SOURCE_DIR}/${FILE_PATH}")
   endforeach()
 

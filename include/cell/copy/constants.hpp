@@ -5,10 +5,11 @@
 namespace tiledcuda::cell::copy {
 
 enum class CopyInst {
-    LoadMat = 0,   // ldmatrix for loading data from shared memory to register.
-    StoreMat = 1,  // stmatrix for storing data from register to shared memory.
-    LoadS32 = 2,   // ldsm32 for loading 32-bit data from shared memory.
-    LoadS128 = 3   // ldsm128 for loading 128-bit data from shared memory.
+    kLoadMat = 0,   // ldmatrix for loading data from shared memory to register.
+    kStoreMat = 1,  // stmatrix for storing data from register to shared memory.
+    kLoadShared32 = 2,   // ldsm32 for loading 32-bit data from shared memory.
+    kLoadShared128 = 3,  // ldsm128 for loading 128-bit data from shared memory.
+    kStoreShared32 = 4,  // stsm32 for storing 32-bit data to shared memory.
 };
 
 enum class WarpReuse {
