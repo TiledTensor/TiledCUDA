@@ -80,6 +80,7 @@ struct GlobalToRegLoader : public Base {
     using Global = Global_;
     using Reg = Reg_;
     using DType = typename Global::DType;
+    using BaseTile = typename Reg::DType;
 
     using WarpLayout = WarpLayout_;
     static constexpr WarpReuse kMode = kMode_;
@@ -94,9 +95,9 @@ struct GlobalToRegLoader : public Base {
         // how many times a `BaseTile` is executed along the row and column
         // direction.
         static constexpr int kRowExec =
-            Base::template row_exec_count<DType, Global::kRows>();
+            Base::template row_exec_count<BaseTile, Global::kRows>();
         static constexpr int kColExec =
-            Base::template col_exec_count<DType, Global::kCols>();
+            Base::template col_exec_count<BaseTile, Global::kCols>();
 
         // TODO: Load data from global memory to register.
         using Loader = GlobalToRegLoaderImpl<Global, Reg, kRowExec, kColExec,
