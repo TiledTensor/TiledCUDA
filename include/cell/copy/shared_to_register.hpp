@@ -49,12 +49,6 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
         int lane_row = this->lane_row_id();
         int lane_col = this->lane_col_id();
 
-        static constexpr int kRowScale =
-            BaseShape::kRows / tl::num_rows<typename LoadMat::ThreadLayout>;
-        static constexpr int kColScale =
-            BaseShape::kCols / (LoadMat::kNumPerAccess *
-                                tl::num_cols<typename LoadMat::ThreadLayout>);
-
         const DType* data;
         for (int i = 0; i < kRowExec; ++i) {
             for (int j = 0; j < kColExec; ++j) {
@@ -66,8 +60,7 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
                 data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
 
                 // issue the hardware-backed memory access instruction.
-                this->ldmatrix<kRowScale, kColScale>(data,
-                                                     dst(i, j).mutable_data());
+                this->ldmatrix(data, dst(i, j).mutable_data());
             }
         }
     }
@@ -96,12 +89,6 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
     static constexpr int kRowExec = kRowExec_;
     static constexpr int kColExec = kColExec_;
 
-    static constexpr int kRowScale =
-        BaseShape::kRows /
-        (LoadMat::kNumPerAccess * tl::num_cols<typename LoadMat::ThreadLayout>);
-    static constexpr int kColScale =
-        BaseShape::kCols / tl::num_rows<typename LoadMat::ThreadLayout>;
-
     DEVICE void operator()(const DType* src, Reg& dst) {
         // transpose the lane position if the shared memory is in column-major.
         // 16 threads are mapped to the strided dimension of the data while the
@@ -121,8 +108,7 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
                 data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
 
                 // issue the hardware-backed memory access instruction
-                this->ldmatrix<kRowScale, kColScale>(data,
-                                                     dst(i, j).mutable_data());
+                this->ldmatrix(data, dst(i, j).mutable_data());
             }
         }
     }

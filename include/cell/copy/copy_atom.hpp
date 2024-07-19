@@ -47,24 +47,15 @@ struct LoadMatBase {
 
     /// @brief a thin wrapper for executing ldmatrix instruction to load a
     ///        `16x16` tile to register.
-    template <const int kRows, const int kCols>
     DEVICE void ldmatrix(const DType* src, DType* dst) {
         uint32_t* reg = reinterpret_cast<uint32_t*>(dst);
         uint32_t smem_addr =
             static_cast<uint32_t>(__cvta_generic_to_shared(src));
 
-        for (int i = 0; i < kRows; ++i) {
-            for (int j = 0; j < kCols; ++j) {
-                asm volatile(
-                    "ldmatrix.sync.aligned.x4.m8n8.shared.b16 "
-                    "{%0, %1, %2, %3}, [%4];\n"
-                    : "=r"(reg[0]), "=r"(reg[1]), "=r"(reg[2]), "=r"(reg[3])
-                    : "r"(smem_addr));
-
-                reg += 4;
-                smem_addr += 1;
-            }
-        }
+        asm volatile(
+            "ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, %3}, [%4];\n"
+            : "=r"(reg[0]), "=r"(reg[1]), "=r"(reg[2]), "=r"(reg[3])
+            : "r"(smem_addr));
     }
 };
 
