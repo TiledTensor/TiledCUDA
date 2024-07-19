@@ -12,6 +12,8 @@ namespace tiledcuda::cell::copy::atom {
 namespace tl = tiledcuda::cell::tile_layout;
 
 template <typename Element>
+requires std::is_same_v<Element, __half> ||
+    std::is_same_v<Element, cutlass::half_t>
 struct LoadMatBase {
     using DType = Element;
     using ThreadLayout = tile_layout::ColMajor<16, 2>;
