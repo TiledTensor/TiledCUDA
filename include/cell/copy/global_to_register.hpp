@@ -83,16 +83,8 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
     using DType = typename Global::DType;
     using BaseTile = typename Reg::DType;
 
-    // strides to iterate over each 16x128-bits `BaseTile`.
-    static constexpr int kTileRstride =
-        BaseTileShape<DType>::row * Global::kRowStride;
-    static constexpr int kTileCstride = BaseTileShape<DType>::col;
+    // The size of a `BaseTile`.
     static constexpr int kTileSize = BaseTileShape<DType>::kTileSize;
-
-    // row stride and col stride for a thread in a warp
-    static constexpr int kStride = traits::TraitsBase<DType>::kNumPerAccess;
-    static constexpr int kLaneRstride = Global::kRowStride;
-    static constexpr int kLaneCstride = kStride;
 
     static constexpr int kRowExec = kRowExec_;
     static constexpr int kColExec = kColExec_;
@@ -103,11 +95,9 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
         const DType* data;
 #pragma unroll
         for (int i = 0; i < kRowExec; ++i) {
-            // TODO: magic number.
             int row = i * kTileSize + lane_id / 4;
 #pragma unroll
             for (int j = 0; j < kColExec; ++j) {
-                // TODO: magic number.
                 int col = j * kTileSize + (lane_id % 4) * 2;
 
                 data = src + row * Global::kRowStride + col;
@@ -130,15 +120,8 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
     using DType = typename Global::DType;
     using BaseTile = typename Reg::DType;
 
-    // strides to iterate over each 16x128-bits `BaseTile`.
-    static constexpr int kTileRstride =
-        BaseTileShape<DType>::row * Global::kRowStride;
-    static constexpr int kTileCstride = BaseTileShape<DType>::col;
-
-    // row stride and col stride for a thread in a warp
-    static constexpr int kStride = traits::TraitsBase<DType>::kNumPerAccess;
-    static constexpr int kLaneRstride = Global::kRowStride;
-    static constexpr int kLaneCstride = kStride;
+    // The size of a `BaseTile`.
+    static constexpr int kTileSize = BaseTileShape<DType>::kTileSize;
 
     static constexpr int kRowExec = kRowExec_;
     static constexpr int kColExec = kColExec_;
@@ -147,8 +130,8 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
 };
 
 /**
- * @brief Load memory from Global memory to Register based on the warp reuse
- * mode.
+ * @brief Load a data tile from Global memory to Register based on the warp
+ * reuse mode.
  * @tparam Global_ Global memory tile type.
  * @tparam Reg_ Register tile type.
  * @tparam WarpLayout_ Warp layout type.
@@ -177,9 +160,11 @@ struct GlobalToRegLoader : public Base {
         // how many times a `BaseTile` is executed along the row and column
         // direction.
         static constexpr int kRowExec =
-            Base::template row_exec_count<BaseTile, Global::kRows>();
+            Base::template row_exec_count<BaseTileShape<DType>,
+                                          Global::kRows>();
         static constexpr int kColExec =
-            Base::template col_exec_count<BaseTile, Global::kCols>();
+            Base::template col_exec_count<BaseTileShape<DType>,
+                                          Global::kCols>();
 
         using Loader = GlobalToRegLoaderImpl<Global, Reg, kRowExec, kColExec,
                                              Global::type>;

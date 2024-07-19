@@ -2,6 +2,8 @@
 #include "cell/copy/mod.hpp"
 #include "common/test_utils.hpp"
 #include "types/mod.hpp"
+#include "util/debug.hpp"
+#include "util/print.hpp"
 
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
@@ -24,31 +26,31 @@ __global__ void copy_g2r_row_major(Element* src) {
     loader(src_tile, dst_tile);
     __syncthreads();
 
-    if (threadIdx.x == 0) {
+    if (thread0()) {
         printf("thread 0:\n");
         for (int i = 0; i < DstTile::kRows; ++i) {
             for (int j = 0; j < DstTile::kCols; ++j) {
-                dst_tile(i, j).dump_value();
+                print_tile(dst_tile(i, j).data(), dst_tile(i, j).layout());
             }
         }
     }
 
-    if (threadIdx.x == 1) {
+    if (thread(1)) {
         printf("thread 1:\n");
         for (int i = 0; i < DstTile::kRows; ++i) {
             for (int j = 0; j < DstTile::kCols; ++j) {
-                dst_tile(i, j).dump_value();
+                print_tile(dst_tile(i, j).data(), dst_tile(i, j).layout());
             }
         }
     }
 
     __syncthreads();
 
-    if (threadIdx.x == 32) {
+    if (thread(32)) {
         printf("thread 32:\n");
         for (int i = 0; i < DstTile::kRows; ++i) {
             for (int j = 0; j < DstTile::kCols; ++j) {
-                dst_tile(i, j).dump_value();
+                print_tile(dst_tile(i, j).data(), dst_tile(i, j).layout());
             }
         }
     }
