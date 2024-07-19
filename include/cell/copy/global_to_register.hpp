@@ -9,6 +9,35 @@ namespace tiledcuda::cell::copy {
 
 using namespace tiledcuda::cell::traits;
 
+template <typename Global_, typename BaseTile_, const tl::Layout type>
+struct GlobalToRegMatLoader {
+    using Global = Global_;
+    using BaseTile = BaseTile_;
+    using DType = Global::DType;
+
+    DEVICE void operator()(const DType* src, BaseTile& dst);
+};
+
+template <typename Global_, typename BaseTile_>
+struct GlobalToRegMatLoader<Global_, BaseTile_, tl::Layout::RowMajor> {
+    using Global = Global_;
+    using BaseTile = BaseTile_;
+    using DType = Global::DType;
+
+    static constexpr int kStride = Global::kRowStride;
+
+    DEVICE void operator()(const DType* src, BaseTile& dst) {
+        dst(0, 0) = src[0 * kStride + 0];
+        dst(0, 1) = src[0 * kStride + 1];
+        dst(1, 0) = src[0 * kStride + 8];
+        dst(1, 1) = src[0 * kStride + 9];
+        dst(0, 2) = src[8 * kStride + 0];
+        dst(0, 3) = src[8 * kStride + 1];
+        dst(1, 2) = src[8 * kStride + 8];
+        dst(1, 3) = src[8 * kStride + 9];
+    }
+};
+
 template <typename Global_, typename Reg_, const int kRowExec_,
           const int kColExec_, const tl::Layout type>
 struct GlobalToRegLoaderImpl {
@@ -25,7 +54,8 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
                              tl::Layout::RowMajor> {
     using Global = Global_;
     using Reg = Reg_;
-    using DType = Global::DType;
+    using DType = typename Global::DType;
+    using BaseTile = typename Reg::DType;
 
     // strides to iterate over each 16x128-bits `BaseTile`.
     static constexpr int kTileRstride =
@@ -43,7 +73,7 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
     DEVICE void operator()(const DType* src, Reg& dst) {
         int lane_id = threadIdx.x % warpSize;
 
-        const DType* data = src;
+        const DType* data;
 #pragma unroll
         for (int i = 0; i < kRowExec; ++i) {
             // TODO: magic number.
@@ -52,22 +82,12 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
             for (int j = 0; j < kColExec; ++j) {
                 // TODO: magic number.
                 int col = j * 16 + (lane_id % 4) * 2;
-                dst(i, j)(0, 0) =
-                    data[(row + 0) * Global::kRowStride + col + 0];
-                dst(i, j)(0, 1) =
-                    data[(row + 0) * Global::kRowStride + col + 1];
-                dst(i, j)(1, 0) =
-                    data[(row + 0) * Global::kRowStride + col + 8];
-                dst(i, j)(1, 1) =
-                    data[(row + 0) * Global::kRowStride + col + 9];
-                dst(i, j)(0, 2) =
-                    data[(row + 8) * Global::kRowStride + col + 0];
-                dst(i, j)(0, 3) =
-                    data[(row + 8) * Global::kRowStride + col + 1];
-                dst(i, j)(1, 2) =
-                    data[(row + 8) * Global::kRowStride + col + 8];
-                dst(i, j)(1, 3) =
-                    data[(row + 8) * Global::kRowStride + col + 9];
+
+                data = src + row * Global::kRowStride + col;
+                using Loader = GlobalToRegMatLoader<Global, BaseTile,
+                                                    tl::Layout::RowMajor>;
+                Loader loader;
+                loader(data, dst(i, j));
             }
         }
     }
@@ -88,8 +108,8 @@ struct GlobalToRegLoader : public Base {
     DEVICE void operator()(const Global& src, Reg& dst) {
         const DType* src_ptr = src.data();
 
-        // 1. advance the pointer to input data to the current warp according to
-        // warp reuse mode.
+        // 1. advance the pointer to input data to the current warp
+        // according to warp reuse mode.
         src_ptr += Base::template get_warp_offset<Global>();
 
         // how many times a `BaseTile` is executed along the row and column
