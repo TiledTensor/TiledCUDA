@@ -46,18 +46,9 @@ class RegTile {
     Layout layout_;
 };
 
-// Elements accessed inside a `BaseTile` for a single thread.
-using BaseHalfTileRowMajor = RegTile<cutlass::half_t, tl::RowMajor<2, 4>>;
-using BaseHalfTileColMajor = RegTile<cutlass::half_t, tl::ColMajor<4, 2>>;
-
-using BaseFloatTileRowMajor = RegTile<float, tl::RowMajor<2, 4>>;
-using BaseFloatTileColMajor = RegTile<float, tl::ColMajor<4, 2>>;
-
-// type constraint for a register tile.
 template <typename Element>
-concept RegTileElemType = std::is_same_v<Element, BaseHalfTileRowMajor> ||
-    std::is_same_v<Element, BaseHalfTileColMajor> ||
-    std::is_same_v<Element, BaseFloatTileRowMajor> ||
-    std::is_same_v<Element, BaseFloatTileColMajor>;
+using BaseTileRowMajor = RegTile<Element, tl::RowMajor<2, 4>>;
 
+template <typename Element>
+using BaseTileColMajor = RegTile<Element, tl::ColMajor<4, 2>>;
 }  // namespace tiledcuda::cell

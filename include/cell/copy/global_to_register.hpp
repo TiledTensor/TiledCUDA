@@ -1,83 +1,175 @@
 #pragma once
 
 #include "cell/copy/constants.hpp"
+#include "cell/copy/warp.hpp"
+#include "cell/traits/base.hpp"
 #include "types/mod.hpp"
 
 namespace tiledcuda::cell::copy {
 
-namespace details {
+using namespace tiledcuda::cell::traits;
 
-template <typename Global, typename Reg, const tl::Layout type>
-struct GlobalToRegLoaderImpl {
-    using DType = Global::type;
-    static constexpr int kHeight = Reg::kRows;
-    static constexpr int kWidth = Reg::kCols;
-    static constexpr int kSubTileSize = 16;
+/**
+ * @brief Load a BastTile Matrix from Global memory to Register.
+ * @tparam Global_ Global memory tile type.
+ * @tparam BaseTile_ BaseTile type.
+ * @tparam type Global Layout type.
+ */
+template <typename Global_, typename BaseTile_, const tl::Layout type>
+struct GlobalToRegMatLoader {
+    using Global = Global_;
+    using BaseTile = BaseTile_;
+    using DType = Global::DType;
 
-    DEVICE void operator()(const Global& src, Reg& dst);
+    DEVICE void operator()(const DType* src, BaseTile& dst);
 };
 
-/// @brief Load tile from global memory to register tile in RowMajor layout.
-/// @tparam Global Global tile type.
-/// @tparam Reg Register tile type.
-template <typename Global, typename Reg>
-struct GlobalToRegLoaderImpl<Global, Reg, tl::Layout::RowMajor> {
+template <typename Global_, typename BaseTile_>
+struct GlobalToRegMatLoader<Global_, BaseTile_, tl::Layout::RowMajor> {
+    using Global = Global_;
+    using BaseTile = BaseTile_;
+    using DType = Global::DType;
+
+    static constexpr int kStride = Global::kRowStride;
+
+    DEVICE void operator()(const DType* src, BaseTile& dst) {
+        dst(0, 0) = src[0 * kStride + 0];
+        dst(0, 1) = src[0 * kStride + 1];
+        dst(1, 0) = src[0 * kStride + 8];
+        dst(1, 1) = src[0 * kStride + 9];
+        dst(0, 2) = src[8 * kStride + 0];
+        dst(0, 3) = src[8 * kStride + 1];
+        dst(1, 2) = src[8 * kStride + 8];
+        dst(1, 3) = src[8 * kStride + 9];
+    }
+};
+
+// TODO(KuangjuX): Implement this.
+template <typename Global_, typename BaseTile_>
+struct GlobalToRegMatLoader<Global_, BaseTile_, tl::Layout::ColMajor> {
+    using Global = Global_;
+    using BaseTile = BaseTile_;
+    using DType = Global::DType;
+
+    static constexpr int kStride = Global::kColStride;
+
+    DEVICE void operator()(const DType* src, BaseTile& dst) {}
+};
+
+/**
+ * @brief Load a RegTile from Global memory to Register.
+ * @tparam Global_ Global memory tile type.
+ * @tparam Reg_ Register tile type.
+ * @tparam kRowExec_ Number of times a `RegTile` is executed along the row
+ * @tparam kColExec_ Number of times a `RegTile` is executed along the column
+ * @tparam type Global Layout type.
+ */
+template <typename Global_, typename Reg_, const int kRowExec_,
+          const int kColExec_, const tl::Layout type>
+struct GlobalToRegLoaderImpl {
+    using Global = Global_;
+    using Reg = Reg_;
+    using DType = Global::type;
+
+    DEVICE void operator()(const DType* src, Reg& dst);
+};
+
+template <typename Global_, typename Reg_, const int kRowExec_,
+          const int kColExec_>
+struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
+                             tl::Layout::RowMajor> {
+    using Global = Global_;
+    using Reg = Reg_;
     using DType = typename Global::DType;
-    static constexpr int kHeight = Reg::kRows;
-    static constexpr int kWidth = Reg::kCols;
-    static constexpr int kSubTileSize = 16;
+    using BaseTile = typename Reg::DType;
 
-    DEVICE void operator()(const Global& src, Reg& dst) {
+    // The size of a `BaseTile`.
+    static constexpr int kTileSize = BaseTileShape<DType>::kTileSize;
+
+    static constexpr int kRowExec = kRowExec_;
+    static constexpr int kColExec = kColExec_;
+
+    DEVICE void operator()(const DType* src, Reg& dst) {
         int lane_id = threadIdx.x % warpSize;
-        int warp_id = threadIdx.x / warpSize;
-        const int tile_size = kSubTileSize;
-        int rows = kHeight * kSubTileSize;
-        int row_offset = rows * warp_id;
 
-        // Load data from global memory to register.
-        // References:
-        // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html?highlight=ldmatrix#warp-level-matrix-load-instruction-ldmatrix
+        const DType* data;
 #pragma unroll
-        for (int i = 0; i < kHeight; ++i) {
-            int row = row_offset + i * tile_size + (lane_id / 4);
+        for (int i = 0; i < kRowExec; ++i) {
+            int row = i * kTileSize + lane_id / 4;
 #pragma unroll
-            for (int j = 0; j < kWidth; ++j) {
-                int col = j * tile_size + (lane_id % 4);
-                dst(i, j)(0, 0) = src(row + 0, col + 0);
-                dst(i, j)(0, 1) = src(row + 0, col + 1);
-                dst(i, j)(1, 0) = src(row + 0, col + 8);
-                dst(i, j)(1, 1) = src(row + 0, col + 9);
-            }
-#pragma unroll
-            for (int j = 0; j < kWidth; ++j) {
-                int col = j * tile_size + (lane_id % 4);
-                dst(i, j)(0, 2) = src(row + 8, col + 0);
-                dst(i, j)(0, 3) = src(row + 8, col + 1);
-                dst(i, j)(1, 2) = src(row + 8, col + 8);
-                dst(i, j)(1, 3) = src(row + 8, col + 9);
+            for (int j = 0; j < kColExec; ++j) {
+                int col = j * kTileSize + (lane_id % 4) * 2;
+
+                data = src + row * Global::kRowStride + col;
+                using Loader = GlobalToRegMatLoader<Global, BaseTile,
+                                                    tl::Layout::RowMajor>;
+                Loader loader;
+                loader(data, dst(i, j));
             }
         }
     }
 };
 
-/// @brief Load tile from global memory to register tile in ColMajor layout.
-/// @tparam Global Global tile type.
-/// @tparam Reg Register tile type.
-// TODO(KuangjuX): Implement LoadImpl for ColMajor layout.
-template <typename Global, typename Reg>
-struct GlobalToRegLoaderImpl<Global, Reg, tl::Layout::ColMajor> {};
-
-}  // namespace details
-
-template <typename Global_, typename Reg_, tl::Layout type_>
-struct GlobalToRegLoader {
+// TODO(KuangjuX): Implement this.
+template <typename Global_, typename Reg_, const int kRowExec_,
+          const int kColExec_>
+struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
+                             tl::Layout::ColMajor> {
     using Global = Global_;
     using Reg = Reg_;
     using DType = typename Global::DType;
+    using BaseTile = typename Reg::DType;
+
+    // The size of a `BaseTile`.
+    static constexpr int kTileSize = BaseTileShape<DType>::kTileSize;
+
+    static constexpr int kRowExec = kRowExec_;
+    static constexpr int kColExec = kColExec_;
+
+    DEVICE void operator()(const DType* src, Reg& dst) {}
+};
+
+/**
+ * @brief Load a data tile from Global memory to Register based on the warp
+ * reuse mode.
+ * @tparam Global_ Global memory tile type.
+ * @tparam Reg_ Register tile type.
+ * @tparam WarpLayout_ Warp layout type.
+ * @tparam kMode_ Warp reuse mode.
+ * @tparam Base Copy base.
+ */
+template <typename Global_, typename Reg_, typename WarpLayout_,
+          const WarpReuse kMode_,
+          typename Base = warp::CopyBase<WarpLayout_, kMode_>>
+struct GlobalToRegLoader : public Base {
+    using Global = Global_;
+    using Reg = Reg_;
+    using DType = typename Global::DType;
+    using BaseTile = typename Reg::DType;
+
+    using WarpLayout = WarpLayout_;
+    static constexpr WarpReuse kMode = kMode_;
 
     DEVICE void operator()(const Global& src, Reg& dst) {
-        details::GlobalToRegLoaderImpl<Global, Reg, type_> loader;
-        loader(src, dst);
+        const DType* src_ptr = src.data();
+
+        // 1. advance the pointer to input data to the current warp
+        // according to warp reuse mode.
+        src_ptr += Base::template get_warp_offset<Global>();
+
+        // how many times a `BaseTile` is executed along the row and column
+        // direction.
+        static constexpr int kRowExec =
+            Base::template row_exec_count<BaseTileShape<DType>,
+                                          Global::kRows>();
+        static constexpr int kColExec =
+            Base::template col_exec_count<BaseTileShape<DType>,
+                                          Global::kCols>();
+
+        using Loader = GlobalToRegLoaderImpl<Global, Reg, kRowExec, kColExec,
+                                             Global::type>;
+        Loader loader;
+        loader(src_ptr, dst);
     }
 };
 

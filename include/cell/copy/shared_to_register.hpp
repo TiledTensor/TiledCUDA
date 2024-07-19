@@ -199,10 +199,8 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
 ///        register file using `ldmatrix`.
 template <typename Reg_, typename WarpLayout_, const WarpReuse kMode_,
           typename Base = warp::CopyBase<WarpLayout_, kMode_>>
-requires RegTileElemType<typename Reg_::DType>
 struct SharedToRegLoader : public Base {
     using Reg = Reg_;
-
     using DType = typename Reg::DType::DType;  // the element data type
     using BaseShape = BaseTileShape<DType>;
 
@@ -249,7 +247,6 @@ struct SharedToRegLoader : public Base {
 ///        matrix.
 template <typename Reg_, typename WarpLayout_,
           typename Base = warp::CopyBase<WarpLayout_, WarpReuse::Cont>>
-requires RegTileElemType<typename Reg_::DType>
 struct RegToSharedStorer : public Base {
     using Reg = Reg_;
     // elementary data type stored in the register tile.
