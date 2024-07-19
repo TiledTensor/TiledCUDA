@@ -25,7 +25,7 @@ struct LoadMatBase {
     //         For an example, in ldmatrix, threads in a warp are arranged as
     //         follows (a 16 x 2 column-major):
     //
-    // .       |  | 0 |  1|
+    //         |  | 0 |  1|
     //         |--|---|---|
     //         |0 | 0 | 16|
     //         |1 | 2 | 17|
