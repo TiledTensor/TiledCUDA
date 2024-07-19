@@ -9,6 +9,12 @@ namespace tiledcuda::cell::copy {
 
 using namespace tiledcuda::cell::traits;
 
+/**
+ * @brief Load a BastTile Matrix from Global memory to Register.
+ * @tparam Global_ Global memory tile type.
+ * @tparam BaseTile_ BaseTile type.
+ * @tparam type Global Layout type.
+ */
 template <typename Global_, typename BaseTile_, const tl::Layout type>
 struct GlobalToRegMatLoader {
     using Global = Global_;
@@ -38,6 +44,26 @@ struct GlobalToRegMatLoader<Global_, BaseTile_, tl::Layout::RowMajor> {
     }
 };
 
+// TODO(KuangjuX): Implement this.
+template <typename Global_, typename BaseTile_>
+struct GlobalToRegMatLoader<Global_, BaseTile_, tl::Layout::ColMajor> {
+    using Global = Global_;
+    using BaseTile = BaseTile_;
+    using DType = Global::DType;
+
+    static constexpr int kStride = Global::kColStride;
+
+    DEVICE void operator()(const DType* src, BaseTile& dst) {}
+};
+
+/**
+ * @brief Load a RegTile from Global memory to Register.
+ * @tparam Global_ Global memory tile type.
+ * @tparam Reg_ Register tile type.
+ * @tparam kRowExec_ Number of times a `RegTile` is executed along the row
+ * @tparam kColExec_ Number of times a `RegTile` is executed along the column
+ * @tparam type Global Layout type.
+ */
 template <typename Global_, typename Reg_, const int kRowExec_,
           const int kColExec_, const tl::Layout type>
 struct GlobalToRegLoaderImpl {
@@ -93,6 +119,41 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
     }
 };
 
+// TODO(KuangjuX): Implement this.
+template <typename Global_, typename Reg_, const int kRowExec_,
+          const int kColExec_>
+struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
+                             tl::Layout::ColMajor> {
+    using Global = Global_;
+    using Reg = Reg_;
+    using DType = typename Global::DType;
+    using BaseTile = typename Reg::DType;
+
+    // strides to iterate over each 16x128-bits `BaseTile`.
+    static constexpr int kTileRstride =
+        BaseTileShape<DType>::row * Global::kRowStride;
+    static constexpr int kTileCstride = BaseTileShape<DType>::col;
+
+    // row stride and col stride for a thread in a warp
+    static constexpr int kStride = traits::TraitsBase<DType>::kNumPerAccess;
+    static constexpr int kLaneRstride = Global::kRowStride;
+    static constexpr int kLaneCstride = kStride;
+
+    static constexpr int kRowExec = kRowExec_;
+    static constexpr int kColExec = kColExec_;
+
+    DEVICE void operator()(const DType* src, Reg& dst) {}
+};
+
+/**
+ * @brief Load memory from Global memory to Register based on the warp reuse
+ * mode.
+ * @tparam Global_ Global memory tile type.
+ * @tparam Reg_ Register tile type.
+ * @tparam WarpLayout_ Warp layout type.
+ * @tparam kMode_ Warp reuse mode.
+ * @tparam Base Copy base.
+ */
 template <typename Global_, typename Reg_, typename WarpLayout_,
           const WarpReuse kMode_,
           typename Base = warp::CopyBase<WarpLayout_, kMode_>>
