@@ -354,8 +354,7 @@ struct GlobalToRegLoader : public Base {
  * @tparam Base Copy base.
  */
 template <typename Global_, typename Reg_, typename WarpLayout_,
-          const WarpReuse kMode_,
-          typename Base = warp::CopyBase<WarpLayout_, kMode_>>
+          typename Base = warp::CopyBase<WarpLayout_, WarpReuse::Cont>>
 struct GlobalToRegStorer : public Base {
     using Global = Global_;
     using Reg = Reg_;
@@ -363,7 +362,6 @@ struct GlobalToRegStorer : public Base {
     using BaseShape = BaseTileShape<DType>;
 
     using WarpLayout = WarpLayout_;
-    static constexpr WarpReuse kMode = kMode_;
 
     DEVICE void operator()(const Reg& src, Global& dst) {
         DType* dst_ptr = dst.mutable_data();
