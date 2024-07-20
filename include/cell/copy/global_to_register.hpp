@@ -53,14 +53,14 @@ struct GlobalToRegMatLoader<Global_, BaseTile_, tl::Layout::ColMajor> {
     static constexpr int kStride = Global::kColStride;
 
     DEVICE void operator()(const DType* src, BaseTile& dst) {
-        dst(0, 0) = src(0 * kStride + 0);
-        dst(1, 0) = src(0 * kStride + 1);
-        dst(0, 1) = src(0 * kStride + 8);
-        dst(1, 1) = src(0 * kStride + 9);
-        dst(2, 0) = src(8 * kStride + 0);
-        dst(3, 0) = src(8 * kStride + 1);
-        dst(2, 1) = src(8 * kStride + 8);
-        dst(3, 1) = src(8 * kStride + 9);
+        dst(0, 0) = src[0 * kStride + 0];
+        dst(1, 0) = src[0 * kStride + 1];
+        dst(0, 1) = src[0 * kStride + 8];
+        dst(1, 1) = src[0 * kStride + 9];
+        dst(2, 0) = src[8 * kStride + 0];
+        dst(3, 0) = src[8 * kStride + 1];
+        dst(2, 1) = src[8 * kStride + 8];
+        dst(3, 1) = src[8 * kStride + 9];
     }
 };
 

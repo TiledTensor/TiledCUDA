@@ -143,19 +143,73 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r_row_major_3) {
                       kWidth, kWarpSize>();
 }
 
-// TEST(TestG2RegCopy, copy_2d_tile_g2r_col_major_0) {
-//     using Element = float;
-//     using WarpLayout = tl::RowMajor<1, 1>;
-//     using RegLayout = tl::RowMajor<1, 1>;
+TEST(TestG2RegCopy, copy_2d_tile_g2r_col_major_0) {
+    using Element = float;
+    using WarpLayout = tl::RowMajor<1, 1>;
+    using RegLayout = tl::ColMajor<1, 1>;
 
-//     const int kHeight = 1;
-//     const int kWidth = 1;
-//     const int kWarpSize = 1;
-//     const copy::WarpReuse kMode = copy::WarpReuse::RowReuseCont;
+    const int kHeight = 1;
+    const int kWidth = 1;
+    const int kWarpSize = 1;
+    const copy::WarpReuse kMode = copy::WarpReuse::RowReuseCont;
 
-//     run_load_g2r_test<Element, tl::Layout::RowMajor, WarpLayout, RegLayout,
-//                       kMode, kHeight, kWidth, kWarpSize>();
-// }
+    using GlobalLayout = tl::ColMajor<16 * kWidth, 16 * kHeight>;
+
+    run_load_g2r_test<Element, tl::Layout::ColMajor, WarpLayout, RegLayout,
+                      GlobalLayout, BaseTileColMajor<Element>, kMode, kHeight,
+                      kWidth, kWarpSize>();
+}
+
+TEST(TestG2RegCopy, copy_2d_tile_g2r_col_major_1) {
+    using Element = float;
+    using WarpLayout = tl::RowMajor<1, 1>;
+    using RegLayout = tl::ColMajor<2, 2>;
+
+    const int kHeight = 2;
+    const int kWidth = 2;
+    const int kWarpSize = 1;
+    const copy::WarpReuse kMode = copy::WarpReuse::RowReuseCont;
+
+    using GlobalLayout = tl::ColMajor<16 * kWidth, 16 * kHeight>;
+
+    run_load_g2r_test<Element, tl::Layout::ColMajor, WarpLayout, RegLayout,
+                      GlobalLayout, BaseTileColMajor<Element>, kMode, kHeight,
+                      kWidth, kWarpSize>();
+}
+
+TEST(TestG2RegCopy, copy_2d_tile_g2r_col_major_2) {
+    using Element = float;
+    using WarpLayout = tl::RowMajor<2, 2>;
+    using RegLayout = tl::ColMajor<1, 2>;
+
+    const int kHeight = 2;
+    const int kWidth = 2;
+    const int kWarpSize = 4;
+    const copy::WarpReuse kMode = copy::WarpReuse::RowReuseCont;
+
+    using GlobalLayout = tl::ColMajor<16 * kWidth, 16 * kHeight>;
+
+    run_load_g2r_test<Element, tl::Layout::ColMajor, WarpLayout, RegLayout,
+                      GlobalLayout, BaseTileColMajor<Element>, kMode, kHeight,
+                      kWidth, kWarpSize>();
+}
+
+TEST(TestG2RegCopy, copy_2d_tile_g2r_col_major_3) {
+    using Element = float;
+    using WarpLayout = tl::RowMajor<2, 2>;
+    using RegLayout = tl::ColMajor<2, 1>;
+
+    const int kHeight = 2;
+    const int kWidth = 2;
+    const int kWarpSize = 4;
+    const copy::WarpReuse kMode = copy::WarpReuse::ColReuseCont;
+
+    using GlobalLayout = tl::ColMajor<16 * kWidth, 16 * kHeight>;
+
+    run_load_g2r_test<Element, tl::Layout::ColMajor, WarpLayout, RegLayout,
+                      GlobalLayout, BaseTileColMajor<Element>, kMode, kHeight,
+                      kWidth, kWarpSize>();
+}
 
 }  // namespace testing
 
