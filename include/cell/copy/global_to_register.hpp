@@ -316,7 +316,7 @@ struct GlobalToRegLoader : public Base {
     using Global = Global_;
     using Reg = Reg_;
     using DType = typename Global::DType;
-    using BaseTile = typename Reg::DType;
+    using BaseShape = BaseTileShape<DType>;
 
     using WarpLayout = WarpLayout_;
     static constexpr WarpReuse kMode = kMode_;
@@ -331,11 +331,9 @@ struct GlobalToRegLoader : public Base {
         // how many times a `BaseTile` is executed along the row and column
         // direction.
         static constexpr int kRowExec =
-            Base::template row_exec_count<BaseTileShape<DType>,
-                                          Global::kRows>();
+            Base::template row_exec_count<BaseShape, Global::kRows>();
         static constexpr int kColExec =
-            Base::template col_exec_count<BaseTileShape<DType>,
-                                          Global::kCols>();
+            Base::template col_exec_count<BaseShape, Global::kCols>();
 
         using Loader = GlobalToRegLoaderImpl<Global, Reg, kRowExec, kColExec,
                                              Global::type>;
