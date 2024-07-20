@@ -71,7 +71,7 @@ struct GlobalToRegMatLoader<Global_, BaseTile_, tl::Layout::ColMajor> {
  * @tparam type Global Layout type.
  */
 template <typename Global_, typename BaseTile_, const tl::Layout kType>
-struct GlobalToRegMatStorer {
+struct RegToGlobalMatStorer {
     using Global = Global_;
     using BaseTile = BaseTile_;
     using DType = Global::DType;
@@ -80,7 +80,7 @@ struct GlobalToRegMatStorer {
 };
 
 template <typename Global_, typename BaseTile_>
-struct GlobalToRegMatStorer<Global_, BaseTile_, tl::Layout::RowMajor> {
+struct RegToGlobalMatStorer<Global_, BaseTile_, tl::Layout::RowMajor> {
     using Global = Global_;
     using BaseTile = BaseTile_;
     using DType = Global::DType;
@@ -100,7 +100,7 @@ struct GlobalToRegMatStorer<Global_, BaseTile_, tl::Layout::RowMajor> {
 };
 
 template <typename Global_, typename BaseTile_>
-struct GlobalToRegMatStorer<Global_, BaseTile_, tl::Layout::ColMajor> {
+struct RegToGlobalMatStorer<Global_, BaseTile_, tl::Layout::ColMajor> {
     using Global = Global_;
     using BaseTile = BaseTile_;
     using DType = Global::DType;
@@ -222,7 +222,7 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
  */
 template <typename Global_, typename Reg_, const int kRowExec_,
           const int kColExec_, const tl::Layout kType>
-struct GlobalToRegStorerImpl {
+struct RegToGlobalStorerImpl {
     using Global = Global_;
     using Reg = Reg_;
     using DType = Global::type;
@@ -232,7 +232,7 @@ struct GlobalToRegStorerImpl {
 
 template <typename Global_, typename Reg_, const int kRowExec_,
           const int kColExec_>
-struct GlobalToRegStorerImpl<Global_, Reg_, kRowExec_, kColExec_,
+struct RegToGlobalStorerImpl<Global_, Reg_, kRowExec_, kColExec_,
                              tl::Layout::RowMajor> {
     using Global = Global_;
     using Reg = Reg_;
@@ -247,7 +247,7 @@ struct GlobalToRegStorerImpl<Global_, Reg_, kRowExec_, kColExec_,
 
         DType* data;
 
-        using Storer = GlobalToRegMatStorer<Global, typename Reg::DType,
+        using Storer = RegToGlobalMatStorer<Global, typename Reg::DType,
                                             tl::Layout::RowMajor>;
         Storer storer;
 
@@ -267,7 +267,7 @@ struct GlobalToRegStorerImpl<Global_, Reg_, kRowExec_, kColExec_,
 
 template <typename Global_, typename Reg_, const int kRowExec_,
           const int kColExec_>
-struct GlobalToRegStorerImpl<Global_, Reg_, kRowExec_, kColExec_,
+struct RegToGlobalStorerImpl<Global_, Reg_, kRowExec_, kColExec_,
                              tl::Layout::ColMajor> {
     using Global = Global_;
     using Reg = Reg_;
@@ -282,7 +282,7 @@ struct GlobalToRegStorerImpl<Global_, Reg_, kRowExec_, kColExec_,
 
         DType* data;
 
-        using Storer = GlobalToRegMatStorer<Global, typename Reg::DType,
+        using Storer = RegToGlobalMatStorer<Global, typename Reg::DType,
                                             tl::Layout::ColMajor>;
         Storer storer;
 
@@ -377,7 +377,7 @@ struct RegToGlobalStorer : public Base {
         static constexpr int kColExec =
             Base::template col_exec_count<BaseShape, Global::kCols>();
 
-        using Storer = GlobalToRegStorerImpl<Global, Reg, kRowExec, kColExec,
+        using Storer = RegToGlobalStorerImpl<Global, Reg, kRowExec, kColExec,
                                              Global::type>;
         Storer storer;
         storer(src, dst_ptr);
