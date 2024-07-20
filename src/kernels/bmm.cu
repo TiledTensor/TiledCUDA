@@ -137,7 +137,7 @@ void custom_batched_gemm_op(const torch::Tensor& a, const torch::Tensor& b,
             reinterpret_cast<cutlass::half_t*>(c.mutable_data_ptr()), m, n, k,
             batch_count);
     } else {
-        throw NotImplementedException("Unsupported data type.");
+        throw errors::NotImplementedException("Unsupported data type.");
     }
 }
 }  // namespace tiledcuda::kernels

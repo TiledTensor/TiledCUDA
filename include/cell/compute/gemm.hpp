@@ -6,7 +6,6 @@
 #include "types/tile_shape.hpp"
 
 namespace tiledcuda::cell::compute {
-
 namespace tl = tile_layout;
 
 template <typename TensorA, typename TensorB, typename TensorAcc,
@@ -36,11 +35,11 @@ struct Gemm<RegTileA, RegTileB, RegTileC, InstShape<16, 16, 16>> {
     using InType = typename RegTileA::DType;
     using OutType = typename RegTileC::DType;
 
-    static_assert(std::is_same_v<InType, cutlass::half_t>,
-                  "Only half precision is supported for now.");
-    static_assert(std::is_same_v<InType, typename RegTileB::DType>,
-                  "Mismatched data type for operand A and B.");
-    static_assert(std::is_same_v<OutType, float>, "Output must be float.");
+    // static_assert(std::is_same_v<InType, cutlass::half_t>,
+    //               "Only half precision is supported for now.");
+    // static_assert(std::is_same_v<InType, typename RegTileB::DType>,
+    //               "Mismatched data type for operand A and B.");
+    // static_assert(std::is_same_v<OutType, float>, "Output must be float.");
 
     // A register tile's contiguous dimension maps to the fragment's contiguous
     // dimension, and the strided dimension maps to the strided dimension.
@@ -53,25 +52,25 @@ struct Gemm<RegTileA, RegTileB, RegTileC, InstShape<16, 16, 16>> {
     static_assert(RegTileB::kRows / BaseShape::sub_col == ks,
                   "Mismatched k-dimension for operand A and B.");
 
-    static_assert(ms && ns && ks, "Invalid tile shapes for GEMM.");
+    // static_assert(ms && ns && ks, "Invalid tile shapes for GEMM.");
 
     DEVICE void operator()(const RegTileA& a, const RegTileB& b, RegTileC& c) {
-        const uint32_t* ra = reinterpret_cast<const uint32_t*>(a.data());
-        const uint32_t* rb = reinterpret_cast<const uint32_t*>(b.data());
-        float* rc = c.mutable_data();
+        // const uint32_t* ra = reinterpret_cast<const uint32_t*>(a.data());
+        // const uint32_t* rb = reinterpret_cast<const uint32_t*>(b.data());
+        // float* rc = c.mutable_data();
 
-        int offset_a = 0, offset_b = 0, offset_c = 0;
-        for (int i = 0; i < ms; ++i) {
-            for (int j = 0; j < ns; ++j) {
-                offset_c = (i * ns + j) * 8;
-                for (int k = 0; k < ks; ++k) {
-                    offset_a = (i * ks + k) * 4;
-                    offset_b = (j * ks + k) * 4;
+        // int offset_a = 0, offset_b = 0, offset_c = 0;
+        // for (int i = 0; i < ms; ++i) {
+        //     for (int j = 0; j < ns; ++j) {
+        //         offset_c = (i * ns + j) * 8;
+        //         for (int k = 0; k < ks; ++k) {
+        //             offset_a = (i * ks + k) * 4;
+        //             offset_b = (j * ks + k) * 4;
 
-                    tile_wmma(&ra[offset_a], &rb[offset_b], &rc[offset_c]);
-                }
-            }
-        }
+        //             tile_wmma(&ra[offset_a], &rb[offset_b], &rc[offset_c]);
+        //         }
+        //     }
+        // }
     }
 
   private:

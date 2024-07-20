@@ -6,8 +6,7 @@
 #include "types/mod.hpp"
 
 namespace tiledcuda::cell::copy {
-
-using namespace tiledcuda::cell::traits;
+using namespace traits;
 
 /**
  * @brief Load a BastTile Matrix from Global memory to Register.

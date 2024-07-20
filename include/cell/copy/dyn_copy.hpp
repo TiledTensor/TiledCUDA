@@ -5,7 +5,6 @@
 #include <cute/tensor.hpp>
 
 namespace tiledcuda::cell::copy {
-
 using namespace cute;
 
 // Copy a 2d data tile from global memory to shared memory

@@ -1,15 +1,16 @@
 #pragma once
 
 #include "config.hpp"
+#include "types/layout.hpp"
 
 #include <cublas_v2.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
-#include <curand.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 namespace tiledcuda {
+namespace tl = cell::tile_layout;
 
 template <int a, int b>
 inline constexpr int CeilDiv = (a + b - 1) / b;  // for compile-time values
@@ -35,4 +36,19 @@ inline void __cublasCheck(const cublasStatus_t err, const char* file,
 }
 #define CublasCheck(call) __cublasCheck(call, __FILE__, __LINE__)
 
+HOST_DEVICE
+const char* layout_type_to_str(tl::Layout type) {
+    switch (type) {
+        case tl::Layout::RowMajor:
+            return "RowMajor";
+        case tl::Layout::ColMajor:
+            return "ColMajor";
+        case tl::Layout::SwizzledRowMajor:
+            return "SwizzledRowMajor";
+        case tl::Layout::SwizzledColMajor:
+            return "SwizzledColMajor";
+        default:
+            return "UnsupportedLayout";
+    }
+}
 }  // namespace tiledcuda
