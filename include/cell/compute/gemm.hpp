@@ -7,7 +7,7 @@
 
 namespace tiledcuda::cell::compute {
 
-namespace tl = tiledcuda::cell::tile_layout;
+namespace tl = tile_layout;
 
 template <typename TensorA, typename TensorB, typename TensorAcc,
           typename TiledMma>
@@ -31,17 +31,16 @@ struct Gemm {
 // partial specialization for wmma 16x16x16
 template <typename RegTileA, typename RegTileB, typename RegTileC>
 struct Gemm<RegTileA, RegTileB, RegTileC, InstShape<16, 16, 16>> {
-    using BaseShape =
-        tiledcuda::cell::traits::BaseTileShape<typename RegTileA::DType>;
+    using BaseShape = traits::BaseTileShape<typename RegTileA::DType::DType>;
 
     using InType = typename RegTileA::DType;
     using OutType = typename RegTileC::DType;
 
-    static_assert(std::is_same<InType, cutlass::half_t>::value,
+    static_assert(std::is_same_v<InType, cutlass::half_t>,
                   "Only half precision is supported for now.");
-    static_assert(std::is_same<InType, typename RegTileB::DType>::value,
+    static_assert(std::is_same_v<InType, typename RegTileB::DType>,
                   "Mismatched data type for operand A and B.");
-    static_assert(std::is_same<OutType, float>::value, "Output must be float.");
+    static_assert(std::is_same_v<OutType, float>, "Output must be float.");
 
     // A register tile's contiguous dimension maps to the fragment's contiguous
     // dimension, and the strided dimension maps to the strided dimension.

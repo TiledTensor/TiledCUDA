@@ -7,8 +7,8 @@
 
 namespace tiledcuda::cell::copy {
 
-using namespace tiledcuda::cell::traits;
-using namespace tiledcuda::cell::copy::atom;
+using namespace traits;
+using namespace atom;
 namespace tl = tile_layout;
 
 namespace detail {
@@ -242,7 +242,7 @@ struct RegToSharedStorer : public Base {
     ///        is shared memory.
     template <typename Shared>
     DEVICE void operator()(const Reg& src, Shared& dst) {
-        static_assert(std::is_same<typename Shared::DType, DType>::value,
+        static_assert(std::is_same_v<typename Shared::DType, DType>,
                       "The element data type of Shared and Register tile must "
                       "be the same.");
         static_assert((Reg::kNumel * Reg::DType::kNumel * 32 /*warp size*/ *

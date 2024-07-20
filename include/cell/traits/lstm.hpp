@@ -5,9 +5,8 @@
 #include "types/tile_shape.hpp"
 
 namespace tiledcuda::cell::traits {
-
 using namespace cute;
-namespace tl = tiledcuda::cell::tile_layout;
+namespace tl = tile_layout;
 
 template <typename Element_, typename CtaTileShape,
           typename WarpArrangement = tiledcuda::cell::TileShape<1, 2>,
