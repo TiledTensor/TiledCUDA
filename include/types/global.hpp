@@ -1,6 +1,7 @@
 #pragma once
 
 #include "types/layout.hpp"
+#include "util/print.hpp"
 
 namespace tiledcuda::cell {
 

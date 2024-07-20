@@ -58,6 +58,44 @@ __global__ void load_g2r(Element* src) {
 
 template <typename Element, tl::Layout kType, typename WarpLayout,
           typename RegLayout, typename GlobalLayout, typename BaseTile,
+          const size_t kHeight, size_t kWidth>
+__global__ void store_r2g(Element* dst) {
+    using SrcLayout = RegTile<BaseTile, RegLayout>;
+    using DstLayout = GlobalTile<Element, GlobalLayout>;
+
+    SrcLayout src_tile;
+    DstLayout dst_tile(dst);
+
+    int lane_id = threadIdx.x % 32;
+
+    // row major
+    for (int i = 0; i < kHeight; ++i) {
+        int row = i * 16 + lane_id / 4;
+        for (int j = 0; j < kWidth; ++j) {
+            int col = j * 16 + (lane_id % 4) * 2;
+            src_tile(i, j)(0, 0) = row * DstLayout::kRowStride + col;
+            src_tile(i, j)(0, 1) = row * DstLayout::kRowStride + col + 1;
+            src_tile(i, j)(1, 0) = row * DstLayout::kRowStride + col + 8;
+            src_tile(i, j)(1, 1) = row * DstLayout::kRowStride + col + 9;
+            src_tile(i, j)(0, 2) = (row + 8) * DstLayout::kRowStride + col;
+            src_tile(i, j)(0, 3) = (row + 8) * DstLayout::kRowStride + col + 1;
+            src_tile(i, j)(1, 2) = (row + 8) * DstLayout::kRowStride + col + 8;
+            src_tile(i, j)(1, 3) = (row + 8) * DstLayout::kRowStride + col + 9;
+        }
+    }
+
+    cell::copy::RegToGlobalStorer<DstLayout, SrcLayout, WarpLayout> storer;
+    storer(src_tile, dst_tile);
+
+    __syncthreads();
+
+    if (thread(0)) {
+        dst_tile.dump_value();
+    }
+}
+
+template <typename Element, tl::Layout kType, typename WarpLayout,
+          typename RegLayout, typename GlobalLayout, typename BaseTile,
           const copy::WarpReuse kMode, const size_t kHeight,
           const size_t kWidth, const size_t kWarpSize>
 void run_load_g2r_test() {
@@ -71,6 +109,19 @@ void run_load_g2r_test() {
 
     load_g2r<Element, kType, WarpLayout, RegLayout, GlobalLayout, BaseTile,
              kMode, kHeight, kWidth><<<1, 32 * kWarpSize>>>(d_src.data().get());
+}
+
+template <typename Element, tl::Layout kType, typename WarpLayout,
+          typename RegLayout, typename GlobalLayout, typename BaseTile,
+          const size_t kHeight, const size_t kWidth, const size_t kWarpSize>
+void run_store_r2g_test() {
+    int kNumel = 16 * 16 * kHeight * kWidth;
+    thrust::host_vector<Element> h_dst(kNumel, 0);
+
+    thrust::device_vector<Element> d_dst = h_dst;
+
+    store_r2g<Element, kType, WarpLayout, RegLayout, GlobalLayout, BaseTile,
+              kHeight, kWidth><<<1, 32 * kWarpSize>>>(d_dst.data().get());
 }
 
 namespace testing {
@@ -208,6 +259,22 @@ TEST(TestG2RegCopy, load_2d_tile_g2r_col_major_3) {
     run_load_g2r_test<Element, tl::Layout::ColMajor, WarpLayout, RegLayout,
                       GlobalLayout, BaseTileColMajor<Element>, kMode, kHeight,
                       kWidth, kWarpSize>();
+}
+
+TEST(TestG2RegCopy, store_2d_tile_r2g_row_major) {
+    using Element = float;
+    using WarpLayout = tl::RowMajor<1, 1>;
+    using RegLayout = tl::ColMajor<1, 1>;
+
+    const int kHeight = 1;
+    const int kWidth = 1;
+    const int kWarpSize = 1;
+
+    using GlobalLayout = tl::RowMajor<16 * kWidth, 16 * kHeight>;
+
+    run_store_r2g_test<Element, tl::Layout::RowMajor, WarpLayout, RegLayout,
+                       GlobalLayout, BaseTileRowMajor<Element>, kHeight, kWidth,
+                       kWarpSize>();
 }
 
 }  // namespace testing

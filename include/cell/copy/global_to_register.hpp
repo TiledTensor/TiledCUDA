@@ -355,7 +355,7 @@ struct GlobalToRegLoader : public Base {
  */
 template <typename Global_, typename Reg_, typename WarpLayout_,
           typename Base = warp::CopyBase<WarpLayout_, WarpReuse::Cont>>
-struct GlobalToRegStorer : public Base {
+struct RegToGlobalStorer : public Base {
     using Global = Global_;
     using Reg = Reg_;
     using DType = typename Global::DType;
