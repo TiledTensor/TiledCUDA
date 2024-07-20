@@ -3,8 +3,7 @@
 #include "types/layout.hpp"
 #include "util/debug.hpp"
 
-namespace tiledcuda {
-namespace cell {
+namespace tiledcuda::cell {
 
 namespace tl = tile_layout;
 
@@ -49,5 +48,4 @@ DEVICE void print_tile(const DType* data, const Layout& layout) {
     }
 }
 
-}  // namespace cell
-}  // namespace tiledcuda
+}  // namespace tiledcuda::cell

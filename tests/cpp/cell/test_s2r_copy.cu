@@ -4,7 +4,7 @@
 
 #include <glog/logging.h>
 
-namespace tiledcuda {
+namespace tiledcuda::testing {
 
 using namespace cell;
 using namespace copy;
@@ -83,8 +83,6 @@ __global__ void run_test_store(Loader& loader, Storer& storer) {
 }
 
 }  // namespace
-
-namespace testing {
 
 TEST(TestShared2Reg, operand_A) {  // load mode for loading operand A in gemm
     using Element = cutlass::half_t;
@@ -165,5 +163,4 @@ TEST(TestReg2Shared, operand_C) {
     cudaDeviceSynchronize();
 }
 
-}  // namespace testing
-}  // namespace tiledcuda
+}  // namespace tiledcuda::testing

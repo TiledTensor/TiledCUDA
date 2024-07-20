@@ -4,9 +4,8 @@
 #include "types/layout.hpp"
 
 namespace tiledcuda::cell::traits {
-
 using namespace cute;
-namespace tl = tiledcuda::cell::tile_layout;
+namespace tl = tile_layout;
 
 /// @brief Configurations for transfering a single 2D data tile from global
 /// memory to shared memory, which include configurating the layout of data tile

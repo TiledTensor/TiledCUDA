@@ -4,7 +4,6 @@
 
 namespace tiledcuda::cell {
 
-using namespace cell;
 namespace tl = tile_layout;
 
 template <typename Element_, typename Layout_>
