@@ -101,6 +101,10 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
         int lane_id = threadIdx.x % warpSize;
 
         const DType* data;
+
+        using Loader =
+            GlobalToRegMatLoader<Global, BaseTile, tl::Layout::RowMajor>;
+        Loader loader;
 #pragma unroll
         for (int i = 0; i < kRowExec; ++i) {
             int row = i * kTileSize + lane_id / 4;
@@ -109,9 +113,7 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
                 int col = j * kTileSize + (lane_id % 4) * 2;
 
                 data = src + row * Global::kRowStride + col;
-                using Loader = GlobalToRegMatLoader<Global, BaseTile,
-                                                    tl::Layout::RowMajor>;
-                Loader loader;
+
                 loader(data, dst(i, j));
             }
         }
@@ -138,15 +140,17 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
 
         const DType* data;
 
+        using Loader =
+            GlobalToRegMatLoader<Global, BaseTile, tl::Layout::ColMajor>;
+        Loader loader;
+
 #pragma unroll
         for (int i = 0; i < kColExec; ++i) {
             int col = i * kTileSize + lane_id / 4;
             for (int j = 0; j < kRowExec; ++j) {
                 int row = j * kTileSize + (lane_id % 4) * 2;
                 data = src + col * Global::kColStride + row;
-                using Loader = GlobalToRegMatLoader<Global, BaseTile,
-                                                    tl::Layout::ColMajor>;
-                Loader loader;
+
                 loader(data, dst(j, i));
             }
         }
