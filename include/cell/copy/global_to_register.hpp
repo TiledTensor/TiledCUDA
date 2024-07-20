@@ -44,7 +44,6 @@ struct GlobalToRegMatLoader<Global_, BaseTile_, tl::Layout::RowMajor> {
     }
 };
 
-// TODO(KuangjuX): Implement this.
 template <typename Global_, typename BaseTile_>
 struct GlobalToRegMatLoader<Global_, BaseTile_, tl::Layout::ColMajor> {
     using Global = Global_;
@@ -53,7 +52,16 @@ struct GlobalToRegMatLoader<Global_, BaseTile_, tl::Layout::ColMajor> {
 
     static constexpr int kStride = Global::kColStride;
 
-    DEVICE void operator()(const DType* src, BaseTile& dst) {}
+    DEVICE void operator()(const DType* src, BaseTile& dst) {
+        dst(0, 0) = src(0 * kStride + 0);
+        dst(1, 0) = src(0 * kStride + 1);
+        dst(0, 1) = src(0 * kStride + 8);
+        dst(1, 1) = src(0 * kStride + 9);
+        dst(2, 0) = src(8 * kStride + 0);
+        dst(3, 0) = src(8 * kStride + 1);
+        dst(2, 1) = src(8 * kStride + 8);
+        dst(3, 1) = src(8 * kStride + 9);
+    }
 };
 
 /**
@@ -110,7 +118,6 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
     }
 };
 
-// TODO(KuangjuX): Implement this.
 template <typename Global_, typename Reg_, const int kRowExec_,
           const int kColExec_>
 struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
@@ -126,7 +133,24 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
     static constexpr int kRowExec = kRowExec_;
     static constexpr int kColExec = kColExec_;
 
-    DEVICE void operator()(const DType* src, Reg& dst) {}
+    DEVICE void operator()(const DType* src, Reg& dst) {
+        int lane_id = threadIdx.x % warpSize;
+
+        const DType* data;
+
+#pragma unroll
+        for (int i = 0; i < kColExec; ++i) {
+            int col = i * kTileSize + lane_id / 4;
+            for (int j = 0; j < kRowExec; ++j) {
+                int row = j * kTileSize + (lane_id % 4) * 2;
+                data = src + col * Global::kColStride + row;
+                using Loader = GlobalToRegMatLoader<Global, BaseTile,
+                                                    tl::Layout::ColMajor>;
+                Loader loader;
+                loader(data, dst(j, i));
+            }
+        }
+    }
 };
 
 /**
