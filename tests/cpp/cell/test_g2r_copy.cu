@@ -83,7 +83,7 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r_row_major_0) {
     const int kHeight = 1;
     const int kWidth = 1;
     const int kWarpSize = 1;
-    const copy::WarpReuse kMode = copy::WarpReuse::RowReuseCont;
+    const copy::WarpReuse kMode = copy::WarpReuse::Cont;
 
     using GlobalLayout = tl::RowMajor<16 * kHeight, 16 * kWidth>;
 
@@ -100,7 +100,7 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r_row_major_1) {
     const int kHeight = 2;
     const int kWidth = 2;
     const int kWarpSize = 1;
-    const copy::WarpReuse kMode = copy::WarpReuse::RowReuseCont;
+    const copy::WarpReuse kMode = copy::WarpReuse::Cont;
 
     using GlobalLayout = tl::RowMajor<16 * kHeight, 16 * kWidth>;
 
@@ -151,7 +151,7 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r_col_major_0) {
     const int kHeight = 1;
     const int kWidth = 1;
     const int kWarpSize = 1;
-    const copy::WarpReuse kMode = copy::WarpReuse::RowReuseCont;
+    const copy::WarpReuse kMode = copy::WarpReuse::Cont;
 
     using GlobalLayout = tl::ColMajor<16 * kWidth, 16 * kHeight>;
 
@@ -168,7 +168,7 @@ TEST(TestG2RegCopy, copy_2d_tile_g2r_col_major_1) {
     const int kHeight = 2;
     const int kWidth = 2;
     const int kWarpSize = 1;
-    const copy::WarpReuse kMode = copy::WarpReuse::RowReuseCont;
+    const copy::WarpReuse kMode = copy::WarpReuse::Cont;
 
     using GlobalLayout = tl::ColMajor<16 * kWidth, 16 * kHeight>;
 
