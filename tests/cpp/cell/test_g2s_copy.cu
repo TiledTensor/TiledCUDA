@@ -6,7 +6,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
-namespace tiledcuda {
+namespace tiledcuda::testing {
 
 namespace {
 // the host function to call the device copy function
@@ -30,8 +30,6 @@ __global__ void copy_g2s(const Element* src, Element* trg) {
     __syncthreads();
 }
 }  // namespace
-
-namespace testing {
 
 TEST(TestG2ShmCopy, copy_2d_tile_g2s) {
     namespace traits = tiledcuda::cell::traits;
@@ -89,5 +87,4 @@ TEST(TestG2ShmCopy, copy_2d_tile_g2s) {
         reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_B.data())), numel);
 }
 
-}  // namespace testing
-}  // namespace tiledcuda
+}  // namespace tiledcuda::testing

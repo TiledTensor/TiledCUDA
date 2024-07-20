@@ -7,10 +7,11 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
-namespace tiledcuda {
+namespace tiledcuda::testing {
 
 using namespace cell;
 
+namespace {
 template <typename Element, tl::Layout kType, typename WarpLayout,
           typename RegLayout, typename GlobalLayout, typename BaseTile,
           const copy::WarpReuse kMode, const size_t kHeight, size_t kWidth>
@@ -160,9 +161,9 @@ void run_store_r2g_test() {
     store_r2g<Element, kType, WarpLayout, RegLayout, GlobalLayout, BaseTile,
               kHeight, kWidth><<<1, 32 * kWarpSize>>>(d_dst.data().get());
 }
+}  // namespace
 
-namespace testing {
-TEST(TestG2RegCopy, load_2d_tile_g2r_row_major_0) {
+TEST(TestG2RegCopy, copy_2d_tile_g2r_row_major_0) {
     using Element = float;
     using WarpLayout = tl::RowMajor<1, 1>;
     using RegLayout = tl::RowMajor<1, 1>;
@@ -330,6 +331,4 @@ TEST(TestG2RegCopy, store_2d_tile_r2g_col_major) {
                        kWarpSize>();
 }
 
-}  // namespace testing
-
-}  // namespace tiledcuda
+}  // namespace tiledcuda::testing

@@ -1,8 +1,7 @@
 #include "common/test_utils.hpp"
 #include "types/mod.hpp"
 
-namespace tiledcuda {
-namespace testing {
+namespace tiledcuda::testing {
 
 using namespace cell;
 using namespace cute;
@@ -112,5 +111,4 @@ TEST(TestTile, test_col_major) {
     cudaDeviceSynchronize();
 }
 
-}  // namespace testing
-}  // namespace tiledcuda
+}  // namespace tiledcuda::testing

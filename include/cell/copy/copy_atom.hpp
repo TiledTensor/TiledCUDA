@@ -8,8 +8,7 @@
 #include "types/layout.hpp"
 
 namespace tiledcuda::cell::copy::atom {
-
-namespace tl = tiledcuda::cell::tile_layout;
+namespace tl = tile_layout;
 
 template <typename Element>
 requires std::is_same_v<Element, __half> ||
