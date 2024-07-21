@@ -7,7 +7,7 @@
 namespace tiledcuda::cell::traits {
 
 template <typename Element>
-concept BeseType = std::is_same_v<Element, float> ||
+concept BaseType = std::is_same_v<Element, float> ||
     std::is_same_v<Element, __half> || std::is_same_v<Element, cutlass::half_t>;
 
 /// @brief Architecture-specific magic numbers.
@@ -24,7 +24,7 @@ struct TraitsBase {
 // shape that efficiently utilizes the hardware's capabilities. Strive to
 // organize all the magic numbers around this BaseTile more clearly.
 template <typename Element, typename Base = TraitsBase<Element>>
-requires BeseType<Element>
+requires BaseType<Element>
 struct BaseTileShape : public Base {
     static constexpr int elem_per_thread = Base::kNumPerAccess;
 

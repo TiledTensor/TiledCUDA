@@ -170,6 +170,7 @@ void run_test() {
 
     LOG(INFO) << std::endl
               << "RegA: " << RegA{} << std::endl
+              << "RegA-Base: " << typename RegA::DType{} << std::endl
               << "RegB: " << RegB{} << std::endl
               << "RegC: " << RegC{} << std::endl;
 
