@@ -36,7 +36,7 @@ constexpr int get_cols<cutlass::half_t> = 1;
 }  // namespace
 
 /// @brief Helper for pretty printing a register tile's static shape
-/// information. This printer works ONLY on the host.
+///        information. This printer works ONLY on the host.
 struct RegTilePrettyPrinter {
     template <typename Tile>
     static HOST void print(std::ostream& out, const Tile& tile) {

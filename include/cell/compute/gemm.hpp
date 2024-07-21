@@ -18,7 +18,7 @@ DEVICE void gemm(const TiledMma& mma, const TensorA& a, const TensorB& b,
 namespace detail {
 
 /// @brief: Functor to warp wmma PTX instruction. See the below document for
-///        various choices and detailed parameters of the wmma PTX instruction.
+///         various choices and detailed parameters of the wmma PTX instruction.
 ///         https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-mma
 template <typename RegTileA, typename RegTileB, typename RegTileC>
 struct Gemm {
@@ -32,7 +32,8 @@ struct Gemm {
                       std::is_same_v<InTypeA, __half>,
                   "This GEMM implementation supports only half-precision as "
                   "the input element type.");
-    static_assert(std::is_same_v<OutType, float>, "Output must be float.");
+    static_assert(std::is_same_v<OutType, float>,
+                  "The output type must be float.");
     static_assert(std::is_same_v<InTypeA, InTypeB>,
                   "Mismatched data type for operand A and B.");
     static_assert(RegTileB::kRows == RegTileA::kCols,
