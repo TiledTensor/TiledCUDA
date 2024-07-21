@@ -1,5 +1,4 @@
 #include "cell/mod.hpp"
-#include "cell/traits/base.hpp"
 #include "common/test_utils.hpp"
 #include "cuda_utils.hpp"
 #include "util/debug.hpp"

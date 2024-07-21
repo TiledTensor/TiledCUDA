@@ -78,8 +78,8 @@ class RegTile {
         return data_[layout_(x, y)];
     }
 
-    DEVICE void dump_value() {
-        print_tile(static_cast<DType*>(data_), layout_);
+    DEVICE void dump_value() const {
+        print_tile(const_cast<DType*>(data_), layout_);
     }
 
   private:
