@@ -11,10 +11,7 @@ using namespace cell;
 using namespace cell::copy;
 namespace tl = tile_layout;
 
-#define DEBUG true
-
 namespace {
-
 // In this implementation, A and C are interpreted as being laid out in
 // row-major, and B is interpreted as being laid out in column-major.
 __device__ void naive_gemm(int kM, int kN, int kK,  //
@@ -37,17 +34,18 @@ __device__ void check_results(const float* hc1, const float* hc2, int numel) {
 
 #if defined(DEBUG)
     if (thread0()) {
-        printf("\n\nours:\n");
+        int cut_off = numel < 128 ? numel : 128;
+        printf("\nours:\n");
         printf("%d:\t", 0);
-        for (int i = 0; i < numel; i++) {
-            printf("%.1f, ", hc1[i]);
-            if (i & (i + 1) % 32 == 0) printf("\n%d:\t", (i + 1) / 32);
+        for (int i = 0; i < cut_off; i++) {
+            printf("%.2f, ", hc1[i]);
+            if (i & (i + 1) % 16 == 0) printf("\n%d:\t", (i + 1) / 16);
         }
         printf("\nground-truth:\n");
         printf("%d:\t", 0);
-        for (int i = 0; i < numel; i++) {
-            printf("%.1f, ", hc2[i]);
-            if (i & (i + 1) % 32 == 0) printf("\n%d:\t", (i + 1) / 32);
+        for (int i = 0; i < cut_off; i++) {
+            printf("%.2f, ", hc2[i]);
+            if (i & (i + 1) % 16 == 0) printf("\n%d:\t", (i + 1) / 16);
         }
     }
 #endif
@@ -58,8 +56,12 @@ __device__ void init_values(Element* a, Element* b, ElementAcc* c, int M, int N,
                             int K) {
     if (!thread0()) return;
 
-    for (int i = 0; i < M * K; ++i) a[i] = static_cast<Element>(i / 100.);
-    for (int i = 0; i < K * N; ++i) b[i] = static_cast<Element>(i / 100.);
+    for (int i = 0; i < M * K; ++i)
+        a[i] = static_cast<Element>(i % 2048 / 1000.);
+
+    for (int i = 0; i < K * N; ++i)
+        b[i] = static_cast<Element>(i % 2048 / 1000.);
+
     for (int i = 0; i < M * N; ++i) c[i] = 0.;
 }
 
@@ -93,14 +95,6 @@ __global__ void test_wmma(LoadRegA& load_rA, LoadRegB& load_rB,
 
         load_rA(sA, rA);
         load_rB(sB, rB);
-
-        if (thread0()) {
-            printf("rA:\n");
-            rA.dump_value();
-
-            printf("\nrB:\n");
-            rB.dump_value();
-        }
 
         compute::gemm_(rA, rB, acc);
     }
@@ -180,7 +174,6 @@ void run_test() {
 
     LOG(INFO) << std::endl
               << "RegA: " << RegA{} << std::endl
-              << "RegA-Base: " << typename RegA::DType{} << std::endl
               << "RegB: " << RegB{} << std::endl
               << "RegC: " << RegC{} << std::endl;
 
@@ -190,15 +183,16 @@ void run_test() {
               typename config::StoreRegC>
         <<<dim_grid, dim_block, shm_size>>>(load_rA, load_rB, store_rC);
     cudaDeviceSynchronize();
+
+    LOG(INFO) << "[" << kM << ", " << kN << ", " << kK << "]. Test passed!"
+              << std::endl;
 }
 
 TEST(TestWmma, test_m16n16k16_f) {
-    // Test the `BaseTile` 16x16x16
-    run_test<16, 16, 16>();
-
-    // run_test<16, 32, 16>();
-    // run_test<96, 48, 80>();
-    // run_test<64, 128, 128>();
+    run_test<16, 16, 16>();  // Test the `BaseTile` 16x16x16
+    run_test<16, 32, 16>();
+    run_test<96, 48, 80>();
+    run_test<64, 128, 128>();
 }
 
 }  // namespace tiledcuda::testing

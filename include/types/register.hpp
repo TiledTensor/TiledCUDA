@@ -95,8 +95,8 @@ using BaseTileColMajor = RegTile<Element, tl::ColMajor<4, 2>>;
 
 /// @brief Pretty printer for the static shape information of a register tile.
 ///        Note: This printer function works ONLY on the host. The current
-///        implementation provides a flattened layout and only displays the
-///        outer name of the tile layout.
+///        implementation prints a flattened layout and only displays the outer
+///        name of the tile layout.
 /// @tparam T: element type, which must be a `RegTile` rather than a basic
 ///            element type like float
 /// @tparam Layout: tile layout
