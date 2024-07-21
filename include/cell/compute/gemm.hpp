@@ -17,9 +17,9 @@ DEVICE void gemm(const TiledMma& mma, const TensorA& a, const TensorB& b,
 
 namespace detail {
 
-///@brief: Functor to warp ptx wmma instruction. See the below document for
+/// @brief: Functor to warp wmma PTX instruction. See the below document for
 ///        various choices and detailed parameters of the wmma PTX instruction.
-//         https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-mma
+///         https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-mma
 template <typename RegTileA, typename RegTileB, typename RegTileC>
 struct Gemm {
     using InTypeA = typename RegTileA::DType::DType;
