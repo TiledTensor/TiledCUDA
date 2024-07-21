@@ -24,7 +24,4 @@ inline static constexpr int64_t get_numel = TileShape::kNumel;
 template <const size_t I, typename TileShape>
 inline static constexpr size_t dim_size = cute::get<I>(TileShape::shape);
 
-template <const int kM, const int kN, const int kK>
-using InstShape = TileShape<kM, kN, kK>;
-
 }  // namespace tiledcuda::cell

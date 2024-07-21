@@ -11,6 +11,8 @@ using namespace cell;
 using namespace cell::copy;
 namespace tl = tile_layout;
 
+#define DEBUG true
+
 namespace {
 
 // In this implementation, A and C are interpreted as being laid out in
@@ -38,13 +40,13 @@ __device__ void check_results(const float* hc1, const float* hc2, int numel) {
         printf("\n\nours:\n");
         printf("%d:\t", 0);
         for (int i = 0; i < numel; i++) {
-            printf("%.0f, ", hc1[i]);
+            printf("%.1f, ", hc1[i]);
             if (i & (i + 1) % 32 == 0) printf("\n%d:\t", (i + 1) / 32);
         }
         printf("\nground-truth:\n");
         printf("%d:\t", 0);
         for (int i = 0; i < numel; i++) {
-            printf("%.0f, ", hc2[i]);
+            printf("%.1f, ", hc2[i]);
             if (i & (i + 1) % 32 == 0) printf("\n%d:\t", (i + 1) / 32);
         }
     }
@@ -56,8 +58,8 @@ __device__ void init_values(Element* a, Element* b, ElementAcc* c, int M, int N,
                             int K) {
     if (!thread0()) return;
 
-    for (int i = 0; i < M * K; ++i) a[i] = static_cast<Element>(i);
-    for (int i = 0; i < K * N; ++i) b[i] = static_cast<Element>(i);
+    for (int i = 0; i < M * K; ++i) a[i] = static_cast<Element>(i / 100.);
+    for (int i = 0; i < K * N; ++i) b[i] = static_cast<Element>(i / 100.);
     for (int i = 0; i < M * N; ++i) c[i] = 0.;
 }
 
@@ -91,6 +93,14 @@ __global__ void test_wmma(LoadRegA& load_rA, LoadRegB& load_rB,
 
         load_rA(sA, rA);
         load_rB(sB, rB);
+
+        if (thread0()) {
+            printf("rA:\n");
+            rA.dump_value();
+
+            printf("\nrB:\n");
+            rB.dump_value();
+        }
 
         compute::gemm_(rA, rB, acc);
     }

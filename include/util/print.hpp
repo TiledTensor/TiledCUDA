@@ -17,7 +17,7 @@ template <typename Layout>
 DEVICE void print_tile(const float* data, const Layout& layout) {
     for (int i = 0; i < tl::num_rows<Layout>; ++i) {
         for (int j = 0; j < tl::num_cols<Layout>; ++j) {
-            printf("%.0f, ", data[layout(i, j)]);
+            printf("%.1f, ", data[layout(i, j)]);
         }
         printf("\n");
     }
@@ -30,7 +30,7 @@ DEVICE void print_tile(const cutlass::half_t* data, const Layout& layout) {
 
     for (int i = 0; i < tl::num_rows<Layout>; ++i) {
         for (int j = 0; j < tl::num_cols<Layout>; ++j) {
-            printf("%.0f, ", __half2float(data_[layout(i, j)]));
+            printf("%.1f, ", __half2float(data_[layout(i, j)]));
         }
         printf("\n");
     }
