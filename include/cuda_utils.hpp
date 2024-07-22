@@ -39,13 +39,13 @@ inline void __cublasCheck(const cublasStatus_t err, const char* file,
 HOST_DEVICE
 const char* layout_type_to_str(tl::Layout type) {
     switch (type) {
-        case tl::Layout::RowMajor:
+        case tl::Layout::kRowMajor:
             return "RowMajor";
-        case tl::Layout::ColMajor:
+        case tl::Layout::kColMajor:
             return "ColMajor";
-        case tl::Layout::SwizzledRowMajor:
+        case tl::Layout::kSwizzledRowMajor:
             return "SwizzledRowMajor";
-        case tl::Layout::SwizzledColMajor:
+        case tl::Layout::kSwizzledColMajor:
             return "SwizzledColMajor";
         default:
             return "UnsupportedLayout";

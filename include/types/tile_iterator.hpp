@@ -4,14 +4,13 @@
 #include "types/tile_shape.hpp"
 
 namespace tiledcuda::cell {
-
 namespace tl = tile_layout;
 
 struct Underscore {};                  // dummy type for underscore
 static const __device__ Underscore _;  // for slicing
 
 template <class Tile, class ChunkShape>
-struct SharedTileIterator;
+struct TileIterator;
 
 /// @brief `SharedTileIterator` chunks a shared memory tile into smaller tiles
 ///         and iterates over these smaller sub-tiles.
@@ -19,7 +18,7 @@ struct SharedTileIterator;
 /// @tparam ChunkShape_: The shape of the smaller tiles into which the large
 ///                      tile is partitioned (chunk shape).
 template <class Tile_, class ChunkShape_>
-class SharedTileIterator {
+class TileIterator {
   public:
     using Tile = Tile_;
     using ChunkShape = ChunkShape_;
@@ -35,7 +34,7 @@ class SharedTileIterator {
     static constexpr int sc0 = Tile::kRows / kStride0;
     static constexpr int sc1 = Tile::kCols / kStride1;
 
-    DEVICE SharedTileIterator(typename Tile::DType* data) : data_(data) {}
+    DEVICE TileIterator(typename Tile::DType* data) : data_(data) {}
 
     // Since a Tile is considered to be at most a 2D array, the iterator
     // traverses over these two dimensions. The current rules are:
@@ -57,7 +56,7 @@ class SharedTileIterator {
                                           Tile::kColStride>());
         using NewTile = SharedTile<typename Tile::DType, TileLayout>;
 
-        int offset = Tile::type == tl::Layout::RowMajor
+        int offset = Tile::kType == tl::Layout::kRowMajor
                          ? x * (kStride0 * Tile::kRowStride) + y * kStride1
                          : x * kStride0 + y * (Tile::kColStride * kStride1);
 
@@ -75,7 +74,7 @@ class SharedTileIterator {
                                           Tile::kColStride>());
         using NewTile = SharedTile<typename Tile::DType, TileLayout>;
 
-        int offset = Tile::type == tl::Layout::RowMajor
+        int offset = Tile::kType == tl::Layout::kRowMajor
                          ? x * (kStride0 * Tile::kCols) + y * kStride1
                          : x * kStride0 + y * (Tile::kRows * kStride1);
         NewTile tile(data_ + offset);
@@ -93,11 +92,11 @@ class SharedTileIterator {
                                                          Tile::kColStride>());
 
         using NewTile = SharedTile<typename Tile::DType, TileLayout>;
-        using Iter = SharedTileIterator<NewTile, ChunkShape>;
+        using Iter = TileIterator<NewTile, ChunkShape>;
         static_assert(Iter::sc0 == 1);
 
         // advance pointer to the correct start position
-        int offset = Tile::type == tl::Layout::RowMajor
+        int offset = Tile::kType == tl::Layout::kRowMajor
                          ? x * (kStride0 * Tile::kCols)
                          : x * kStride0;
 
@@ -115,11 +114,11 @@ class SharedTileIterator {
                                                          Tile::kColStride>());
 
         using NewTile = SharedTile<typename Tile::DType, TileLayout>;
-        using Iter = SharedTileIterator<NewTile, ChunkShape>;
+        using Iter = TileIterator<NewTile, ChunkShape>;
         static_assert(Iter::sc1 == 1);
 
         // advance pointer to the correct start position
-        int offset = Tile::type == tl::Layout::RowMajor
+        int offset = Tile::kType == tl::Layout::kRowMajor
                          ? y * kStride1
                          : y * (Tile::kRows * kStride1);
 

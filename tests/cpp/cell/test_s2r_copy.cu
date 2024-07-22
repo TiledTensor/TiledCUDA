@@ -99,7 +99,7 @@ TEST(TestShared2Reg, operand_A) {  // load mode for loading operand A in gemm
 
     // In the `RowReuseCont` mode, warps in the same row repeatedly access the
     // same data.
-    using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::RowReuseCont>;
+    using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::kRowReuseCont>;
     Copy copy;
 
     dim3 dim_grid(1, 1, 1);
@@ -127,7 +127,7 @@ TEST(TestShared2Reg, operand_B) {  // load mode for loading operand B in gemm
     using Reg = RegTile<BaseTileColMajor<Element>, tl::ColMajor<2, 2>>;
     // In the `ColReuseCont` mode, warps in the same column repeatedly access
     // the same data.
-    using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::ColReuseCont>;
+    using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::kColReuseCont>;
     Copy copy;
 
     dim3 dim_grid(1, 1, 1);
@@ -148,7 +148,7 @@ TEST(TestReg2Shared, operand_C) {
     using Shared = SharedTile<Element, tl::RowMajor<16, 16>>;
     using Reg = RegTile<BaseTileRowMajor<Element>, tl::RowMajor<1, 1>>;
 
-    using Loader = SharedToRegLoader<Reg, WarpLayout, WarpReuse::Cont>;
+    using Loader = SharedToRegLoader<Reg, WarpLayout, WarpReuse::kCont>;
     Loader loader;
 
     using Storer = RegToSharedStorer<Reg, WarpLayout>;

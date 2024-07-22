@@ -21,23 +21,25 @@ DEVICE int warp_offset_impl(int warp_row, int warp_col, int warp_rstride,
 };
 
 template <>
-DEVICE int warp_offset_impl<WarpReuse::Cont>(int warp_row, int warp_col,
-                                             int warp_rstride,
-                                             int warp_cstride) {
+DEVICE int warp_offset_impl<WarpReuse::kCont>(int warp_row, int warp_col,
+                                              int warp_rstride,
+                                              int warp_cstride) {
     return warp_row * warp_rstride + warp_col * warp_cstride;
 }
 
 template <>
-DEVICE int warp_offset_impl<WarpReuse::ColReuseCont>(int warp_row, int warp_col,
-                                                     int warp_rstride,
-                                                     int warp_cstride) {
+DEVICE int warp_offset_impl<WarpReuse::kColReuseCont>(int warp_row,
+                                                      int warp_col,
+                                                      int warp_rstride,
+                                                      int warp_cstride) {
     return warp_col * warp_cstride;
 }
 
 template <>
-DEVICE int warp_offset_impl<WarpReuse::RowReuseCont>(int warp_row, int warp_col,
-                                                     int warp_rstride,
-                                                     int warp_cstride) {
+DEVICE int warp_offset_impl<WarpReuse::kRowReuseCont>(int warp_row,
+                                                      int warp_col,
+                                                      int warp_rstride,
+                                                      int warp_cstride) {
     return warp_row * warp_rstride;
 }
 }  // namespace detail
@@ -59,11 +61,11 @@ struct CopyBase {
             Shared::kCols / tl::num_cols<WarpLayout>;
 
         constexpr static int kWarpRstride =
-            Shared::type == tl::Layout::RowMajor
+            Shared::kType == tl::Layout::kRowMajor
                 ? Shared::kRowStride * kWarpShapeRow
                 : kWarpShapeRow;
         constexpr static int kWarpCstride =
-            Shared::type == tl::Layout::RowMajor
+            Shared::kType == tl::Layout::kRowMajor
                 ? kWarpShapeCol
                 : Shared::kColStride * kWarpShapeCol;
 
@@ -87,8 +89,8 @@ struct CopyBase {
             // Warps in the same columns (`warps_per_row` in total) repeatedly
             // load the shared memory rows. Therefore, `row_exec` is not divided
             // by warps_per_row.
-            case WarpReuse::ColReuseCont:
-            case WarpReuse::ColReuseCir:
+            case WarpReuse::kColReuseCont:
+            case WarpReuse::kColReuseCir:
                 count = kRows / BaseTile::kRows;
                 break;
             default:  // Cont, Cir, RowReuseCont, RowReuseCir hit this case.
@@ -118,8 +120,8 @@ struct CopyBase {
             // Warps in the same rows (`warps_per_col` in total) repeatedly load
             // the shared memory columns. Therefore, `col_exec` is not divided
             // by `warps_per_col`.
-            case WarpReuse::RowReuseCont:
-            case WarpReuse::RowReuseCir:
+            case WarpReuse::kRowReuseCont:
+            case WarpReuse::kRowReuseCir:
                 count = kCols / BaseTile::kCols;
                 break;
             default:  // Cont, Cir, ColReuseCont, ColReuseCir hit this case.
@@ -158,9 +160,9 @@ struct CopyBase {
         // Consider refining the code structure using more appropriate methods,
         // such as partial specialization.
         switch (tl::layout_type<WarpLayout>) {
-            case tl::Layout::RowMajor:
+            case tl::Layout::kRowMajor:
                 return wid / tl::num_cols<WarpLayout>;
-            case tl::Layout::ColMajor:
+            case tl::Layout::kColMajor:
                 return wid % tl::num_rows<WarpLayout>;
             default:
                 assert(false && "Not implemented yet.");
@@ -196,9 +198,9 @@ struct CopyBase {
         // Consider refining the code structure using more appropriate methods,
         // such as partial specialization.
         switch (tl::layout_type<WarpLayout>) {
-            case tl::Layout::RowMajor:
+            case tl::Layout::kRowMajor:
                 return wid % tl::num_cols<WarpLayout>;
-            case tl::Layout::ColMajor:
+            case tl::Layout::kColMajor:
                 return wid / tl::num_rows<WarpLayout>;
             default:
                 assert(false && "Not implemented yet.");

@@ -128,11 +128,11 @@ struct TestTraits {
     /// === 3. configurate tile transfer between shared and register loader ===
     // shared tile for operand A
     using SharedA = SharedTile<Element, tl::RowMajor<kM, kK>>;
-    using TileIteratorA = SharedTileIterator<SharedA, TileShape<kM, kChunkK>>;
+    using TileIteratorA = TileIterator<SharedA, TileShape<kM, kChunkK>>;
 
     // shared tile for operand B
     using SharedB = SharedTile<Element, tl::ColMajor<kK, kN>>;
-    using TileIteratorB = SharedTileIterator<SharedB, TileShape<kChunkK, kN>>;
+    using TileIteratorB = TileIterator<SharedB, TileShape<kChunkK, kN>>;
 
     static_assert(TileIteratorA::sc1 == TileIteratorB::sc0,
                   "mismatched K dimension!");
@@ -145,7 +145,7 @@ struct TestTraits {
 
     // load RegTileA from shared
     using LoadRegA =
-        SharedToRegLoader<RegA, WarpLayout, WarpReuse::RowReuseCont>;
+        SharedToRegLoader<RegA, WarpLayout, WarpReuse::kRowReuseCont>;
 
     // register tile for operand B, calculate register usage for operand B
     static constexpr int kBKs = kChunkK / BaseShape::kTileSize;
@@ -155,7 +155,7 @@ struct TestTraits {
 
     // load RegTileB from shared
     using LoadRegB =
-        SharedToRegLoader<RegB, WarpLayout, WarpReuse::ColReuseCont>;
+        SharedToRegLoader<RegB, WarpLayout, WarpReuse::kColReuseCont>;
 
     // shared tile for output C
     using SharedC = SharedTile<ElementAcc, tl::RowMajor<kM, kN>>;
