@@ -128,7 +128,7 @@ struct TestTraits {
     static constexpr int kKs = kK / BaseShape::kTileSize;
 
     using SharedA = SharedTile<Element, tl::RowMajor<kM, kK>>;
-    using TileIteratorA = SharedTileIterator<SharedA, TileShape<kM, kK>>;
+    using TileIteratorA = TileIterator<SharedA, TileShape<kM, kK>>;
 
     using RegA = RegTile<BaseTileRowMajor<Element>, tl::RowMajor<kMs, kKs>>;
     using LoadRegA =
@@ -137,7 +137,7 @@ struct TestTraits {
     using SharedB = SharedTile<Element, tl::ColMajor<kK, kN>>;
 
     using RegB = RegTile<BaseTileColMajor<Element>, tl::ColMajor<kKs, kNs>>;
-    using TileIteratorB = SharedTileIterator<SharedB, TileShape<kK, kN>>;
+    using TileIteratorB = TileIterator<SharedB, TileShape<kK, kN>>;
     using LoadRegB =
         SharedToRegLoader<RegB, WarpLayout, WarpReuse::ColReuseCont>;
 

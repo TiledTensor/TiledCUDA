@@ -128,11 +128,11 @@ struct TestTraits {
     /// === 3. configurate tile transfer between shared and register loader ===
     // shared tile for operand A
     using SharedA = SharedTile<Element, tl::RowMajor<kM, kK>>;
-    using TileIteratorA = SharedTileIterator<SharedA, TileShape<kM, kChunkK>>;
+    using TileIteratorA = TileIterator<SharedA, TileShape<kM, kChunkK>>;
 
     // shared tile for operand B
     using SharedB = SharedTile<Element, tl::ColMajor<kK, kN>>;
-    using TileIteratorB = SharedTileIterator<SharedB, TileShape<kChunkK, kN>>;
+    using TileIteratorB = TileIterator<SharedB, TileShape<kChunkK, kN>>;
 
     static_assert(TileIteratorA::sc1 == TileIteratorB::sc0,
                   "mismatched K dimension!");

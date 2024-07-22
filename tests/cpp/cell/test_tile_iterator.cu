@@ -82,7 +82,7 @@ TEST(TestTile, test_row_major) {
     const int cols = 12;
 
     using Tile = SharedTile<Element, tl::RowMajor<rows, cols>>;
-    using Iterator = SharedTileIterator<Tile, TileShape<2, 4>>;
+    using Iterator = TileIterator<Tile, TileShape<2, 4>>;
 
     LOG(INFO) << std::endl << "Test Row-major" << std::endl;
 
@@ -100,7 +100,7 @@ TEST(TestTile, test_col_major) {
     const int cols = 12;
 
     using Tile = SharedTile<Element, tl::ColMajor<rows, cols>>;
-    using Iterator = SharedTileIterator<Tile, TileShape<2, 4>>;
+    using Iterator = TileIterator<Tile, TileShape<2, 4>>;
 
     LOG(INFO) << std::endl << "Test Column-major" << std::endl;
 
