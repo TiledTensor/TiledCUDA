@@ -108,7 +108,7 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
                 data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
 
                 // issue the hardware-backed memory access instruction
-                this->ldmatrix(data, dst(i, j).mutable_data());
+                this->ldmatrix(data, dst(j, i).mutable_data());
             }
         }
     }
