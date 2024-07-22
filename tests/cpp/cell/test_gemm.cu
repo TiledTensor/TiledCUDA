@@ -4,7 +4,6 @@
 #include "util/debug.hpp"
 
 #include <cublas_v2.h>
-#include <glog/logging.h>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
@@ -13,8 +12,6 @@ using namespace cell;
 using namespace cell::copy;
 namespace tl = cell::tile_layout;
 using namespace cute;
-
-#define DEBUG true
 
 namespace {
 float rand_float(float a = 1e-3, float b = 1) {
@@ -63,11 +60,10 @@ bool check_correctness(const half* hc1, const float* hc2, int row, int col) {
         total_diff += diff;
 
         if (diff > eps) {
-            // LOG(INFO) << i
-            //           << "-th value has large numeric absolute diff: " <<
-            //           diff
-            //           << ", Expected: " << __half2float(hc1[i])
-            //           << "; Got: " << hc2[i] << std::endl;
+            LOG(INFO) << i
+                      << "-th value has large numeric absolute diff: " << diff
+                      << ", Expected: " << __half2float(hc1[i])
+                      << "; Got: " << hc2[i] << std::endl;
         }
     }
 
@@ -210,8 +206,6 @@ __global__ void test_wmma(const Element* ga, const Element* gb,
     RegC acc;
 
     for (int k = 0; k < TileIteratorA::sc1; ++k) {
-        // printf("sA:\n");
-
         load_rA(sAs(k), rA);
         load_rB(sBs(k), rB);
 
@@ -238,14 +232,12 @@ void run_test() {
     // initialize data
     thrust::host_vector<Element> h_a(kM * kK);
     for (int i = 0; i < h_a.size(); ++i) {
-        h_a[i] = static_cast<Element>(i);
-        // h_a[i] = static_cast<Element>(rand_float());
+        h_a[i] = static_cast<Element>(rand_float());
     }
 
     thrust::host_vector<Element> h_b(kK * kN);
     for (int i = 0; i < h_b.size(); ++i) {
-        h_b[i] = static_cast<Element>(i);
-        // h_b[i] = static_cast<Element>(rand_float());
+        h_b[i] = static_cast<Element>(rand_float());
     }
 
     thrust::host_vector<ElementAcc> h_c(kM * kN);
@@ -264,6 +256,10 @@ void run_test() {
               << "], k_chunk_size: " << kChunkK
               << ", kThreads: " << config::kThreads << std::endl;
 
+    using RegA = typename config::RegA;
+    using RegB = typename config::RegB;
+    using RegC = typename config::RegC;
+
 #if defined(DEBUG)
     // TODO: move these lengthy codes into pretty printer.
     LOG(INFO) << "TileIteratorA: [" << config::TileIteratorA::Tile::kRows
@@ -277,9 +273,6 @@ void run_test() {
               << ", sc0 = " << config::TileIteratorB::sc0
               << ", sc1 = " << config::TileIteratorB::sc1 << std::endl;
 
-    using RegA = typename config::RegA;
-    using RegB = typename config::RegB;
-    using RegC = typename config::RegC;
     LOG(INFO) << std::endl
               << "RegA: " << RegA{} << std::endl
               << "RegB: " << RegB{} << std::endl
@@ -329,22 +322,22 @@ void run_test() {
 
 TEST(TestGemm, test) {
     // minimal shape for 1 warp
-    // run_test<16, 32, 32, tl::RowMajor<1, 1>, 16>();
-    // run_test<32, 32, 64, tl::RowMajor<1, 1>, 16>();
+    run_test<16, 32, 32, tl::RowMajor<1, 1>, 16>();
+    run_test<32, 32, 64, tl::RowMajor<1, 1>, 16>();
     run_test<32, 32, 32, tl::RowMajor<1, 1>, 32>();
 
     // minimal shape for 2 warps
-    // run_test<32, 32, 32, tl::RowMajor<1, 2>, 32>();
-    // run_test<64, 32, 128, tl::RowMajor<2, 1>, 32>();
+    run_test<32, 32, 32, tl::RowMajor<1, 2>, 32>();
+    run_test<64, 32, 128, tl::RowMajor<2, 1>, 32>();
 
     // minimal shape for 2 x 2 warps
-    // run_test<32, 32, 32, tl::RowMajor<2, 2>, 32>();
-    // run_test<32, 32, 64, tl::RowMajor<2, 2>, 32>();
-    // run_test<64, 32, 32, tl::RowMajor<2, 2>, 32>();
-    // run_test<32, 32, 128, tl::RowMajor<2, 2>, 64>();
+    run_test<32, 32, 32, tl::RowMajor<2, 2>, 32>();
+    run_test<32, 32, 64, tl::RowMajor<2, 2>, 32>();
+    run_test<64, 32, 32, tl::RowMajor<2, 2>, 32>();
+    run_test<32, 32, 128, tl::RowMajor<2, 2>, 64>();
 
-    // run_test<64, 64, 32, tl::RowMajor<2, 2>, 32>();
-    // run_test<64, 32, 128, tl::RowMajor<2, 2>, 32>();
+    run_test<64, 64, 32, tl::RowMajor<2, 2>, 32>();
+    run_test<64, 32, 128, tl::RowMajor<2, 2>, 32>();
 }
 
 }  // namespace tiledcuda::testing

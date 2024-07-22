@@ -45,36 +45,9 @@ struct Gemm {
     static_assert(kMs && kNs && kKs, "Invalid tile shapes for GEMM.");
 
     DEVICE void operator()(const RegTileA& a, const RegTileB& b, RegTileC& c) {
-        if (thread0()) {
-            printf("GEMM: ms = %d, ns = %d,  ks = %d\nrA:\n", kMs, kNs, kKs);
-
-            // a.dump_value();
-            for (int i = 0; i < RegTileA::kRows; ++i) {
-                for (int j = 0; j < RegTileA::kCols; ++j) {
-                    printf("rA(%d, %d):\n", i, j);
-                    a(i, j).dump_value();
-                }
-                printf("\n");
-            }
-
-            printf("\nrB:\n");
-            b.dump_value();
-            printf("\n");
-        }
-
         for (int i = 0; i < kMs; ++i) {
             for (int j = 0; j < kNs; ++j) {
                 for (int k = 0; k < kKs; ++k) {
-                    if (thread0()) {
-                        printf("(%d, %d, %d):\n", i, j, k);
-
-                        printf("rA:\n");
-                        a(i, k).dump_value();
-
-                        printf("\nrB:\n");
-                        b(k, j).dump_value();
-                        printf("\n");
-                    }
                     tile_wmma(a(i, k).data(), b(k, j).data(),
                               c(i, j).mutable_data());
                 }

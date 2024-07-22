@@ -49,15 +49,6 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
         int lane_row = this->lane_row_id();
         int lane_col = this->lane_col_id();
 
-        // if (thread0()) {
-        //     printf("kTileRstride: %d, kTileCstride: %d\n", kTileRstride,
-        //            kTileCstride);
-        //     printf("kLaneRstride: %d, kLaneCstride: %d\n", kLaneRstride,
-        //            kLaneCstride);
-
-        //     printf("load operand A:\n");
-        // }
-
         const DType* data;
         for (int i = 0; i < kRowExec; ++i) {
             for (int j = 0; j < kColExec; ++j) {
@@ -70,11 +61,6 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
 
                 // issue the hardware-backed memory access instruction.
                 this->ldmatrix(data, dst(i, j).mutable_data());
-
-                // if (thread0()) {
-                //     printf("\niter (%d, %d)\n", i, j);
-                //     dst(i, j).dump_value();
-                // }
             }
         }
     }
@@ -123,11 +109,6 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
 
                 // issue the hardware-backed memory access instruction
                 this->ldmatrix(data, dst(j, i).mutable_data());
-
-                // if (thread0()) {
-                //     printf("\niter (%d, %d)\n", i, j);
-                //     dst(j, i).dump_value();
-                // }
             }
         }
     }
