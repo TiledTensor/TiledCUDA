@@ -12,9 +12,8 @@ namespace tiledcuda::cell::copy {
 using namespace traits;
 namespace tl = tile_layout;
 
-template <typename Global_, typename Shared_, const int kRowExec_,
-          const int kColExec_, const tl::Layout kType,
-          typename Base = TraitsBase<Global_::DType>>
+template <typename Global_, typename Shared_, const int kThreads_,
+          const tl::Layout kType, typename Base = TraitsBase<Global_::DType>>
 struct GlobalToSharedLoaderImpl {
     using Global = Global_;
     using Shared = Shared_;
@@ -26,17 +25,16 @@ struct GlobalToSharedLoaderImpl {
     DEVICE void operator()(const DType* src, DType* dst);
 };
 
-template <typename Global_, typename Shared_, const int kRowExec_,
-          const int kColExec_, const int kThreads_,
+template <typename Global_, typename Shared_, const int kThreads_,
           typename Base = TraitsBase<Global_::DType>>
-struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
-                                tl::Layout::kSwizzledRowMajor> {
+struct GlobalToSharedLoaderImpl<Global_, Shared_, kThreads_,
+                                tl::Layout::kSwizzledRowMajor, Base> {
     using Global = Global_;
     using Shared = Shared_;
     using DType = typename Global::DType;
 
-    static const int kRowExec = kRowExec_;
-    static const int kColExec = kColExec_;
+    // static const int kRowExec = kRowExec_;
+    // static const int kColExec = kColExec_;
     static const int kThreads = kThreads_;
 
     static const int kShmRows = Shared::kRows;
@@ -90,15 +88,26 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
     }
 };
 
-template <typename Global_, typename Shared_, typename WarpLayout_>
+template <typename Global_, typename Shared_, const int kThreads_,
+          const tl::Layout kType_ = tl::Layout::kSwizzledRowMajor>
 struct GlobalToSharedLoader {
     using Global = Global_;
     using Shared = Shared_;
     using DType = typename Global::DType;
 
-    using WarpLayout = WarpLayout_;
+    const int kThreads = kThreads_;
+    const tl::Layout kType = kType_;
 
-    DEVICE operator(const Global& src, Shared& dst);
+    DEVICE operator(const Global& src, Shared& dst) {
+        const DType* src_ptr = src.data();
+        DType* dst_ptr = dst.mutable_data();
+
+        using Loader =
+            GlobalToSharedLoaderImpl<Global, Shared, kThreads, kType>;
+
+        Loader loader;
+        loader(src_ptr, dst_ptr);
+    }
 };
 
 }  // namespace tiledcuda::cell::copy
