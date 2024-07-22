@@ -20,7 +20,7 @@ struct GlobalTile {
     static constexpr int kRowStride = tl::row_stride<Layout>;
     static constexpr int kColStride = tl::col_stride<Layout>;
 
-    static constexpr tl::Layout type = tl::layout_type<Layout>;
+    static constexpr tl::Layout kType = tl::layout_type<Layout>;
 
     DEVICE GlobalTile(DType* data) : data_(data), layout_(Layout{}) {}
 

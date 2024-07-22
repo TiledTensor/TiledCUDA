@@ -16,14 +16,14 @@ enum class WarpReuse {
     // TODO(haruhi): It seems that Cir/RowReuseCir/ColReuseCir are not ncessary,
     // thus the reuse mode can be simplified.
     // data are evenly partitioned to be loaded by warps.
-    Cont = 0,          // all warps continuously load data, no reuse
-    Cir = 1,           // all warps circularly load data, no reuse
-    RowReuseCont = 2,  // Row-wise even reuse, warps in the same row
-                       // repeatedly load the same data
-    RowReuseCir = 3,   // Row-wise circular reuse
-    ColReuseCont = 4,  // Column-wise even reuse, warps in the same column
-                       // repeatedly load the same data
-    ColReuseCir = 5    // Column-wise circular reuse
+    kCont = 0,          // all warps continuously load data, no reuse
+    kCir = 1,           // all warps circularly load data, no reuse
+    kRowReuseCont = 2,  // Row-wise even reuse, warps in the same row
+                        // repeatedly load the same data
+    kRowReuseCir = 3,   // Row-wise circular reuse
+    kColReuseCont = 4,  // Column-wise even reuse, warps in the same column
+                        // repeatedly load the same data
+    kColReuseCir = 5    // Column-wise circular reuse
 };
 
 }  // namespace tiledcuda::cell::copy

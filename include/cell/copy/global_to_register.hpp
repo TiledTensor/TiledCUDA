@@ -24,7 +24,7 @@ struct GlobalToRegMatLoader {
 };
 
 template <typename Global_, typename BaseTile_>
-struct GlobalToRegMatLoader<Global_, BaseTile_, tl::Layout::RowMajor> {
+struct GlobalToRegMatLoader<Global_, BaseTile_, tl::Layout::kRowMajor> {
     using Global = Global_;
     using BaseTile = BaseTile_;
     using DType = Global::DType;
@@ -44,7 +44,7 @@ struct GlobalToRegMatLoader<Global_, BaseTile_, tl::Layout::RowMajor> {
 };
 
 template <typename Global_, typename BaseTile_>
-struct GlobalToRegMatLoader<Global_, BaseTile_, tl::Layout::ColMajor> {
+struct GlobalToRegMatLoader<Global_, BaseTile_, tl::Layout::kColMajor> {
     using Global = Global_;
     using BaseTile = BaseTile_;
     using DType = Global::DType;
@@ -79,7 +79,7 @@ struct RegToGlobalMatStorer {
 };
 
 template <typename Global_, typename BaseTile_>
-struct RegToGlobalMatStorer<Global_, BaseTile_, tl::Layout::RowMajor> {
+struct RegToGlobalMatStorer<Global_, BaseTile_, tl::Layout::kRowMajor> {
     using Global = Global_;
     using BaseTile = BaseTile_;
     using DType = Global::DType;
@@ -99,7 +99,7 @@ struct RegToGlobalMatStorer<Global_, BaseTile_, tl::Layout::RowMajor> {
 };
 
 template <typename Global_, typename BaseTile_>
-struct RegToGlobalMatStorer<Global_, BaseTile_, tl::Layout::ColMajor> {
+struct RegToGlobalMatStorer<Global_, BaseTile_, tl::Layout::kColMajor> {
     using Global = Global_;
     using BaseTile = BaseTile_;
     using DType = Global::DType;
@@ -131,7 +131,7 @@ template <typename Global_, typename Reg_, const int kRowExec_,
 struct GlobalToRegLoaderImpl {
     using Global = Global_;
     using Reg = Reg_;
-    using DType = Global::type;
+    using DType = Global::DType;
 
     DEVICE void operator()(const DType* src, Reg& dst);
 };
@@ -139,7 +139,7 @@ struct GlobalToRegLoaderImpl {
 template <typename Global_, typename Reg_, const int kRowExec_,
           const int kColExec_>
 struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
-                             tl::Layout::RowMajor> {
+                             tl::Layout::kRowMajor> {
     using Global = Global_;
     using Reg = Reg_;
     using DType = typename Global::DType;
@@ -157,7 +157,7 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
         const DType* data;
 
         using Loader =
-            GlobalToRegMatLoader<Global, BaseTile, tl::Layout::RowMajor>;
+            GlobalToRegMatLoader<Global, BaseTile, tl::Layout::kRowMajor>;
         Loader loader;
 #pragma unroll
         for (int i = 0; i < kRowExec; ++i) {
@@ -177,7 +177,7 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
 template <typename Global_, typename Reg_, const int kRowExec_,
           const int kColExec_>
 struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
-                             tl::Layout::ColMajor> {
+                             tl::Layout::kColMajor> {
     using Global = Global_;
     using Reg = Reg_;
     using DType = typename Global::DType;
@@ -195,7 +195,7 @@ struct GlobalToRegLoaderImpl<Global_, Reg_, kRowExec_, kColExec_,
         const DType* data;
 
         using Loader =
-            GlobalToRegMatLoader<Global, BaseTile, tl::Layout::ColMajor>;
+            GlobalToRegMatLoader<Global, BaseTile, tl::Layout::kColMajor>;
         Loader loader;
 
 #pragma unroll
@@ -224,7 +224,7 @@ template <typename Global_, typename Reg_, const int kRowExec_,
 struct RegToGlobalStorerImpl {
     using Global = Global_;
     using Reg = Reg_;
-    using DType = Global::type;
+    using DType = Global::DType;
 
     DEVICE void operator()(const Reg& src, DType* dst);
 };
@@ -232,7 +232,7 @@ struct RegToGlobalStorerImpl {
 template <typename Global_, typename Reg_, const int kRowExec_,
           const int kColExec_>
 struct RegToGlobalStorerImpl<Global_, Reg_, kRowExec_, kColExec_,
-                             tl::Layout::RowMajor> {
+                             tl::Layout::kRowMajor> {
     using Global = Global_;
     using Reg = Reg_;
     using DType = typename Global::DType;
@@ -247,7 +247,7 @@ struct RegToGlobalStorerImpl<Global_, Reg_, kRowExec_, kColExec_,
         DType* data;
 
         using Storer = RegToGlobalMatStorer<Global, typename Reg::DType,
-                                            tl::Layout::RowMajor>;
+                                            tl::Layout::kRowMajor>;
         Storer storer;
 
 #pragma unroll
@@ -267,7 +267,7 @@ struct RegToGlobalStorerImpl<Global_, Reg_, kRowExec_, kColExec_,
 template <typename Global_, typename Reg_, const int kRowExec_,
           const int kColExec_>
 struct RegToGlobalStorerImpl<Global_, Reg_, kRowExec_, kColExec_,
-                             tl::Layout::ColMajor> {
+                             tl::Layout::kColMajor> {
     using Global = Global_;
     using Reg = Reg_;
     using DType = typename Global::DType;
@@ -280,9 +280,8 @@ struct RegToGlobalStorerImpl<Global_, Reg_, kRowExec_, kColExec_,
         int lane_id = threadIdx.x % warpSize;
 
         DType* data;
-
         using Storer = RegToGlobalMatStorer<Global, typename Reg::DType,
-                                            tl::Layout::ColMajor>;
+                                            tl::Layout::kColMajor>;
         Storer storer;
 
 #pragma unroll
@@ -335,7 +334,7 @@ struct GlobalToRegLoader : public Base {
             Base::template col_exec_count<BaseShape, Global::kCols>();
 
         using Loader = GlobalToRegLoaderImpl<Global, Reg, kRowExec, kColExec,
-                                             Global::type>;
+                                             Global::kType>;
         Loader loader;
         loader(src_ptr, dst);
     }
@@ -351,7 +350,7 @@ struct GlobalToRegLoader : public Base {
  * @tparam Base Copy base.
  */
 template <typename Global_, typename Reg_, typename WarpLayout_,
-          typename Base = warp::CopyBase<WarpLayout_, WarpReuse::Cont>>
+          typename Base = warp::CopyBase<WarpLayout_, WarpReuse::kCont>>
 struct RegToGlobalStorer : public Base {
     using Global = Global_;
     using Reg = Reg_;
@@ -375,7 +374,7 @@ struct RegToGlobalStorer : public Base {
             Base::template col_exec_count<BaseShape, Global::kCols>();
 
         using Storer = RegToGlobalStorerImpl<Global, Reg, kRowExec, kColExec,
-                                             Global::type>;
+                                             Global::kType>;
         Storer storer;
         storer(src, dst_ptr);
     }

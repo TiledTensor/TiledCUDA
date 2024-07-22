@@ -26,7 +26,7 @@ struct SharedToRegLoaderImpl {
 template <typename Shared, typename Reg_, const int kRowExec_,
           const int kColExec_>
 struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
-                             tl::Layout::RowMajor, CopyInst::kLoadMat>
+                             tl::Layout::kRowMajor, CopyInst::kLoadMat>
     : public LoadMatBase<typename Shared::DType> {
     using LoadMat = LoadMatBase<typename Shared::DType>;
     using DType = Shared::DType;
@@ -70,7 +70,7 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
 template <typename Shared, typename Reg_, const int kRowExec_,
           const int kColExec_>
 struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
-                             tl::Layout::ColMajor, CopyInst::kLoadMat>
+                             tl::Layout::kColMajor, CopyInst::kLoadMat>
     : public LoadMatBase<typename Shared::DType> {
     using LoadMat = LoadMatBase<typename Shared::DType>;
     using DType = Shared::DType;
@@ -139,11 +139,11 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
 
     // strides to iterate over each 16x16 `BaseTile` in the shared memory
     static constexpr int kTileRstride =  // row stride for a `BaseTile`
-        Shared::type == tl::Layout::RowMajor
+        Shared::kType == tl::Layout::kRowMajor
             ? BaseShape::kRows * Shared::kRowStride
             : BaseShape::kRows;
     static constexpr int kTileCstride =
-        Shared::type == tl::Layout::RowMajor
+        Shared::kType == tl::Layout::kRowMajor
             ? BaseShape::kCols
             : BaseShape::kCols * Shared::kColStride;
 
@@ -151,10 +151,10 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
     // needed to address the data within the 16x16 `BaseTile` for the current
     // thread. These strides corresponds to the thread layout and specific
     // instruction used.
-    static constexpr int kLaneRstride = Shared::type == tl::Layout::RowMajor
+    static constexpr int kLaneRstride = Shared::kType == tl::Layout::kRowMajor
                                             ? Shared::kRowStride
                                             : Base::kElemPerSeg;
-    static constexpr int kLaneCstride = Shared::type == tl::Layout::RowMajor
+    static constexpr int kLaneCstride = Shared::kType == tl::Layout::kRowMajor
                                             ? Base::kElemPerSeg
                                             : Shared::kColStride;
 
@@ -218,7 +218,7 @@ struct SharedToRegLoader : public Base {
 
         using Loader =
             detail::SharedToRegLoaderImpl<Shared, Reg, kRowExec, kColExec,
-                                          Shared::type, CopyInst::kLoadMat>;
+                                          Shared::kType, CopyInst::kLoadMat>;
         Loader loader;
         loader(src_ptr, dst);
     }
@@ -228,7 +228,7 @@ struct SharedToRegLoader : public Base {
 ///        to revert the data distrubution into an comphrehensive row-major
 ///        matrix.
 template <typename Reg_, typename WarpLayout_,
-          typename Base = warp::CopyBase<WarpLayout_, WarpReuse::Cont>>
+          typename Base = warp::CopyBase<WarpLayout_, WarpReuse::kCont>>
 struct RegToSharedStorer : public Base {
     using Reg = Reg_;
     // elementary data type stored in the register tile.

@@ -18,10 +18,10 @@ namespace tile_layout {
 using namespace cute;
 
 enum class Layout {
-    RowMajor = 0,  // Tile layout for shared memory.
-    ColMajor = 1,
-    SwizzledRowMajor = 2,
-    SwizzledColMajor = 3,
+    kRowMajor = 0,  // Tile layout for shared memory.
+    kColMajor = 1,
+    kSwizzledRowMajor = 2,
+    kSwizzledColMajor = 3,
 };
 
 // In the row major layout, the contiguous dimension in memory is the
@@ -56,7 +56,7 @@ static constexpr size_t get_numel = int(size(Layout_{}));
 // column stride is 1, whereas in a column-major layout, the row stride is 1.
 template <typename Layout_>
 static constexpr Layout layout_type =
-    col_stride<Layout_> == 1 ? Layout::RowMajor : Layout::ColMajor;
+    col_stride<Layout_> == 1 ? Layout::kRowMajor : Layout::kColMajor;
 
 template <const int Shape1, const int Shape2, const int Stride1,
           const int Stride2>

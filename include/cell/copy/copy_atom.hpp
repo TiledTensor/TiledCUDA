@@ -78,11 +78,11 @@ struct StoreMmmaBase {
     // and `kCStride` calculate the row and column strides, respectively, when
     // iterating over these 4 segments in shared memory.
     static constexpr int kRstride =
-        Shared::type == tl::Layout::RowMajor
+        Shared::kType == tl::Layout::kRowMajor
             ? tl::num_rows<ThreadLayout> * Shared::kRowStride
             : tl::num_rows<ThreadLayout>;
     static constexpr int kCstride =
-        Shared::type == tl::Layout::RowMajor
+        Shared::kType == tl::Layout::kRowMajor
             ? kElemPerSeg * tl::num_cols<ThreadLayout>
             : kElemPerSeg * tl::num_cols<ThreadLayout> * Shared::kColStride;
 
@@ -104,7 +104,7 @@ struct StoreMmmaBase {
         int src_offset, dst_offset;
         for (int i = 0; i < kSegRows; ++i) {
             for (int j = 0; j < kSegCols; ++j) {
-                src_offset = RegTile::kType == tl::Layout::RowMajor
+                src_offset = RegTile::kType == tl::Layout::kRowMajor
                                  ? i * kElemPerRow + j * kElemPerSeg
                                  : j * kElemPerRow + i * kElemPerSeg;
 

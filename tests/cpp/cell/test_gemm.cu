@@ -145,7 +145,7 @@ struct TestTraits {
 
     // load RegTileA from shared
     using LoadRegA =
-        SharedToRegLoader<RegA, WarpLayout, WarpReuse::RowReuseCont>;
+        SharedToRegLoader<RegA, WarpLayout, WarpReuse::kRowReuseCont>;
 
     // register tile for operand B, calculate register usage for operand B
     static constexpr int kBKs = kChunkK / BaseShape::kTileSize;
@@ -155,7 +155,7 @@ struct TestTraits {
 
     // load RegTileB from shared
     using LoadRegB =
-        SharedToRegLoader<RegB, WarpLayout, WarpReuse::ColReuseCont>;
+        SharedToRegLoader<RegB, WarpLayout, WarpReuse::kColReuseCont>;
 
     // shared tile for output C
     using SharedC = SharedTile<ElementAcc, tl::RowMajor<kM, kN>>;
