@@ -42,6 +42,7 @@ function(cuda_test TARGET_NAME)
                         "${multiValueArgs}" ${ARGN})
 
   list(APPEND UT_SRCS "${PROJECT_SOURCE_DIR}/tests/cpp/test_unit.cc"
+       "${PROJECT_SOURCE_DIR}/src/cuda_utils.cc"
        "${PROJECT_SOURCE_DIR}/tests/cpp/common/test_utils.cc" ${nv_test_SRCS})
 
   cuda_add_executable(${TARGET_NAME} ${UT_SRCS})

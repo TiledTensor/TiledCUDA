@@ -256,7 +256,7 @@ void custom_lstm_cell_op(const torch::Tensor& w, const torch::Tensor& x,
             reinterpret_cast<cutlass::half_t*>(c1.mutable_data_ptr()),
             reinterpret_cast<cutlass::half_t*>(h1.mutable_data_ptr()), m, n, k);
     } else {
-        throw NotImplementedException("Unsupported data type.");
+        throw errors::NotImplementedException("Unsupported data type.");
     }
 }
 }  // namespace tiledcuda::kernels

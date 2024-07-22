@@ -15,7 +15,6 @@ namespace tiledcuda::cell {
  */
 
 namespace tile_layout {
-
 using namespace cute;
 
 enum class Layout {

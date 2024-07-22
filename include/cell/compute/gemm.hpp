@@ -6,7 +6,6 @@
 #include "types/tile_shape.hpp"
 
 namespace tiledcuda::cell::compute {
-
 namespace tl = tile_layout;
 
 template <typename TensorA, typename TensorB, typename TensorAcc,
@@ -18,64 +17,50 @@ DEVICE void gemm(const TiledMma& mma, const TensorA& a, const TensorB& b,
 
 namespace detail {
 
-// functor to warp ptx wmma instruction
-// see the below document for various choices and detailed parameters of the
-// wmma PTX instruction.
-// https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-mma
-template <typename RegTileA, typename RegTileB, typename RegTileC,
-          typename InstShape>
-struct Gemm {
-    DEVICE void operator()(const RegTileA& a, const RegTileB& b, RegTileC& c);
-};
-
-// partial specialization for wmma 16x16x16
+/// @brief: Functor to warp wmma PTX instruction. See the below document for
+///         various choices and detailed parameters of the wmma PTX instruction.
+///         https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-mma
 template <typename RegTileA, typename RegTileB, typename RegTileC>
-struct Gemm<RegTileA, RegTileB, RegTileC, InstShape<16, 16, 16>> {
-    using BaseShape = traits::BaseTileShape<typename RegTileA::DType::DType>;
+struct Gemm {
+    using InTypeA = typename RegTileA::DType::DType;
+    using InTypeB = typename RegTileB::DType::DType;
+    using OutType = typename RegTileC::DType::DType;
 
-    using InType = typename RegTileA::DType;
-    using OutType = typename RegTileC::DType;
+    using BaseShape = traits::BaseTileShape<InTypeA>;
 
-    static_assert(std::is_same_v<InType, cutlass::half_t>,
-                  "Only half precision is supported for now.");
-    static_assert(std::is_same_v<InType, typename RegTileB::DType>,
+    static_assert(std::is_same_v<InTypeA, cutlass::half_t> ||
+                      std::is_same_v<InTypeA, __half>,
+                  "This GEMM implementation supports only half-precision as "
+                  "the input element type.");
+    static_assert(std::is_same_v<OutType, float>,
+                  "The output type must be float.");
+    static_assert(std::is_same_v<InTypeA, InTypeB>,
                   "Mismatched data type for operand A and B.");
-    static_assert(std::is_same_v<OutType, float>, "Output must be float.");
-
-    // A register tile's contiguous dimension maps to the fragment's contiguous
-    // dimension, and the strided dimension maps to the strided dimension.
-    static constexpr int ms = RegTileA::kRows / BaseShape::sub_row;
-    static constexpr int ns = RegTileB::kCols / BaseShape::sub_row;
-    static constexpr int ks = RegTileA::kCols / BaseShape::sub_col;
-
-    // FIXME (haruhi): This check requires operand B to have a column-major
-    // layout of [K, N], meaning the k dimension is contiguous in memory.
-    static_assert(RegTileB::kRows / BaseShape::sub_col == ks,
+    static_assert(RegTileB::kRows == RegTileA::kCols,
                   "Mismatched k-dimension for operand A and B.");
 
-    static_assert(ms && ns && ks, "Invalid tile shapes for GEMM.");
+    static constexpr int kMs = RegTileA::kRows;
+    static constexpr int kNs = RegTileB::kCols;
+    static constexpr int kKs = RegTileA::kCols;
+    static_assert(kMs && kNs && kKs, "Invalid tile shapes for GEMM.");
 
     DEVICE void operator()(const RegTileA& a, const RegTileB& b, RegTileC& c) {
-        const uint32_t* ra = reinterpret_cast<const uint32_t*>(a.data());
-        const uint32_t* rb = reinterpret_cast<const uint32_t*>(b.data());
-        float* rc = c.mutable_data();
-
-        int offset_a = 0, offset_b = 0, offset_c = 0;
-        for (int i = 0; i < ms; ++i) {
-            for (int j = 0; j < ns; ++j) {
-                offset_c = (i * ns + j) * 8;
-                for (int k = 0; k < ks; ++k) {
-                    offset_a = (i * ks + k) * 4;
-                    offset_b = (j * ks + k) * 4;
-
-                    tile_wmma(&ra[offset_a], &rb[offset_b], &rc[offset_c]);
+        for (int i = 0; i < kMs; ++i) {
+            for (int j = 0; j < kNs; ++j) {
+                for (int k = 0; k < kKs; ++k) {
+                    tile_wmma(a(i, k).data(), b(k, j).data(),
+                              c(i, j).mutable_data());
                 }
             }
         }
     }
 
   private:
-    DEVICE void tile_wmma(const uint32_t* A, const uint32_t* B, float* C) {
+    DEVICE void tile_wmma(const InTypeA* ra, const InTypeB* rb, OutType* rc) {
+        const uint32_t* A = reinterpret_cast<const uint32_t*>(ra);
+        const uint32_t* B = reinterpret_cast<const uint32_t*>(rb);
+        float* C = static_cast<float*>(rc);
+
         asm volatile(
             "mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 "
             "{%0,  %1,  %2,  %3},"
@@ -102,7 +87,7 @@ struct Gemm<RegTileA, RegTileB, RegTileC, InstShape<16, 16, 16>> {
 
 template <typename RegTileA, typename RegTileB, typename RegTileC>
 DEVICE void gemm_(const RegTileA& a, const RegTileB& b, RegTileC& c) {
-    detail::Gemm<RegTileA, RegTileB, RegTileC, InstShape<16, 16, 16>> gemm;
+    detail::Gemm<RegTileA, RegTileB, RegTileC> gemm;
     gemm(a, b, c);
 }
 

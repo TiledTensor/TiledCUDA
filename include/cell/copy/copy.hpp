@@ -5,7 +5,6 @@
 #include <cute/tensor.hpp>
 
 namespace tiledcuda::cell::copy {
-
 using namespace cute;
 
 template <typename TiledCopy, typename STensor, typename DTensor,
