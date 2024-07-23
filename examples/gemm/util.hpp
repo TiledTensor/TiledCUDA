@@ -1,9 +1,8 @@
 #pragma once
+
 #include "cell/mod.hpp"
-#include "cuda_utils.hpp"
 #include "types/mod.hpp"
 
-#include <cublas_v2.h>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
@@ -42,11 +41,10 @@ bool check_results(const float* values1, const float* values2, int numel) {
 
     for (int i = 0; i < numel; ++i) {
         if (fabs(values1[i] - values2[i]) > epsilon) {
-            printf("%.2f vs. %.2f\n", values1[i], values2[i]);
+            printf("Diff: %.2f vs. %.2f\n", values1[i], values2[i]);
             passed = false;
             break;
         }
-        printf("%.2f vs. %.2f\n", values1[i], values2[i]);
     }
     return passed;
 }
@@ -56,7 +54,7 @@ struct GemmTraits {
     using BaseShape = traits::BaseTileShape<InType>;
     static constexpr int kChunkK = 16;
 
-    using WarpLayout = tl::RowMajor<2, 2>;
+    using WarpLayout = tl::RowMajor<1, 1>;
     static constexpr int kThreads = tl::get_numel<WarpLayout> * 32;
     static constexpr int kWarpPerRow = tl::num_rows<WarpLayout>;
     static constexpr int kWarpPerCol = tl::num_cols<WarpLayout>;

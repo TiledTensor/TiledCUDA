@@ -58,10 +58,8 @@ class TileIterator {
     //    single tile, hence it returns a Tile.
     // 2. If any part of the index is an underscore, this access is
     //    considered to be a slice, naturally it returns a TileIterator.
-
     DEVICE auto operator()(int i) {
-        assert(data_);
-
+        assert(data_);  // The iterator is not initialized.
         static_assert(sc0 == 1 || sc1 == 1,
                       "A single index is supported only when the strip count "
                       "of one of the iterator's dimensions is 1.");
@@ -84,10 +82,8 @@ class TileIterator {
     }
 
     DEVICE auto operator()(int x, int y) {
-        assert(data_);
-
-        // The indices must be within the strip count.
-        assert(x < sc0 && y < sc1);
+        assert(data_);               // The iterator is not initialized.
+        assert(x < sc0 && y < sc1);  // indices must be within the strip count.
 
         using TileLayout =
             decltype(tl::make_tile_layout<kStride0, kStride1, Tile::kRowStride,
@@ -103,9 +99,8 @@ class TileIterator {
     }
 
     DEVICE auto operator()(int x, const Underscore& y) {
-        assert(data_);
-
-        assert(x < sc0);  // The index must be within the strip count.
+        assert(data_);    // The iterator is not initialized.
+        assert(x < sc0);  // index must be within the strip count.
 
         // Updated the layout for sub-tiles accessed by the sliced iterator.
         // Note: Only the shape changes; the stride remains the same.
@@ -127,9 +122,8 @@ class TileIterator {
     }
 
     DEVICE auto operator()(const Underscore& x, int y) {
-        assert(data_);
-
-        assert(y < sc1);  // The index must be within the strip count.
+        assert(data_);    // The iterator is not initialized.
+        assert(y < sc1);  // index must be within the strip count.
 
         // Updated the layout for sub-tiles accessed by the sliced iterator.
         // Note: Only the shape changes; the stride remains the same.

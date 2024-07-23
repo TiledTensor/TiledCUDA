@@ -7,7 +7,6 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
 include(generic)
 set(THIRD_PARTY_DIR "${PROJECT_SOURCE_DIR}/../../3rd-party")
 include_directories(${THIRD_PARTY_DIR}/cutlass/include)
-
 include_directories("${PROJECT_SOURCE_DIR}/../../include")
 
 add_executable(gemm gemm.cu)

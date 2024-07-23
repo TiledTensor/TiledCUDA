@@ -1,25 +1,25 @@
 #include "util.hpp"
 
-template <typename InType, typename AccType, typename IteratorA, typename RegA,
-          typename LoaderA, typename IteratorB, typename RegB, typename LoaderB,
+template <typename InType, typename AccType, typename GlobalA, typename RegA,
+          typename LoaderA, typename GlobalB, typename RegB, typename LoaderB,
           typename GlobalC, typename RegC, typename CStorer>
 __global__ void simple_gemm(const InType* dA, const InType* dB, AccType* dC) {
-    IteratorA gAs(dA);
+    GlobalA gA(dA);
     RegA rA;
     LoaderA loader_a;
 
-    IteratorB gBs(dB);
+    GlobalB gB(dB);
     RegB rB;
     LoaderB loader_b;
 
     RegC acc;
-    for (int k = 0; k < IteratorA::sc1; ++k) {
-        loader_a(gAs(k), rA);
-        loader_b(gBs(k), rB);
-        __syncthreads();
 
-        compute::gemm_(rA, rB, acc);
-    }
+    loader_a(gA, rA);
+    loader_b(gB, rB);
+    __syncthreads();
+
+    compute::gemm_(rA, rB, acc);
+
     __syncthreads();
 
     GlobalC gC(dC);
@@ -31,9 +31,9 @@ int main() {
     using InType = __half;
     using AccType = float;
 
-    const int kM = 64;
-    const int kN = 128;
-    const int kK = 64;
+    const int kM = 16;
+    const int kN = 16;
+    const int kK = 16;
 
     // initialize data
     thrust::host_vector<InType> h_a(kM * kK);
@@ -63,12 +63,7 @@ int main() {
     using RegB = typename Config::RegB;
     using RegC = typename Config::RegC;
 
-    using IteratorA = typename Config::IteratorA;
-    using IteratorB = typename Config::IteratorB;
-
-    std::cout << "Config::kThreads: " << Config::kThreads << std::endl
-              << "IterA: " << IteratorA{} << std::endl
-              << "IterB: " << IteratorB{} << std::endl
+    std::cout << "kThreads: " << Config::kThreads << std::endl
               << "RegA: " << RegA{} << std::endl
               << "RegB: " << RegB{} << std::endl
               << "RegC: " << RegC{} << std::endl;
@@ -80,18 +75,30 @@ int main() {
     int size_c = kM * kN * sizeof(AccType);
     int shm_size = size_ab > size_c ? size_ab : size_c;
 
-    simple_gemm<InType, AccType, IteratorA, RegA, typename Config::ALoader,
-                IteratorB, RegB, typename Config::BLoader,
-                typename Config::GlobalC, RegC, typename Config::CStorer>
+    simple_gemm<InType, AccType, typename Config::GlobalA, RegA,
+                typename Config::ALoader, typename Config::GlobalB, RegB,
+                typename Config::BLoader, typename Config::GlobalC,
+                typename Config::RegC, typename Config::CStorer>
         <<<dim_grid, dim_block, shm_size>>>(A, B, C);
     h_c = d_c;
     cudaDeviceSynchronize();
 
-    // thrust::host_vector<AccType> h_c2(kM * kN);
-    // thrust::fill(h_c2.begin(), h_c2.end(), 0.);
-    // naive_gemm(kM, kN, kK, h_a.data(), h_b.data(), h_c2.data());
+    {  // check correctness
+        thrust::host_vector<AccType> h_c2(kM * kN);
+        thrust::fill(h_c2.begin(), h_c2.end(), 0.);
+        naive_gemm(kM, kN, kK, thrust::raw_pointer_cast(h_a.data()),
+                   thrust::raw_pointer_cast(h_b.data()), h_c2.data());
 
-    // assert(check_results(h_c.data(), h_c2.data(), kM * kN));
+        bool passed =
+            check_results(thrust::raw_pointer_cast(h_c.data()),
+                          thrust::raw_pointer_cast(h_c2.data()), kM * kN);
+
+        if (passed) {
+            std::cout << "Test passed." << std::endl;
+        } else {
+            std::cerr << "Test failed." << std::endl;
+        }
+    }
 
     return 0;
 }
