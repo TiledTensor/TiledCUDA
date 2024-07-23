@@ -26,15 +26,15 @@ enum class Layout {
 
 // In the row major layout, the contiguous dimension in memory is the
 // last dimension.
-template <const int row, const int col, const int stride = col>
+template <const int kRow, const int kCol, const int kStride = kCol>
 using RowMajor =
-    cute::Layout<Shape<Int<row>, Int<col>>, Stride<Int<stride>, _1>>;
+    cute::Layout<Shape<Int<kRow>, Int<kCol>>, Stride<Int<kStride>, _1>>;
 
 // In the column major layout, the contiguous dimension in memory is the
 // first dimension.
-template <const int row, const int col, const int stride = row>
+template <const int kRow, const int kCol, const int kStride = kRow>
 using ColMajor =
-    cute::Layout<Shape<Int<row>, Int<col>>, Stride<_1, Int<stride>>>;
+    cute::Layout<Shape<Int<kRow>, Int<kCol>>, Stride<_1, Int<kStride>>>;
 
 template <typename Layout_>
 static constexpr size_t num_rows = cute::size<0>(Layout_{});
@@ -54,15 +54,17 @@ static constexpr size_t get_numel = int(size(Layout_{}));
 // We wrap CuTe's `Layout`, which consists of `Shape` and `Stride`, into an
 // intelligent row-major or column-major layout. In a row-major layout, the
 // column stride is 1, whereas in a column-major layout, the row stride is 1.
+// NOTE: A potential issue is that `ColMajor<1, 1>` will also be indentified as
+// a row-major layout.
 template <typename Layout_>
 static constexpr Layout layout_type =
     col_stride<Layout_> == 1 ? Layout::kRowMajor : Layout::kColMajor;
 
-template <const int Shape1, const int Shape2, const int Stride1,
-          const int Stride2>
+template <const int kShape1, const int kShape2, const int kStride1,
+          const int kStride2>
 HOST_DEVICE auto make_tile_layout() {
-    using Layout = cute::Layout<Shape<Int<Shape1>, Int<Shape2>>,
-                                Stride<Int<Stride1>, Int<Stride2>>>;
+    using Layout = cute::Layout<Shape<Int<kShape1>, Int<kShape2>>,
+                                Stride<Int<kStride1>, Int<kStride2>>>;
     return Layout{};
 }
 

@@ -1,5 +1,4 @@
 set(THIRD_PARTY_DIR "${PROJECT_SOURCE_DIR}/3rd-party")
-
 # add cutlass into dependence
 include_directories(${THIRD_PARTY_DIR}/cutlass/include)
 

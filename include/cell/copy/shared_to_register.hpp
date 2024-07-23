@@ -50,7 +50,9 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
         int lane_col = this->lane_col_id();
 
         const DType* data;
+#pragma unroll
         for (int i = 0; i < kRowExec; ++i) {
+#pragma unroll
             for (int j = 0; j < kColExec; ++j) {
                 // 2. advance pointer to the 16x16 `BaseTile` indexed by (i, j).
                 data = src + (i * kTileRstride + j * kTileCstride);
@@ -97,7 +99,9 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
         int lane_col = this->lane_row_id();
 
         const DType* data;
+#pragma unroll
         for (int i = 0; i < kColExec; ++i) {
+#pragma unroll
             for (int j = 0; j < kRowExec; ++j) {
                 // 2. advance pointer to the 16x16 `BaseTile` indexed by
                 // (i, j).
@@ -163,7 +167,9 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
         int lane_row = this->lane_row_id();
         int lane_col = this->lane_col_id();
 
+#pragma unroll
         for (int i = 0; i < kRowExec; ++i) {
+#pragma unroll
             for (int j = 0; j < kColExec; ++j) {
                 // 2. advance pointer to the 16x128-bits `BaseTile` indexed by
                 // (i, j).

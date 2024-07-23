@@ -47,6 +47,7 @@ struct Gemm {
     DEVICE void operator()(const RegTileA& a, const RegTileB& b, RegTileC& c) {
         for (int i = 0; i < kMs; ++i) {
             for (int j = 0; j < kNs; ++j) {
+#pragma unroll
                 for (int k = 0; k < kKs; ++k) {
                     tile_wmma(a(i, k).data(), b(k, j).data(),
                               c(i, j).mutable_data());

@@ -47,8 +47,7 @@ const char* layout_type_to_str(tl::Layout type) {
             return "SwizzledRowMajor";
         case tl::Layout::kSwizzledColMajor:
             return "SwizzledColMajor";
-        default:
-            return "UnsupportedLayout";
     }
+    return "UnsupportedLayout";
 }
 }  // namespace tiledcuda

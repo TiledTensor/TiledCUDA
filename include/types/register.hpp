@@ -45,7 +45,6 @@ struct RegTilePrettyPrinter {
             << Tile::kCols * get_cols<typename Tile::DType> << "]";
     }
 };
-
 }  // namespace detail
 
 template <typename Element_, typename Layout_>
