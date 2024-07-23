@@ -20,21 +20,25 @@ __global__ void copy_g2s(const Element* src) {
     using SrcTile = GlobalTile<Element, GlobalLayout>;
     using DstTile = SharedTile<Element, SharedLayout>;
 
-    cell::copy::GlobalToSharedLoader<SrcTile, DstTile, WarpLayout> loader;
-    loader(src, buf);
+    SrcTile src_tile((Element*)src);
+    DstTile dst_tile(buf);
+
+    cell::copy::GlobalToSharedLoader<DstTile, WarpLayout> loader;
+    loader(src_tile, dst_tile);
 
     __copy_async();
     __syncthreads();
 
     if (thread(0)) {
-        for (int i = 0; i < 16; ++i) {
-            for (int j = 0; j < 32; ++j) {
-                printf(
-                    "%f ",
-                    __half2float(*reinterpret_cast<__half*>(&buf[i * 16 + j])));
-            }
-            printf("\n");
-        }
+        // for (int i = 0; i < 16; ++i) {
+        //     for (int j = 0; j < 32; ++j) {
+        //         printf(
+        //             "%f ",
+        //             __half2float(*reinterpret_cast<__half*>(&buf[i * 16 +
+        //             j])));
+        //     }
+        //     printf("\n");
+        // }
     }
 }
 
@@ -59,7 +63,7 @@ TEST(TESTG2SharedCopy, copy_2d_tile_g2s) {
     using SharedLayout = tl::RowMajor<kShmRows, kShmCols>;
 
     // threads are arranged as 8 x 4 to perform 2D copy
-    static const int kThreads = 32;
+    static const int kThreads = tl::get_numel<WarpLayout> * 32;
 
     int numel = kRows * kCols;
     thrust::host_vector<Element> h_A(numel);

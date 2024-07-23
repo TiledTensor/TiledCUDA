@@ -71,23 +71,26 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kThreads_,
     }
 };
 
-template <typename Global_, typename Shared_, typename WarpLayout_,
+template <typename Shared_, typename WarpLayout_,
           const tl::Layout kType_ = tl::Layout::kSwizzledRowMajor>
 struct GlobalToSharedLoader {
-    using Global = Global_;
     using Shared = Shared_;
-    using DType = typename Global::DType;
+    using DType = typename Shared::DType;
     using WarpLayout = WarpLayout_;
 
     static constexpr int kThreads = tl::get_numel<WarpLayout> * 32;
     static constexpr tl::Layout kType = kType_;
 
-    DEVICE void operator()(const DType* src, DType* dst) {
+    template <typename Global>
+    DEVICE void operator()(const Global& src, Shared& dst) {
+        const DType* src_ptr = src.data();
+        DType* dst_ptr = dst.mutable_data();
+
         using Loader = GlobalToSharedLoaderImpl<Global, Shared, kThreads, kType,
                                                 TraitsBase<DType>>;
 
         Loader loader;
-        loader(src, dst);
+        loader(src_ptr, dst_ptr);
     }
 };
 
