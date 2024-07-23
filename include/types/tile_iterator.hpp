@@ -70,7 +70,7 @@ class TileIterator {
         using TileLayout =
             decltype(tl::make_tile_layout<kStride0, kStride1, Tile::kRowStride,
                                           Tile::kColStride>());
-        using NewTile = SharedTile<typename Tile::DType, TileLayout>;
+        using NewTile = SharedTile<DType, TileLayout>;
 
         int offset = Tile::kType == tl::Layout::kRowMajor
                          ? x * (kStride0 * Tile::kRowStride) + y * kStride1
@@ -88,7 +88,7 @@ class TileIterator {
         using TileLayout =
             decltype(tl::make_tile_layout<kStride0, kStride1, Tile::kRowStride,
                                           Tile::kColStride>());
-        using NewTile = SharedTile<typename Tile::DType, TileLayout>;
+        using NewTile = SharedTile<DType, TileLayout>;
 
         int offset = Tile::kType == tl::Layout::kRowMajor
                          ? x * (kStride0 * Tile::kCols) + y * kStride1
@@ -108,7 +108,7 @@ class TileIterator {
                                                          Tile::kRowStride,
                                                          Tile::kColStride>());
 
-        using NewTile = SharedTile<typename Tile::DType, TileLayout>;
+        using NewTile = SharedTile<DType, TileLayout>;
         using Iter = TileIterator<NewTile, ChunkShape>;
         static_assert(Iter::sc0 == 1);
 
@@ -131,7 +131,7 @@ class TileIterator {
                                                          Tile::kRowStride,
                                                          Tile::kColStride>());
 
-        using NewTile = SharedTile<typename Tile::DType, TileLayout>;
+        using NewTile = SharedTile<DType, TileLayout>;
         using Iter = TileIterator<NewTile, ChunkShape>;
         static_assert(Iter::sc1 == 1);
 
@@ -150,7 +150,7 @@ class TileIterator {
     }
 
   private:
-    typename Tile::DType* data_;
+    DType* data_;
 };
 
 /// @brief Pretty printer for the static shape information of a TileIterator.
