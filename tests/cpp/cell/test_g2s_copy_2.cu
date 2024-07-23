@@ -13,7 +13,7 @@ using namespace cell;
 
 template <typename Element, typename GlobalLayout, typename SharedLayout,
           typename WarpLayout>
-__global__ void copy_g2s(const Element* src) {
+__global__ void copy_g2s(const Element* src, Element* target) {
     extern __shared__ Element shm[];
     auto* buf = reinterpret_cast<Element*>(shm);
 
@@ -22,6 +22,7 @@ __global__ void copy_g2s(const Element* src) {
 
     SrcTile src_tile((Element*)src);
     DstTile dst_tile(buf);
+    SrcTile target_tile(target);
 
     cell::copy::GlobalToSharedLoader<DstTile, WarpLayout> loader;
     loader(src_tile, dst_tile);
@@ -29,17 +30,10 @@ __global__ void copy_g2s(const Element* src) {
     __copy_async();
     __syncthreads();
 
-    if (thread(0)) {
-        // for (int i = 0; i < 16; ++i) {
-        //     for (int j = 0; j < 32; ++j) {
-        //         printf(
-        //             "%f ",
-        //             __half2float(*reinterpret_cast<__half*>(&buf[i * 16 +
-        //             j])));
-        //     }
-        //     printf("\n");
-        // }
-    }
+    cell::copy::SharedToGlobalStorer<DstTile, WarpLayout> storer;
+    storer(dst_tile, target_tile);
+
+    __syncthreads();
 }
 
 TEST(TESTG2SharedCopy, copy_2d_tile_g2s) {
@@ -75,8 +69,8 @@ TEST(TESTG2SharedCopy, copy_2d_tile_g2s) {
     // copy data from host to device
     thrust::device_vector<Element> d_A = h_A;
 
-    // thrust::device_vector<Element> d_B(numel);
-    // thrust::fill(d_B.begin(), d_B.end(), static_cast<Element>(0.));
+    thrust::device_vector<Element> d_B(numel);
+    thrust::fill(d_B.begin(), d_B.end(), static_cast<Element>(0.));
 
     int m = CeilDiv<kRows, kShmRows>;
     int n = CeilDiv<kCols, kShmCols>;
@@ -85,30 +79,18 @@ TEST(TESTG2SharedCopy, copy_2d_tile_g2s) {
 
     copy_g2s<Element, GlobalLayout, SharedLayout, WarpLayout>
         <<<dim_grid, dim_block, kShmRows * kShmCols * sizeof(Element)>>>(
-            thrust::raw_pointer_cast(d_A.data()));
+            thrust::raw_pointer_cast(d_A.data()),
+            thrust::raw_pointer_cast(d_B.data()));
 
-    // using G2SCopyTraits = traits::G2S2DCopyTraits<Element, kRows, kCols,
-    //                                               kShmRows, kShmCols,
-    //                                               kThreads>;
-    // using S2GCopyTraits = traits::S2G2DCopyTraits<Element, kRows, kCols,
-    //                                               kShmRows, kShmCols,
-    //                                               kThreads>;
+    cudaDeviceSynchronize();
 
-    // int shm_size = kShmRows * kShmCols * sizeof(Element);
-    // copy_g2s<Element, G2SCopyTraits, S2GCopyTraits>
-    //     <<<dim_grid, dim_block, shm_size>>>(
-    //         thrust::raw_pointer_cast(d_A.data()),
-    //         thrust::raw_pointer_cast(d_B.data()));
-    // cudaDeviceSynchronize();
+    // check correctness
+    thrust::host_vector<Element> h_B(numel);
+    h_B = d_B;
 
-    // // check correctness
-    // thrust::host_vector<Element> h_B(numel);
-    // h_B = d_B;
-
-    // assert_equal(
-    //     reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_A.data())),
-    //     reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_B.data())),
-    //     numel);
+    assert_equal(
+        reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_A.data())),
+        reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_B.data())), numel);
 }
 
 }  // namespace tiledcuda::testing
