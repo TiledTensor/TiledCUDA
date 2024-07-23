@@ -13,32 +13,27 @@ using namespace traits;
 namespace tl = tile_layout;
 
 template <typename Global_, typename Shared_, const int kThreads_,
-          const tl::Layout kType, typename Base = TraitsBase<Global_::DType>>
+          const tl::Layout kType, typename Base>
 struct GlobalToSharedLoaderImpl {
     using Global = Global_;
     using Shared = Shared_;
     using DType = typename Global::DType;
 
-    static const int kRowExec = kRowExec_;
-    static const int kColExec = kColExec_;
-
     DEVICE void operator()(const DType* src, DType* dst);
 };
 
 template <typename Global_, typename Shared_, const int kThreads_,
-          typename Base = TraitsBase<Global_::DType>>
+          typename Base>
 struct GlobalToSharedLoaderImpl<Global_, Shared_, kThreads_,
                                 tl::Layout::kSwizzledRowMajor, Base> {
     using Global = Global_;
     using Shared = Shared_;
     using DType = typename Global::DType;
 
-    // static const int kRowExec = kRowExec_;
-    // static const int kColExec = kColExec_;
-    static const int kThreads = kThreads_;
+    static constexpr int kThreads = kThreads_;
 
-    static const int kShmRows = Shared::kRows;
-    static const int kShmCols = Shared::kCols;
+    static constexpr int kShmRows = Shared::kRows;
+    static constexpr int kShmCols = Shared::kCols;
 
     // To avoid bank conflict, the shared memory requires a swizzled layout
     static const int kSwizzleMode = kShmCols % 32 ? 1 : 0;
@@ -59,9 +54,9 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kThreads_,
 
 #ifdef CP_ASYNC_SM80_ENABLED
     using CopyInst =
-        Copy_Atom<SM80_CP_ASYNC_CACHEGLOBAL<cute::uint128_t>, Element>;
+        Copy_Atom<SM80_CP_ASYNC_CACHEGLOBAL<cute::uint128_t>, DType>;
 #else
-    using CopyInst = Copy_Atom<DefaultCopy, Element>;
+    using CopyInst = Copy_Atom<DefaultCopy, DType>;
 #endif
 
     using TiledCopy =
@@ -88,22 +83,23 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kThreads_,
     }
 };
 
-template <typename Global_, typename Shared_, const int kThreads_,
+template <typename Global_, typename Shared_, typename WarpLayout_,
           const tl::Layout kType_ = tl::Layout::kSwizzledRowMajor>
 struct GlobalToSharedLoader {
     using Global = Global_;
     using Shared = Shared_;
     using DType = typename Global::DType;
+    using WarpLayout = WarpLayout_;
 
-    const int kThreads = kThreads_;
-    const tl::Layout kType = kType_;
+    static constexpr int kThreads = tl::get_numel<WarpLayout> * 32;
+    static constexpr tl::Layout kType = kType_;
 
-    DEVICE operator(const Global& src, Shared& dst) {
+    DEVICE void operator()(const Global& src, Shared& dst) {
         const DType* src_ptr = src.data();
         DType* dst_ptr = dst.mutable_data();
 
-        using Loader =
-            GlobalToSharedLoaderImpl<Global, Shared, kThreads, kType>;
+        using Loader = GlobalToSharedLoaderImpl<Global, Shared, kThreads, kType,
+                                                TraitsBase<DType>>;
 
         Loader loader;
         loader(src_ptr, dst_ptr);
