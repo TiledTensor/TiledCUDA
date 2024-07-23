@@ -6,8 +6,6 @@
 #include "cell/traits/base.hpp"
 #include "types/mod.hpp"
 
-#include <cute/tensor.hpp>
-
 namespace tiledcuda::cell::copy {
 
 using namespace traits;
@@ -100,8 +98,6 @@ struct SharedToGlobalStorerImpl<Global_, Shared_, kThreads_,
     using Swizzled =
         tl::SwizzledRowMajor<DType, kShmRows, kShmCols, kSwizzleMode>;
 
-    // using SrcLayout = tl::RowMajor<kRows, kCols, kCols>;
-    // using DstLayout = typename Swizzled::SmemLayout;
     using SrcLayout = typename Swizzled::SmemLayout;
     using DstLayout = tl::RowMajor<kRows, kCols, kCols>;
 
