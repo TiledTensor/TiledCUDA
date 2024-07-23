@@ -8,7 +8,6 @@
 #include <thrust/host_vector.h>
 
 namespace tiledcuda::testing {
-
 using namespace cell;
 
 namespace {
@@ -21,7 +20,7 @@ __global__ void load_g2r(Element* src) {
     SrcTile src_tile(src);
     DstTile dst_tile;
 
-    cell::copy::GlobalToRegLoader<SrcTile, DstTile, WarpLayout, kMode> loader;
+    copy::GlobalToRegLoader<SrcTile, DstTile, WarpLayout, kMode> loader;
     loader(src_tile, dst_tile);
     __syncthreads();
 
@@ -122,7 +121,7 @@ __global__ void store_r2g(Element* dst) {
             break;
     }
 
-    cell::copy::RegToGlobalStorer<DstLayout, SrcLayout, WarpLayout> storer;
+    copy::RegToGlobalStorer<DstLayout, SrcLayout, WarpLayout> storer;
     storer(src_tile, dst_tile);
 
     __syncthreads();

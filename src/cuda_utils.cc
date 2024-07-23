@@ -26,5 +26,4 @@ const char* cublasGetErrorString(cublasStatus_t status) {
     }
     return "unknown error";
 }
-
 }  // namespace tiledcuda

@@ -6,11 +6,22 @@
 namespace tiledcuda::cell {
 namespace tl = tile_layout;
 
+namespace detail {
+/// @brief Helper for pretty printing a tile iterator's static shape-related
+///        information. This printer works ONLY on the host.
+struct TileIteratorPrettyPrinter {
+    template <typename TileIterator>
+    static HOST void print(std::ostream& out, const TileIterator& itr) {
+        out << "numel = " << TileIterator::Tile::kNumel << ", ChunkShape["
+            << TileIterator::Tile::kRows << ", " << TileIterator::Tile::kCols
+            << "], sc0 = " << TileIterator::sc0
+            << ", sc1 = " << TileIterator::sc1;
+    }
+};
+}  // namespace detail
+
 struct Underscore {};                  // dummy type for underscore
 static const __device__ Underscore _;  // for slicing
-
-template <class Tile, class ChunkShape>
-struct TileIterator;
 
 /// @brief `SharedTileIterator` chunks a shared memory tile into smaller tiles
 ///         and iterates over these smaller sub-tiles.
@@ -21,6 +32,7 @@ template <class Tile_, class ChunkShape_>
 class TileIterator {
   public:
     using Tile = Tile_;
+    using DType = Tile::DType;
     using ChunkShape = ChunkShape_;
 
     static_assert(Tile::kRows >= dim_size<0, ChunkShape>,
@@ -34,7 +46,11 @@ class TileIterator {
     static constexpr int sc0 = Tile::kRows / kStride0;
     static constexpr int sc1 = Tile::kCols / kStride1;
 
-    DEVICE TileIterator(typename Tile::DType* data) : data_(data) {}
+    HOST_DEVICE TileIterator() : data_(nullptr) {}
+
+    DEVICE TileIterator(DType* data) : data_(data) {}
+
+    DEVICE TileIterator(const DType* data) : data_(const_cast<DType*>(data)) {}
 
     // Since a Tile is considered to be at most a 2D array, the iterator
     // traverses over these two dimensions. The current rules are:
@@ -42,8 +58,8 @@ class TileIterator {
     //    single tile, hence it returns a Tile.
     // 2. If any part of the index is an underscore, this access is
     //    considered to be a slice, naturally it returns a TileIterator.
-
     DEVICE auto operator()(int i) {
+        assert(data_);  // The iterator is not initialized.
         static_assert(sc0 == 1 || sc1 == 1,
                       "A single index is supported only when the strip count "
                       "of one of the iterator's dimensions is 1.");
@@ -54,7 +70,7 @@ class TileIterator {
         using TileLayout =
             decltype(tl::make_tile_layout<kStride0, kStride1, Tile::kRowStride,
                                           Tile::kColStride>());
-        using NewTile = SharedTile<typename Tile::DType, TileLayout>;
+        using NewTile = SharedTile<DType, TileLayout>;
 
         int offset = Tile::kType == tl::Layout::kRowMajor
                          ? x * (kStride0 * Tile::kRowStride) + y * kStride1
@@ -66,13 +82,13 @@ class TileIterator {
     }
 
     DEVICE auto operator()(int x, int y) {
-        // The indices must be within the strip count.
-        assert(x < sc0 && y < sc1);
+        assert(data_);               // The iterator is not initialized.
+        assert(x < sc0 && y < sc1);  // indices must be within the strip count.
 
         using TileLayout =
             decltype(tl::make_tile_layout<kStride0, kStride1, Tile::kRowStride,
                                           Tile::kColStride>());
-        using NewTile = SharedTile<typename Tile::DType, TileLayout>;
+        using NewTile = SharedTile<DType, TileLayout>;
 
         int offset = Tile::kType == tl::Layout::kRowMajor
                          ? x * (kStride0 * Tile::kCols) + y * kStride1
@@ -83,7 +99,8 @@ class TileIterator {
     }
 
     DEVICE auto operator()(int x, const Underscore& y) {
-        assert(x < sc0);  // The index must be within the strip count.
+        assert(data_);    // The iterator is not initialized.
+        assert(x < sc0);  // index must be within the strip count.
 
         // Updated the layout for sub-tiles accessed by the sliced iterator.
         // Note: Only the shape changes; the stride remains the same.
@@ -91,7 +108,7 @@ class TileIterator {
                                                          Tile::kRowStride,
                                                          Tile::kColStride>());
 
-        using NewTile = SharedTile<typename Tile::DType, TileLayout>;
+        using NewTile = SharedTile<DType, TileLayout>;
         using Iter = TileIterator<NewTile, ChunkShape>;
         static_assert(Iter::sc0 == 1);
 
@@ -105,7 +122,8 @@ class TileIterator {
     }
 
     DEVICE auto operator()(const Underscore& x, int y) {
-        assert(y < sc1);  // The index must be within the strip count.
+        assert(data_);    // The iterator is not initialized.
+        assert(y < sc1);  // index must be within the strip count.
 
         // Updated the layout for sub-tiles accessed by the sliced iterator.
         // Note: Only the shape changes; the stride remains the same.
@@ -113,7 +131,7 @@ class TileIterator {
                                                          Tile::kRowStride,
                                                          Tile::kColStride>());
 
-        using NewTile = SharedTile<typename Tile::DType, TileLayout>;
+        using NewTile = SharedTile<DType, TileLayout>;
         using Iter = TileIterator<NewTile, ChunkShape>;
         static_assert(Iter::sc1 == 1);
 
@@ -132,7 +150,16 @@ class TileIterator {
     }
 
   private:
-    typename Tile::DType* data_;
+    DType* data_;
 };
+
+/// @brief Pretty printer for the static shape information of a TileIterator.
+///        Note: This printer function works ONLY on the host.
+template <typename TileShape, typename ChunkShape>
+static HOST std::ostream& operator<<(
+    std::ostream& out, const TileIterator<TileShape, ChunkShape>& itr) {
+    detail::TileIteratorPrettyPrinter::print(out, itr);
+    return out;
+}
 
 }  // namespace tiledcuda::cell

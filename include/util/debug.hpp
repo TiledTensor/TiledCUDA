@@ -4,7 +4,7 @@
 
 #include <cuda_runtime_api.h>
 
-namespace tiledcuda::cell {
+namespace tiledcuda {
 
 DEVICE bool block(int bid) {
     int id = blockIdx.x + blockIdx.y * gridDim.x +
@@ -29,4 +29,4 @@ DEVICE bool thread0() { return thread(0, 0); }
 
 DEVICE bool block0() { return block(0); }
 
-}  // namespace tiledcuda::cell
+}  // namespace tiledcuda

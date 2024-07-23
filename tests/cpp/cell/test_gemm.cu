@@ -260,20 +260,12 @@ void run_test() {
     using RegB = typename config::RegB;
     using RegC = typename config::RegC;
 
-#if defined(DEBUG)
-    // TODO: move these lengthy codes into pretty printer.
-    LOG(INFO) << "TileIteratorA: [" << config::TileIteratorA::Tile::kRows
-              << ", " << config::TileIteratorA::Tile::kCols
-              << "]; numel = " << config::TileIteratorA::Tile::kNumel
-              << ", sc0 = " << config::TileIteratorA::sc0
-              << ", sc1 = " << config::TileIteratorA::sc1 << std::endl;
-    LOG(INFO) << "TileIteratorB: [" << config::TileIteratorB::Tile::kRows
-              << ", " << config::TileIteratorB::Tile::kCols
-              << "]; numel = " << config::TileIteratorB::Tile::kNumel
-              << ", sc0 = " << config::TileIteratorB::sc0
-              << ", sc1 = " << config::TileIteratorB::sc1 << std::endl;
+    using IteratorA = typename config::TileIteratorA;
+    using IteratorB = typename config::TileIteratorB;
 
-    LOG(INFO) << std::endl
+#if defined(DEBUG)
+    LOG(INFO) << "TileIteratorA: " << IteratorA{} << std::endl
+              << "TileIteratorB: " << IteratorB{} << std::endl
               << "RegA: " << RegA{} << std::endl
               << "RegB: " << RegB{} << std::endl
               << "RegC: " << RegC{} << std::endl;
@@ -288,14 +280,10 @@ void run_test() {
     // TODO: Refine this code; there are too many template parameters,
     // making it messy.
     test_wmma<Element, ElementAcc, typename config::LoadSharedA,
-              typename config::LoadSharedB, typename config::StoreSharedC,  //
-              typename config::TileIteratorA, RegA,
-              typename config::LoadRegA,  //
-              typename config::TileIteratorB, RegB,
-              typename config::LoadRegB,  //
-              typename config::SharedC, RegC,
-              typename config::StoreRegC  //
-              ><<<dim_grid, dim_block, shm_size>>>(
+              typename config::LoadSharedB, typename config::StoreSharedC,
+              IteratorA, RegA, typename config::LoadRegA, IteratorB, RegB,
+              typename config::LoadRegB, typename config::SharedC, RegC,
+              typename config::StoreRegC><<<dim_grid, dim_block, shm_size>>>(
         thrust::raw_pointer_cast(d_a.data()),
         thrust::raw_pointer_cast(d_b.data()),
         thrust::raw_pointer_cast(d_c.data()));

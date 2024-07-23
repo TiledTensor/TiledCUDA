@@ -24,6 +24,9 @@ struct GlobalTile {
 
     DEVICE GlobalTile(DType* data) : data_(data), layout_(Layout{}) {}
 
+    DEVICE GlobalTile(const DType* data)
+        : data_(const_cast<DType*>(data)), layout_(Layout{}) {}
+
     DEVICE DType* mutable_data() { return data_; }
 
     DEVICE const DType* data() const { return data_; }
