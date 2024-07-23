@@ -43,7 +43,6 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kThreads_,
     using Swizzled =
         tl::SwizzledRowMajor<DType, kShmRows, kShmCols, kSwizzleMode>;
 
-    // using SrcLayout = Global::Layout;
     using SrcLayout = tl::RowMajor<kRows, kCols, kCols>;
     using DstLayout = typename Swizzled::SmemLayout;
 
