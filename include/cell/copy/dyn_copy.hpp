@@ -49,9 +49,8 @@ DEVICE void copy_2d_tile_s2g(const Element* src_data, Element* dst_data,
 #pragma unroll
     for (int i = 0; i < int(size<1>(src)); ++i)
 #pragma unroll
-        for (int j = 0; j < int(size<2>(src)); ++j) {
+        for (int j = 0; j < int(size<2>(src)); ++j)
             cute::copy(tiled_copy, src(_, i, j), dst(_, i, j));
-        }
 }
 
 }  // namespace tiledcuda::cell::copy
