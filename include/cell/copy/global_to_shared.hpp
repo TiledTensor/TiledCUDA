@@ -1,6 +1,7 @@
 #pragma once
 
-#include "cell/copy/mod.hpp"
+#include "cell/copy/constants.hpp"
+#include "cell/copy/dyn_copy.hpp"
 #include "cell/copy/warp.hpp"
 #include "cell/traits/base.hpp"
 #include "types/mod.hpp"
@@ -32,6 +33,8 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kThreads_,
 
     static constexpr int kThreads = kThreads_;
 
+    static constexpr int kRows = Global::kRows;
+    static constexpr int kCols = Global::kCols;
     static constexpr int kShmRows = Shared::kRows;
     static constexpr int kShmCols = Shared::kCols;
 
@@ -40,7 +43,8 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kThreads_,
     using Swizzled =
         tl::SwizzledRowMajor<DType, kShmRows, kShmCols, kSwizzleMode>;
 
-    using SrcLayout = Global::Layout;
+    // using SrcLayout = Global::Layout;
+    using SrcLayout = tl::RowMajor<kRows, kCols, kCols>;
     using DstLayout = typename Swizzled::SmemLayout;
 
     // threads in a thread block are laid out as a 2D tile
@@ -63,23 +67,7 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kThreads_,
         decltype(make_tiled_copy(CopyInst{}, ThreadLayout{}, ValueLayout{}));
 
     DEVICE void operator()(const DType* src, DType* dst) {
-        int tid = threadIdx.x;
-
-        auto gtile = make_tensor(make_gmem_ptr(src), SrcLayout{});
-        auto stile = make_tensor(make_smem_ptr(dst), DstLayout{});
-
-        auto loader = TiledCopy::get_thread_slice(tid);
-
-        auto src_tile = loader.partition_S(gtile);
-        auto dst_tile = loader.partition_D(stile);
-
-#pragma unroll
-        for (int i = 0; i < int(size<1>(src_tile)); ++i) {
-#pragma unroll
-            for (int j = 0; j < int(size<2>(src_tile)); ++j) {
-                cute::copy(TiledCopy{}, src_tile(_, i, j), dst_tile(_, i, j));
-            }
-        }
+        copy_2d_tile_g2s(src, dst, SrcLayout{}, DstLayout{}, TiledCopy{});
     }
 };
 
@@ -94,15 +82,12 @@ struct GlobalToSharedLoader {
     static constexpr int kThreads = tl::get_numel<WarpLayout> * 32;
     static constexpr tl::Layout kType = kType_;
 
-    DEVICE void operator()(const Global& src, Shared& dst) {
-        const DType* src_ptr = src.data();
-        DType* dst_ptr = dst.mutable_data();
-
+    DEVICE void operator()(const DType* src, DType* dst) {
         using Loader = GlobalToSharedLoaderImpl<Global, Shared, kThreads, kType,
                                                 TraitsBase<DType>>;
 
         Loader loader;
-        loader(src_ptr, dst_ptr);
+        loader(src, dst);
     }
 };
 
