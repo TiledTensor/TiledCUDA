@@ -36,6 +36,17 @@ DEVICE void print_tile(const cutlass::half_t* data, const Layout& layout) {
     }
 }
 
+/// @brief Print a tile of half-precision floating point numbers.
+template <typename Layout>
+DEVICE void print_tile(const __half* data, const Layout& layout) {
+    for (int i = 0; i < tl::num_rows<Layout>; ++i) {
+        for (int j = 0; j < tl::num_cols<Layout>; ++j) {
+            printf("%.1f, ", __half2float(data[layout(i, j)]));
+        }
+        printf("\n");
+    }
+}
+
 /// @brief Print a register tile. Since register tile is a nested array-like
 ///        structure. printing resigter tile hits this function.
 template <typename DType, typename Layout>
