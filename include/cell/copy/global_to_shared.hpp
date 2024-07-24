@@ -12,22 +12,23 @@ using namespace traits;
 namespace tl = tile_layout;
 
 template <typename Global_, typename Shared_, const int kThreads_,
-          const tl::Layout kType, typename Base>
+          const tl::Layout kType>
 struct GlobalToSharedLoaderImpl {
     using Global = Global_;
     using Shared = Shared_;
     using DType = typename Global::DType;
+    using Base = TraitsBase<DType>;
 
     DEVICE void operator()(const DType* src, DType* dst);
 };
 
-template <typename Global_, typename Shared_, const int kThreads_,
-          typename Base>
+template <typename Global_, typename Shared_, const int kThreads_>
 struct GlobalToSharedLoaderImpl<Global_, Shared_, kThreads_,
-                                tl::Layout::kSwizzledRowMajor, Base> {
+                                tl::Layout::kSwizzledRowMajor> {
     using Global = Global_;
     using Shared = Shared_;
     using DType = typename Global::DType;
+    using Base = TraitsBase<DType>;
 
     static constexpr int kThreads = kThreads_;
 
@@ -69,22 +70,23 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kThreads_,
 };
 
 template <typename Global_, typename Shared_, const int kThreads_,
-          const tl::Layout kType, typename Base>
+          const tl::Layout kType>
 struct SharedToGlobalStorerImpl {
     using Global = Global_;
     using Shared = Shared_;
     using DType = typename Global::DType;
+    using Base = TraitsBase<DType>;
 
     DEVICE void operator()(const DType* src, DType* dst);
 };
 
-template <typename Global_, typename Shared_, const int kThreads_,
-          typename Base>
+template <typename Global_, typename Shared_, const int kThreads_>
 struct SharedToGlobalStorerImpl<Global_, Shared_, kThreads_,
-                                tl::Layout::kSwizzledRowMajor, Base> {
+                                tl::Layout::kSwizzledRowMajor> {
     using Global = Global_;
     using Shared = Shared_;
     using DType = typename Global::DType;
+    using Base = TraitsBase<DType>;
 
     static constexpr int kThreads = kThreads_;
 
@@ -136,8 +138,8 @@ struct GlobalToSharedLoader {
         const DType* src_ptr = src.data();
         DType* dst_ptr = dst.mutable_data();
 
-        using Loader = GlobalToSharedLoaderImpl<Global, Shared, kThreads, kType,
-                                                TraitsBase<DType>>;
+        using Loader =
+            GlobalToSharedLoaderImpl<Global, Shared, kThreads, kType>;
 
         Loader loader;
         loader(src_ptr, dst_ptr);
@@ -159,8 +161,8 @@ struct SharedToGlobalStorer {
         const DType* src_ptr = src.data();
         DType* dst_ptr = dst.mutable_data();
 
-        using Storer = SharedToGlobalStorerImpl<Global, Shared, kThreads, kType,
-                                                TraitsBase<DType>>;
+        using Storer =
+            SharedToGlobalStorerImpl<Global, Shared, kThreads, kType>;
 
         Storer storer;
         storer(src_ptr, dst_ptr);

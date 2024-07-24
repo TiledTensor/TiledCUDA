@@ -14,23 +14,23 @@ using namespace cell;
 template <typename Element, typename GlobalLayout, typename SharedLayout,
           typename WarpLayout>
 __global__ void copy_g2s(const Element* src, Element* target) {
-    extern __shared__ Element shm[];
-    auto* buf = reinterpret_cast<Element*>(shm);
+    extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
+    auto* buf = reinterpret_cast<Element*>(buf_);
 
     using SrcTile = GlobalTile<Element, GlobalLayout>;
     using DstTile = SharedTile<Element, SharedLayout>;
 
-    SrcTile src_tile((Element*)src);
+    SrcTile src_tile(src);
     DstTile dst_tile(buf);
     SrcTile target_tile(target);
 
-    cell::copy::GlobalToSharedLoader<DstTile, WarpLayout> loader;
+    copy::GlobalToSharedLoader<DstTile, WarpLayout> loader;
     loader(src_tile, dst_tile);
 
     __copy_async();
     __syncthreads();
 
-    cell::copy::SharedToGlobalStorer<DstTile, WarpLayout> storer;
+    copy::SharedToGlobalStorer<DstTile, WarpLayout> storer;
     storer(dst_tile, target_tile);
 
     __syncthreads();
