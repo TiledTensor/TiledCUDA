@@ -136,5 +136,22 @@ struct SwizzledRowMajor<float, kRows, kCols, 1> {
     using SmemLayout = RowMajor<kRows, kCols, kCols>;
 };
 
+/// @brief Swizzled layout transformer for a given layout.
+/// @tparam Layout_ The layout to be transformed.
+/// @tparam kType The type of the layout.
+template <typename Layout_, const Layout kType>
+struct Swizzled {
+    static constexpr int kRows = num_rows<Layout_>;
+    static constexpr int kCols = num_cols<Layout_>;
+};
+
+template <typename Layout_>
+struct Swizzled<Layout_, Layout::RowMajor> {
+    static constexpr int kRows = num_rows<Layout_>;
+    static constexpr int kCols = num_cols<Layout_>;
+
+    using Layout = SwizzledRowMajor<kRows, kCols>;
+};
+
 }  // namespace tile_layout
 }  // namespace tiledcuda::cell
