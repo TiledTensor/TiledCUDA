@@ -139,26 +139,19 @@ struct SwizzledRowMajor<float, kRows, kCols, 1> {
 /// @brief Swizzled layout transformer for a given layout.
 /// @tparam Element_ The element type of the layout.
 /// @tparam Layout_ The layout to be transformed.
-/// @tparam kType The type of the layout.
-template <typename Element_, typename Layout_, const Layout kType>
+template <typename Element_, typename Layout_>
 struct Swizzled {
     using Element = Element_;
 
     static constexpr int kRows = num_rows<Layout_>;
     static constexpr int kCols = num_cols<Layout_>;
-};
-
-template <typename Element, typename Layout_>
-struct Swizzled<Layout_, Layout::RowMajor> {
-    using Element = Element;
-
-    static constexpr int kRows = num_rows<Layout_>;
-    static constexpr int kCols = num_cols<Layout_>;
+    static constexpr Layout kType = layout_type<Layout_>;
 
     static constexpr int kSwizzleMode = kCols % 32 ? 1 : 0;
 
-    using Layout =
-        SwizzledRowMajor<Element, kRows, kCols, kSwizzleMode>::SmemLayout;
+    // TODO: SwizzledRowMajor/SwizzledColMajor
+    using SwizzledLayout =
+        SwizzledRowMajor<Element, kRows, kCols, kSwizzleMode>;
 };
 
 }  // namespace tile_layout

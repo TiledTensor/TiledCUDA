@@ -11,7 +11,7 @@ namespace tiledcuda::cell::copy {
 using namespace traits;
 namespace tl = tile_layout;
 
-template <typename Global_, typename Shared_, const int kThreads_,
+template <typename Global_, typename Shared_, typename WarpLayout_,
           const tl::Layout kType>
 struct GlobalToSharedLoaderImpl {
     using Global = Global_;
@@ -22,20 +22,29 @@ struct GlobalToSharedLoaderImpl {
     DEVICE void operator()(const DType* src, DType* dst);
 };
 
-template <typename Global_, typename Shared_, const int kThreads_>
-struct GlobalToSharedLoaderImpl<Global_, Shared_, kThreads_,
+template <typename Global_, typename Shared_, typename WarpLayout_>
+struct GlobalToSharedLoaderImpl<Global_, Shared_, WarpLayout_,
                                 tl::Layout::kSwizzledRowMajor> {
     using Global = Global_;
     using Shared = Shared_;
     using DType = typename Global::DType;
     using Base = TraitsBase<DType>;
+    using WarpLayout = WarpLayout_;
 
-    static constexpr int kThreads = kThreads_;
+    // static constexpr int kThreads = kThreads_;
 
     static constexpr int kRows = Global::kRows;
     static constexpr int kCols = Global::kCols;
     static constexpr int kShmRows = Shared::kRows;
     static constexpr int kShmCols = Shared::kCols;
+
+    static constexpr int kWarpRows = tl::num_rows<WarpLayout>;
+    static constexpr int kWarpCols = tl::num_cols<WarpLayout>;
+    static constexpr int kWarpSize = kWarpRows * kWarpCols;
+    static constexpr int kThreads = kWarpSize * 32;
+
+    // TODO: This is only for half precision.
+    // using SubThreadLayout = tl::RowMajor<4, 8>;
 
     // To avoid bank conflict, the shared memory requires a swizzled layout
     static const int kSwizzleMode = kShmCols % 32 ? 1 : 0;
@@ -49,6 +58,10 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kThreads_,
     // that has a shape of kThreadsRows x kThreadsCols.
     static constexpr int kThreadsCols = kShmCols / Base::kNumPerAccess;
     static constexpr int kThreadsRows = kThreads / kThreadsCols;
+    // static constexpr int kThreadsCols =
+    //     tl::num_cols<SubThreadLayout> * kWarpCols;
+    // static constexpr int kThreadsRows =
+    //     tl::num_rows<SubThreadLayout> * kWarpRows;
 
     using ThreadLayout = tl::RowMajor<kThreadsRows, kThreadsCols, kThreadsCols>;
 
@@ -69,7 +82,7 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kThreads_,
     }
 };
 
-template <typename Global_, typename Shared_, const int kThreads_,
+template <typename Global_, typename Shared_, typename WarpLayout_,
           const tl::Layout kType>
 struct SharedToGlobalStorerImpl {
     using Global = Global_;
@@ -80,20 +93,27 @@ struct SharedToGlobalStorerImpl {
     DEVICE void operator()(const DType* src, DType* dst);
 };
 
-template <typename Global_, typename Shared_, const int kThreads_>
-struct SharedToGlobalStorerImpl<Global_, Shared_, kThreads_,
+template <typename Global_, typename Shared_, typename WarpLayout_>
+struct SharedToGlobalStorerImpl<Global_, Shared_, WarpLayout_,
                                 tl::Layout::kSwizzledRowMajor> {
     using Global = Global_;
     using Shared = Shared_;
     using DType = typename Global::DType;
     using Base = TraitsBase<DType>;
-
-    static constexpr int kThreads = kThreads_;
+    using WarpLayout = WarpLayout_;
 
     static constexpr int kRows = Global::kRows;
     static constexpr int kCols = Global::kCols;
     static constexpr int kShmRows = Shared::kRows;
     static constexpr int kShmCols = Shared::kCols;
+
+    static constexpr int kWarpRows = tl::num_rows<WarpLayout>;
+    static constexpr int kWarpCols = tl::num_cols<WarpLayout>;
+    static constexpr int kWarpSize = kWarpRows * kWarpCols;
+    static constexpr int kThreads = kWarpSize * 32;
+
+    // TODO: This is only for half precision.
+    // using SubThreadLayout = tl::RowMajor<4, 8>;
 
     // To avoid bank conflict, the shared memory requires a swizzled layout
     static const int kSwizzleMode = kShmCols % 32 ? 1 : 0;
@@ -107,6 +127,10 @@ struct SharedToGlobalStorerImpl<Global_, Shared_, kThreads_,
     // that has a shape of kThreadsRows x kThreadsCols.
     static constexpr int kThreadsCols = kShmCols / Base::kNumPerAccess;
     static constexpr int kThreadsRows = kThreads / kThreadsCols;
+    // static constexpr int kThreadsCols =
+    //     tl::num_cols<SubThreadLayout> * kWarpCols;
+    // static constexpr int kThreadsRows =
+    //     tl::num_rows<SubThreadLayout> * kWarpRows;
 
     using ThreadLayout = tl::RowMajor<kThreadsRows, kThreadsCols, kThreadsCols>;
 
@@ -130,7 +154,7 @@ struct GlobalToSharedLoader {
     using DType = typename Shared::DType;
     using WarpLayout = WarpLayout_;
 
-    static constexpr int kThreads = tl::get_numel<WarpLayout> * 32;
+    // static constexpr int kThreads = tl::get_numel<WarpLayout> * 32;
     static constexpr tl::Layout kType = kType_;
 
     template <typename Global>
@@ -139,7 +163,7 @@ struct GlobalToSharedLoader {
         DType* dst_ptr = dst.mutable_data();
 
         using Loader =
-            GlobalToSharedLoaderImpl<Global, Shared, kThreads, kType>;
+            GlobalToSharedLoaderImpl<Global, Shared, WarpLayout, kType>;
 
         Loader loader;
         loader(src_ptr, dst_ptr);
@@ -153,7 +177,7 @@ struct SharedToGlobalStorer {
     using DType = typename Shared::DType;
     using WarpLayout = WarpLayout_;
 
-    static constexpr int kThreads = tl::get_numel<WarpLayout> * 32;
+    // static constexpr int kThreads = tl::get_numel<WarpLayout> * 32;
     static constexpr tl::Layout kType = kType_;
 
     template <typename Global>
@@ -162,7 +186,7 @@ struct SharedToGlobalStorer {
         DType* dst_ptr = dst.mutable_data();
 
         using Storer =
-            SharedToGlobalStorerImpl<Global, Shared, kThreads, kType>;
+            SharedToGlobalStorerImpl<Global, Shared, WarpLayout, kType>;
 
         Storer storer;
         storer(src_ptr, dst_ptr);

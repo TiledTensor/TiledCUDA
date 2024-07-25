@@ -17,6 +17,7 @@ __global__ void copy_g2s(const Element* src, Element* target) {
     extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
     auto* buf = reinterpret_cast<Element*>(buf_);
 
+    using SwizzledLayout = tl::Swizzled<Element, SharedLayout>;
     using SrcTile = GlobalTile<Element, GlobalLayout>;
     using DstTile = SharedTile<Element, SharedLayout>;
 
