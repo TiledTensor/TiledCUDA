@@ -17,7 +17,8 @@ __global__ void copy_g2s(const Element* src, Element* target) {
     extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
     auto* buf = reinterpret_cast<Element*>(buf_);
 
-    using SwizzledLayout = tl::Swizzled<Element, SharedLayout>;
+    using Swizzled = tl::Swizzled<SharedLayout, WarpLayout>;
+
     using SrcTile = GlobalTile<Element, GlobalLayout>;
     using DstTile = SharedTile<Element, SharedLayout>;
 
@@ -25,13 +26,13 @@ __global__ void copy_g2s(const Element* src, Element* target) {
     DstTile dst_tile(buf);
     SrcTile target_tile(target);
 
-    copy::GlobalToSharedLoader<DstTile, WarpLayout> loader;
+    copy::GlobalToSharedLoader<DstTile, WarpLayout, Swizzled> loader;
     loader(src_tile, dst_tile);
 
     __copy_async();
     __syncthreads();
 
-    copy::SharedToGlobalStorer<DstTile, WarpLayout> storer;
+    copy::SharedToGlobalStorer<DstTile, WarpLayout, Swizzled> storer;
     storer(dst_tile, target_tile);
 
     __syncthreads();

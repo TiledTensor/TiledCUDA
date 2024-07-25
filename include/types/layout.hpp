@@ -152,6 +152,19 @@ struct Swizzled {
     // TODO: SwizzledRowMajor/SwizzledColMajor
     using SwizzledLayout =
         SwizzledRowMajor<Element, kRows, kCols, kSwizzleMode>;
+
+    template <typename WarpLayout, typename Base>
+    DEVICE auto get_thread_layout() {
+        static constexpr int kWarpRows = num_rows<WarpLayout>;
+        static constexpr int kWarpCols = num_cols<WarpLayout>;
+        static constexpr int kWarpSize = kWarpRows * kWarpCols;
+        static constexpr int kThreads = kWarpSize * 32;
+
+        static constexpr int kThreadsCols = kCols / Base::kNumPerAccess;
+        static constexpr int kThreadsRows = kThreads / kThreadsCols;
+
+        return RowMajor<kThreadsRows, kThreadsCols, kThreadsCols>{};
+    }
 };
 
 }  // namespace tile_layout
