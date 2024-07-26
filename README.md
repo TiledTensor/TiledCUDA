@@ -66,15 +66,11 @@ __global__ void simple_gemm(const InType* dA, const InType* dB, AccType* dC) {
 }
 ```
 
-<!-- ## Features
-
-- Implemented `__device__` function wrapper that enables **static/dynamic** copying between different memory hierarchy.
-- Implemented `__device__` function wrapper for CUDA **micro kernels**, such as `copy_async` and tensor core operations.
-- Implemented template wrapper for **CuTe** to simplify its usage.
-- Implemented fused kernels such as **GEMM**, **Back2Back GEMM**, **Batched GEMM**, **Lstm Cell**, etc. -->
 
 ## TiledCUDA Abstraction
 
 TiledCUDA builds kernels around the core concept of BaseTile, starting from the lowest level by encapsulating atomic instructions(`ldmatrix`, `stmatrix`, `mma`, etc.), and then composing them step-by-step in both the temporal and spatial domains.
 
 To facilitate user-friendliness, TiledCUDA has implemented the **TileIterator**, which overloads the indexing operator and iterator, allowing users to control the traversal and execution of Tiles using more precise semantics.
+
+Within the `BaseTile`, TiledCUDA defines the minimum shape that can be executed by the hardware, and provides implementations based on different data types.
