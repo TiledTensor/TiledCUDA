@@ -1,4 +1,5 @@
 #include "util.hpp"
+#include "util/cuda_timer.hpp"
 
 template <typename InType, typename AccType, typename IteratorA, typename RegA,
           typename LoaderA, typename IteratorB, typename RegB, typename LoaderB,
@@ -78,12 +79,17 @@ int main() {
     dim3 dim_grid(1, 1, 1);
     dim3 dim_block(Config::kThreads, 1, 1);
 
+    CudaTimer timer;
+    timer.start();
     simple_gemm<InType, AccType, IteratorA, RegA, typename Config::ALoader,
                 IteratorB, RegB, typename Config::BLoader,
                 typename Config::GlobalC, typename Config::RegC,
                 typename Config::CStorer><<<dim_grid, dim_block>>>(A, B, C);
-    h_c = d_c;
     cudaDeviceSynchronize();
+    float time = timer.stop() / iter;
+    std::cout << "elapsed time: " << time << " ms" << std::endl;
+
+    h_c = d_c;
 
     {  // check correctness
         thrust::host_vector<AccType> h_c2(kM * kN);
