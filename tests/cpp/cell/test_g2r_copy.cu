@@ -20,7 +20,7 @@ __global__ void load_g2r(Element* src) {
     SrcTile src_tile(src);
     DstTile dst_tile;
 
-    copy::GlobalToRegLoader<SrcTile, DstTile, WarpLayout, kMode> loader;
+    copy::GlobalToRegLoader<DstTile, WarpLayout, kMode> loader;
     loader(src_tile, dst_tile);
     __syncthreads();
 
