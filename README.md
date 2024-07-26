@@ -12,27 +12,15 @@ The features of TiledCUDA include:
 - **Flexible**: TiledCUDA allows users to configure the kernel components according to their specific requirements.
 - **Efficient**: TiledCUDA provides efficient implementations of the kernel components.
 
-## Quick Start
+## Design
 
-### Download
+TiledCUDA builds kernels around the core concept of BaseTile, starting from the lowest level by encapsulating atomic instructions(`ldmatrix`, `stmatrix`, `mma`, etc.), and then composing them step-by-step in both the temporal and spatial domains.
 
-```bash
-git clone git@github.com:TiledTensor/TiledCUDA.git
-cd TiledCUDA && git submodule update --init --recursive
-```
+To facilitate user-friendliness, TiledCUDA has implemented the **TileIterator**, which overloads the indexing operator and iterator, allowing users to control the traversal and execution of Tiles using more precise semantics.
 
-### Installation
+Within the `BaseTile`, TiledCUDA defines the minimum shape that can be executed by the hardware, and provides implementations based on different data types.
 
-TileCUDA requires a C++20 host compiler, CUDA 12.0 or later, and GCC version 10.0 or higher to support C++20 features.
-
-### Unit Test
-
-- **Run a single unit test**: `make unit_test UNIT_TEST=test_scatter_nd.py`
-- **Run all unit tests**: `./scripts/unittests/python.sh`
-- **Run a single cpp unit test**: `make unit_test_cpp CPP_UT=test_copy`
-- **Run all cpp unit tests**: `make unit_test_cpps`
-
-### Examples
+## Examples
 
 Here's an example of a simple GEMM kernel written in TiledCUDA:
 
@@ -66,11 +54,26 @@ __global__ void simple_gemm(const InType* dA, const InType* dB, AccType* dC) {
 }
 ```
 
+## Quick Start
 
-## TiledCUDA Abstraction
+### Download
 
-TiledCUDA builds kernels around the core concept of BaseTile, starting from the lowest level by encapsulating atomic instructions(`ldmatrix`, `stmatrix`, `mma`, etc.), and then composing them step-by-step in both the temporal and spatial domains.
+```bash
+git clone git@github.com:TiledTensor/TiledCUDA.git
+cd TiledCUDA && git submodule update --init --recursive
+```
 
-To facilitate user-friendliness, TiledCUDA has implemented the **TileIterator**, which overloads the indexing operator and iterator, allowing users to control the traversal and execution of Tiles using more precise semantics.
+### Installation
 
-Within the `BaseTile`, TiledCUDA defines the minimum shape that can be executed by the hardware, and provides implementations based on different data types.
+TileCUDA requires a C++20 host compiler, CUDA 12.0 or later, and GCC version 10.0 or higher to support C++20 features.
+
+### Unit Test
+
+- **Run a single unit test**: `make unit_test UNIT_TEST=test_scatter_nd.py`
+- **Run all unit tests**: `./scripts/unittests/python.sh`
+- **Run a single cpp unit test**: `make unit_test_cpp CPP_UT=test_copy`
+- **Run all cpp unit tests**: `make unit_test_cpps`
+
+
+
+
