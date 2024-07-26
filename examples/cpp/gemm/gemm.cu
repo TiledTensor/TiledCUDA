@@ -1,25 +1,26 @@
 #include "util.hpp"
 
-template <typename InType, typename AccType, typename GlobalA, typename RegA,
-          typename LoaderA, typename GlobalB, typename RegB, typename LoaderB,
+template <typename InType, typename AccType, typename IteratorA, typename RegA,
+          typename LoaderA, typename IteratorB, typename RegB, typename LoaderB,
           typename GlobalC, typename RegC, typename CStorer>
 __global__ void simple_gemm(const InType* dA, const InType* dB, AccType* dC) {
-    GlobalA gA(dA);
+    IteratorA gAs(dA);
     RegA rA;
     LoaderA loader_a;
 
-    GlobalB gB(dB);
+    IteratorB gBs(dB);
     RegB rB;
     LoaderB loader_b;
 
     RegC acc;
 
-    loader_a(gA, rA);
-    loader_b(gB, rB);
-    __syncthreads();
+    for (int k = 0; k < IteratorA::sc1; ++k) {
+        loader_a(gAs(k), rA);
+        loader_b(gBs(k), rB);
+        __syncthreads();
 
-    compute::gemm_(rA, rB, acc);
-
+        compute::gemm_(rA, rB, acc);
+    }
     __syncthreads();
 
     GlobalC gC(dC);
@@ -31,9 +32,9 @@ int main() {
     using InType = __half;
     using AccType = float;
 
-    const int kM = 16;
-    const int kN = 16;
-    const int kK = 16;
+    const int kM = 128;
+    const int kN = 128;
+    const int kK = 128;
 
     // initialize data
     thrust::host_vector<InType> h_a(kM * kK);
@@ -63,23 +64,24 @@ int main() {
     using RegB = typename Config::RegB;
     using RegC = typename Config::RegC;
 
+    using IteratorA = typename Config::IteratorA;
+    using IteratorB = typename Config::IteratorB;
+
     std::cout << "kThreads: " << Config::kThreads << std::endl
               << "RegA: " << RegA{} << std::endl
               << "RegB: " << RegB{} << std::endl
-              << "RegC: " << RegC{} << std::endl;
+              << "RegC: " << RegC{} << std::endl
+              << "IteratorA: " << IteratorA{} << std::endl
+              << "IteratorB: " << IteratorB{} << std::endl
+              << std::endl;
 
     dim3 dim_grid(1, 1, 1);
     dim3 dim_block(Config::kThreads, 1, 1);
 
-    int size_ab = (kM + kN) * kK * sizeof(InType);
-    int size_c = kM * kN * sizeof(AccType);
-    int shm_size = size_ab > size_c ? size_ab : size_c;
-
-    simple_gemm<InType, AccType, typename Config::GlobalA, RegA,
-                typename Config::ALoader, typename Config::GlobalB, RegB,
-                typename Config::BLoader, typename Config::GlobalC,
-                typename Config::RegC, typename Config::CStorer>
-        <<<dim_grid, dim_block, shm_size>>>(A, B, C);
+    simple_gemm<InType, AccType, IteratorA, RegA, typename Config::ALoader,
+                IteratorB, RegB, typename Config::BLoader,
+                typename Config::GlobalC, typename Config::RegC,
+                typename Config::CStorer><<<dim_grid, dim_block>>>(A, B, C);
     h_c = d_c;
     cudaDeviceSynchronize();
 

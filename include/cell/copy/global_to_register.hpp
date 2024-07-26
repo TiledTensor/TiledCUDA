@@ -300,25 +300,23 @@ struct RegToGlobalStorerImpl<Global_, Reg_, kRowExec_, kColExec_,
 
 /**
  * @brief Load a data tile from Global memory to Register based on the warp
- * reuse mode.
- * @tparam Global_ Global memory tile type.
+ *        reuse mode.
  * @tparam Reg_ Register tile type.
  * @tparam WarpLayout_ Warp layout type.
  * @tparam kMode_ Warp reuse mode.
  * @tparam Base Copy base.
  */
-template <typename Global_, typename Reg_, typename WarpLayout_,
-          const WarpReuse kMode_,
+template <typename Reg_, typename WarpLayout_, const WarpReuse kMode_,
           typename Base = warp::CopyBase<WarpLayout_, kMode_>>
 struct GlobalToRegLoader : public Base {
-    using Global = Global_;
     using Reg = Reg_;
-    using DType = typename Global::DType;
+    using DType = typename Reg::DType::DType;
     using BaseShape = BaseTileShape<DType>;
 
     using WarpLayout = WarpLayout_;
     static constexpr WarpReuse kMode = kMode_;
 
+    template <typename Global>
     DEVICE void operator()(const Global& src, Reg& dst) {
         const DType* src_ptr = src.data();
 
@@ -342,7 +340,7 @@ struct GlobalToRegLoader : public Base {
 
 /**
  * @brief Store a data tile from Register to Global memory based on the warp
- * reuse mode.
+ *        reuse mode.
  * @tparam Global_ Global memory tile type.
  * @tparam Reg_ Register tile type.
  * @tparam WarpLayout_ Warp layout type.

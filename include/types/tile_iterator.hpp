@@ -13,9 +13,9 @@ struct TileIteratorPrettyPrinter {
     template <typename TileIterator>
     static HOST void print(std::ostream& out, const TileIterator& itr) {
         out << "numel = " << TileIterator::Tile::kNumel << ", ChunkShape["
-            << TileIterator::Tile::kRows << ", " << TileIterator::Tile::kCols
-            << "], sc0 = " << TileIterator::sc0
-            << ", sc1 = " << TileIterator::sc1;
+            << dim_size<0, typename TileIterator::ChunkShape> << ", "
+            << dim_size<1, typename TileIterator::ChunkShape> << "], sc0 = "
+            << TileIterator::sc0 << ", sc1 = " << TileIterator::sc1;
     }
 };
 }  // namespace detail
