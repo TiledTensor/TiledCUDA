@@ -14,15 +14,15 @@ The features of TiledCUDA include:
 
 ## Design
 
-TiledCUDA builds kernels around the core concept of BaseTile, starting from the lowest level by encapsulating atomic instructions(`ldmatrix`, `stmatrix`, `mma`, etc.), and then composing them step-by-step in both the temporal and spatial domains.
+TiledCUDA builds kernels around the core concept of **BaseTile**, starting from the lowest level by encapsulating atomic instructions(`ldmatrix`, `stmatrix`, `mma`, etc.), and then composing them step-by-step in both the temporal and spatial domains.
 
 To facilitate user-friendliness, TiledCUDA has implemented the **TileIterator**, which overloads the indexing operator and iterator, allowing users to control the traversal and execution of Tiles using more precise semantics.
 
-Within the `BaseTile`, TiledCUDA defines the minimum shape that can be executed by the hardware, and provides implementations based on different data types.
+Within the **BaseTile**, TiledCUDA defines the minimum shape that can be executed by the hardware, and provides implementations based on different data types.
 
 ![](docs/_static/TiledCUDA_overview.png)
 
-A simple GEMM workflow based on TiledCUDA is shown in the figure above. TiledCUDA has implemented `GlobalTile`/`SharedTile` for Global/Shared memory levels to define the memory layout. Users can customize the shape and layout of different memory hierarchies.
+A simple GEMM workflow based on TiledCUDA is shown in the figure above. TiledCUDA has implemented **GlobalTile**/**SharedTile** for Global/Shared memory levels to define the memory layout. Users can customize the shape and layout of different memory hierarchies.
 
 Users can use the **TileIterator** to iterate over the customized **GlobalTile**/**SharedTile** at the **BaseTile** level as the basic unit. Meanwhile, TiledCUDA has implemented different iteration methods for different **Warp Reuse** strategies.
 
