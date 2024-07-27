@@ -20,6 +20,8 @@ To facilitate user-friendliness, TiledCUDA has implemented the **TileIterator**,
 
 Within the `BaseTile`, TiledCUDA defines the minimum shape that can be executed by the hardware, and provides implementations based on different data types.
 
+![](docs/_static/TiledCUDA_overview.png)
+
 ## Examples
 
 Here's an example of a simple GEMM kernel written in TiledCUDA:
