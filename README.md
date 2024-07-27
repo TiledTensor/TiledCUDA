@@ -22,6 +22,16 @@ Within the `BaseTile`, TiledCUDA defines the minimum shape that can be executed 
 
 ![](docs/_static/TiledCUDA_overview.png)
 
+A simple GEMM workflow based on TiledCUDA is shown in the figure above. TiledCUDA has implemented `GlobalTile`/`SharedTile` for Global/Shared memory levels to define the memory layout. Users can customize the shape and layout of different memory hierarchies.
+
+Users can use the **TileIterator** to iterate over the customized **GlobalTile**/**SharedTile** at the **BaseTile** level as the basic unit. Meanwhile, TiledCUDA has implemented different iteration methods for different **Warp Reuse** strategies.
+
+During the iteration process, the BaseTile is loaded into the **RegTile** one by one. We have implemented loading methods for both **GlobalTile** and **SharedTile**. **GlobalToRegLoader** utilizes vectorized access to implement the loading from global memory to registers, while **SharedToRegLoader** leverages the ldmatrix instruction to load from shared memory to registers.
+
+After the **BaseTile** is loaded into the RegTile, TiledCUDA has implemented the `tiled_wmma` method for the basic **RegTile**, which can perform matrix multiplication for the smallest BaseTile.
+
+After the wmma operation is completed, **RegToGlobal** and **RegToShared** provide the implementation to load back from the **RegTile** to the original memory, so that the computed results can be stored into the result memory tile.
+
 ## Examples
 
 Here's an example of a simple GEMM kernel written in TiledCUDA:
