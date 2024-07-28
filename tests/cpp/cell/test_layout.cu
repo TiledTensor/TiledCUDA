@@ -1,6 +1,8 @@
 #include "common/test_utils.hpp"
 #include "types/mod.hpp"
 
+#include <sstream>
+
 namespace tiledcuda::testing {
 
 using namespace cell;
@@ -43,12 +45,24 @@ TEST(TestLayout, test_swizzled_layout) {
     auto layout1 = RowMajor{};
     auto layout2 = SwizzledRowMajor{};
 
+    std::stringstream ss;
+
+    ss << "original:" << std::endl;
     for (int i = 0; i < kRows; ++i) {
         for (int j = 0; j < kCols; ++j) {
-            LOG(INFO) << layout1(i, j) << "->" << layout2(i, j);
+            ss << layout1(i, j) << ", ";
         }
-        LOG(INFO) << std::endl;
+        ss << std::endl;
     }
+
+    ss << std::endl << "swizzled:" << std::endl;
+    for (int i = 0; i < kRows; ++i) {
+        for (int j = 0; j < kCols; ++j) {
+            ss << layout2(i, j) << ", ";
+        }
+        ss << std::endl;
+    }
+    LOG(INFO) << ss.str();
 }
 
 }  // namespace tiledcuda::testing

@@ -21,7 +21,7 @@ enum class Layout {
     kRowMajor = 0,  // Tile layout for shared memory.
     kColMajor = 1,
     kSwizzledRowMajor = 2,
-    kSwizzledColMajor = 3,
+    kSwizzledColMajor = 3
 };
 
 // In the row major layout, the contiguous dimension in memory is the
