@@ -1,16 +1,14 @@
 # TiledCUDA
 
-**TiledCUDA** is a kernel template library that is designed to be highly efficient and easy to use. It adopts a hardware bottom-up approach, providing efficient device kernels centered around Base Tiles whose shapes align with TensorCore's instruction shape and encapsulate hardware-dependent performance parameters. These components serve as building blocks, enabling users to process larger tiles composed of Base Tiles for their applications.
+**TiledCUDA** is a highly efficient kernel template library designed to elevate CUDA C’s level of abstraction for processing tiles. It is designed to be:
 
-TiledCUDA is designed to be:
+- **Higher-Level Programming**: TiledCUDA offers a set of device kernels for transferring tiles between the CUDA device's three memory hierarchies and for computing tiles.
+- **Modularity**: TiledCUDA enables users to construct their applications by processing larger tiles in time and space using the provided BaseTiles.
+- **Efficiency**: TiledCUDA offers highly efficient implementations of these device kernels.
 
-- **Higher-Level Programming than CUDA C**: TiledCUDA offers a set of device kernels for processing tiles, elevating CUDA C's level of abstraction.
-- **Modularity**: TiledCUDA enables users to construct their applications by processing larger tiles in time and space using the provided BaseTiles..
-- **Efficiency**: TiledCUDA offers highly efficient implementations of these kernels.
+TildedCUDA adopts a hardware bottom-up approach, building kernels around the core concept of **BaseTile**. The shapes of these `BaseTile`s align with TensorCore's instruction shape and encapsulate hardware-dependent performance parameters to optimally utilizes TensorCore's capabilities. They serve as building blocks. Larger tiles are then constructed from BaseTile in both temporal and spatial dimensions, enabling users to process larger tiles composed of BaseTiles for their applications.
 
-TiledCUDA builds kernels around the core concept of BaseTile, which is aligned with a shape that optimally utilizes TensorCore's capabilities. Larger tiles are then constructed from BaseTile in both temporal and spatial dimensions.
-
-To enhance user-friendliness, TiledCUDA implements the TileIterator, which allows users to partition a large tile into sub-tiles and index or traverse these sub-tiles using a logical array-indexing-like syntax, eliminating the need for daunting and error-prone physical index computations.
+To enhance user-friendliness, TiledCUDA also provides the **TileIterator**, which allows users to partition a large tile into sub-tiles and index or traverse these sub-tiles using a logical array-indexing-like syntax, eliminating the need for daunting and error-prone physical index computations.
 
 ## Example
 
