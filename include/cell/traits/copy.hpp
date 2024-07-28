@@ -12,7 +12,7 @@ namespace tl = tile_layout;
 /// and thread tile.
 template <typename Element_, const int kRows_, const int kCols_,
           const int kShmRows_, const int kShmCols_, const int kThreads,
-          const bool kUseSwizzle = true, typename Base = TraitsBase<Element_>>
+          typename Base = TraitsBase<Element_>>
 struct G2S2DCopyTraits : public Base {
     using Element = Element_;
 
@@ -51,7 +51,7 @@ struct G2S2DCopyTraits : public Base {
 /// @tparam kThreads: number of threads in a thread block
 template <typename Element_, const int kRows_, const int kCols_,
           const int kShmRows_, const int kShmCols_, const int kThreads,
-          const bool kUseSwizzle = true, typename Base = TraitsBase<Element_>>
+          typename Base = TraitsBase<Element_>>
 struct S2G2DCopyTraits : public Base {
     using Element = Element_;
 
@@ -61,11 +61,8 @@ struct S2G2DCopyTraits : public Base {
     static constexpr int kShmRows = kShmRows_;
     static constexpr int kShmCols = kShmCols_;
 
-    using SrcLayout =
+    using SrcLayout = tl::RowMajor<kShmRows, kShmCols, kShmCols>;
 
-        tl::RowMajor<kShmRows, kShmCols, kShmCols>;
-
-    // To avoid bank conflicts, the shared memory requires a swizzled layout
     using DstLayout = tl::RowMajor<kRows, kCols, kCols>;
 
     // threads in a thread block are laid out as a 2D tile

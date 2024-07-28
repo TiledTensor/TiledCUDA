@@ -54,7 +54,8 @@ TEST(TESTG2SharedCopy, copy_2d_tile_g2s) {
     static constexpr int kShmCols = kCols;
 
     using GlobalLayout = tl::RowMajor<kRows, kCols>;
-    using SharedLayout = tl::RowMajor<kShmRows, kShmCols>;
+    using SharedLayout =
+        tl::Swizzled<tl::RowMajor<kShmRows, kShmCols>, 2, 3, 3>::Layout;
 
     // threads are arranged as 8 x 4 to perform 2D copy
     static const int kThreads = tl::get_numel<WarpLayout> * 32;

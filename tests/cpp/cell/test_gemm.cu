@@ -115,15 +115,12 @@ struct TestTraits {
 
     /// == 2. configurate tile transfer between global and shared using CuTe ==
     using LoadSharedA =
-        traits::G2S2DCopyTraits<Element, kM, kK, kM, kK, kThreads,
-                                false /*use swizzle*/>;
+        traits::G2S2DCopyTraits<Element, kM, kK, kM, kK, kThreads>;
     using LoadSharedB =
-        traits::G2S2DCopyTraits<Element, kN, kK, kN, kK, kThreads,
-                                false /*use swizzle*/>;
+        traits::G2S2DCopyTraits<Element, kN, kK, kN, kK, kThreads>;
     // transfer operand C from shared memory to global memory
     using StoreSharedC =
-        traits::S2G2DCopyTraits<ElementAcc, kM, kN, kM, kN, kThreads,
-                                false /*use swizzle*/>;
+        traits::S2G2DCopyTraits<ElementAcc, kM, kN, kM, kN, kThreads>;
 
     /// === 3. configurate tile transfer between shared and register loader ===
     // shared tile for operand A

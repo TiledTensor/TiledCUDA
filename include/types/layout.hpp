@@ -80,103 +80,21 @@ HOST_DEVICE auto make_col_major_layout(const int row, const int col,
                              make_stride(Int<1>{}, stride));
 }
 
-// CuTe's swizzle functions, swizzle(B, M, S), permute elements in a
-// 2D coordinate space. This 2D coordinate space has 2^B rows and 2^S columns,
-// and each coordinate position has 2^M elements. Therefore, to apply a swizzle
-// function to a 2D data tile, the data tile should have a shape that is a
-// multiple of 2^B x 2^S x 2^M.
-/// @tparam Element: element type
-/// @tparam kRows: number of rows
-/// @tparam kCols: number of columns
-/// @tparam kSwizzleMode: The value should be either 0 or 1, indicating whether
-/// the size of the contiguous dimension is divisible by 32 or not.
-template <typename Element, const int kRows, const int kCols,
-          const int kSwizzleMode>
-struct SwizzledRowMajor {};
-
-// FIXME(haruhi): This implementation is very inflexible and is almost
-// equivalent to a hard-coded swizzle function for 2D data tiles that have a
-// shape that is a multiple of 8x32.
-// Improve the implementation to make it more general.
-template <const int kRows, const int kCols>
-struct SwizzledRowMajor<cutlass::half_t, kRows, kCols, 0> {
-    static_assert(kRows % 8 == 0,
-                  "The number of rows must be a multiple of 8.");
-
-    using SmemLayoutAtom = decltype(composition(
-        Swizzle<2, 3, 3>{}, cute::Layout<Shape<_8, _32>, Stride<_32, _1>>{}));
-    using layout = decltype(tile_to_shape(SmemLayoutAtom{},
-                                          Shape<Int<kRows>, Int<kCols>>{}));
-};
-
-// FIXME(haruhi): This implementation is very inflexible and is almost
-// equivalent to a hard-coded swizzle function for 2D data tiles that have a
-// shape that is a multiple of 8x64.
-// Improve the implementation to make it more general.
-template <const int kRows, const int kCols>
-struct SwizzledRowMajor<cutlass::half_t, kRows, kCols, 1> {
-    static_assert(kRows % 8 == 0,
-                  "The number of rows must be a multiple of 8.");
-
-    using SmemLayoutAtom = decltype(composition(
-        Swizzle<3, 3, 3>{}, cute::Layout<Shape<_8, _64>, Stride<_64, _1>>{}));
-    using SmemLayout = decltype(tile_to_shape(SmemLayoutAtom{},
-                                              Shape<Int<kRows>, Int<kCols>>{}));
-};
-
-template <const int kRows, const int kCols>
-struct SwizzledRowMajor<float, kRows, kCols, 0> {
-    // FIXME: not implmented yet. placeholder for future implementation.
-    using SmemLayout = RowMajor<kRows, kCols, kCols>;
-};
-
-template <const int kRows, const int kCols>
-struct SwizzledRowMajor<float, kRows, kCols, 1> {
-    // FIXME: not implmented yet. placeholder for future implementation.
-    using SmemLayout = RowMajor<kRows, kCols, kCols>;
-};
-
-// /// @brief Swizzled layout transformer for a given layout.
-// /// @tparam Element_ The element type of the layout.
-// /// @tparam Layout_ The layout to be transformed.
-// template <typename Element_, typename Layout_>
-// struct Swizzled {
-//     using Element = Element_;
-
-//     static constexpr int kRows = num_rows<Layout_>;
-//     static constexpr int kCols = num_cols<Layout_>;
-//     static constexpr Layout kType = layout_type<Layout_>;
-
-//     static constexpr int kSwizzleMode = kCols % 32 ? 1 : 0;
-
-//     // TODO: SwizzledRowMajor/SwizzledColMajor
-//     using SwizzledLayout =
-//         SwizzledRowMajor<Element, kRows, kCols, kSwizzleMode>;
-
-//     template <typename WarpLayout, typename Base>
-//     DEVICE auto get_thread_layout() {
-//         static constexpr int kWarpRows = num_rows<WarpLayout>;
-//         static constexpr int kWarpCols = num_cols<WarpLayout>;
-//         static constexpr int kWarpSize = kWarpRows * kWarpCols;
-//         static constexpr int kThreads = kWarpSize * 32;
-
-//         static constexpr int kThreadsCols = kCols / Base::kNumPerAccess;
-//         static constexpr int kThreadsRows = kThreads / kThreadsCols;
-
-//         return RowMajor<kThreadsRows, kThreadsCols, kThreadsCols>{};
-//     }
-// };
-
-template <typename Layout, const int kB, const int kM, const int kS>
+// @brief: leverage CuTe's swizzle functions, swizzle(B, M, S), permute elements
+//         in a 2D coordinate space. This 2D coordinate space has 2^B rows and
+//         2^S columns, and each coordinate position has 2^M elements.
+//         Therefore, to apply a swizzle function to a 2D data tile, the data
+//         tile should have a shape that is a multiple of 2^B x 2^S x 2^M.
+template <typename Layout_, const int kB, const int kM, const int kS>
 struct Swizzled {
-    static_assert(int(cute::size(Layout{})) % 2 ^ kB * 2 ^ kM * 2 ^ kS == 0);
+    static_assert(int(cute::size(Layout_{})) % 2 ^ kB * 2 ^ kM * 2 ^ kS == 0);
 
     using LayoutAtom =
         decltype(composition(cute::Swizzle<kB, kS, kM>{},
                              cute::Layout<Shape<_8, _32>, Stride<_32, _1>>{}));
-    using layout = decltype(tile_to_shape(
-        LayoutAtom{}, cute::Shape<Int<cute::size<0>(Layout{})>,
-                                  Int<cute::size<1>(Layout{})>>{}));
+    using Layout = decltype(tile_to_shape(
+        LayoutAtom{}, cute::Shape<Int<cute::size<0>(Layout_{})>,
+                                  Int<cute::size<1>(Layout_{})>>{}));
 };
 
 }  // namespace tile_layout

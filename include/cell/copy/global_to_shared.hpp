@@ -39,14 +39,8 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, WarpLayout_,
     static constexpr int kWarpSize = kWarpRows * kWarpCols;
     static constexpr int kThreads = kWarpSize * 32;
 
-    // To avoid bank conflict, the shared memory requires a swizzled layout
-    static const int kSwizzleMode = kShmCols % 32 ? 1 : 0;
-    using Swizzled =
-        tl::SwizzledRowMajor<DType, kShmRows, kShmCols, kSwizzleMode>;
-
     using SrcLayout = tl::RowMajor<kRows, kCols, kCols>;
     using DstLayout = Shared::Layout;
-    // using DstLayout = typename Swizzled::SmemLayout;
 
     // threads in a thread block are laid out as a 2D tile
     // that has a shape of kThreadsRows x kThreadsCols.
@@ -105,11 +99,6 @@ struct SharedToGlobalStorerImpl<Global_, Shared_, WarpLayout_,
     // TODO: This is only for half precision.
     // using SubThreadLayout = tl::RowMajor<4, 8>;
 
-    // To avoid bank conflict, the shared memory requires a swizzled layout
-    static const int kSwizzleMode = kShmCols % 32 ? 1 : 0;
-    using Swizzled =
-        tl::SwizzledRowMajor<DType, kShmRows, kShmCols, kSwizzleMode>;
-
     using SrcLayout = Shared::Layout;
     using DstLayout = tl::RowMajor<kRows, kCols, kCols>;
 
@@ -117,6 +106,7 @@ struct SharedToGlobalStorerImpl<Global_, Shared_, WarpLayout_,
     // that has a shape of kThreadsRows x kThreadsCols.
     static constexpr int kThreadsCols = kShmCols / Base::kNumPerAccess;
     static constexpr int kThreadsRows = kThreads / kThreadsCols;
+
     // static constexpr int kThreadsCols =
     //     tl::num_cols<SubThreadLayout> * kWarpCols;
     // static constexpr int kThreadsRows =
