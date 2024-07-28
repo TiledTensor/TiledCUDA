@@ -2,39 +2,27 @@
 
 ## Introduction
 
-**TiledCUDA** is a kernel template library that is designed to be highly efficient and easy to use. 
+**TiledCUDA** is a kernel template library that is designed to be highly efficient and easy to use. It adopts a hardware bottom-up approach, providing efficient device kernels centered around Base Tiles whose shapes align with TensorCore's instruction shape and encapsulate hardware-dependent performance parameters. These components serve as building blocks, enabling users to process larger tiles composed of Base Tiles for their applications.
 
-TiledCUDA takes a bottom-up approach, building efficient kernel components centered around **Base Tiles**.These components encapsulate performance-related parameters that users can configure according to their specific requrements.
+TiledCUDA is designed to be:
 
-The features of TiledCUDA include:
+- **Higher-Level Programmin than CUDA C**: TiledCUDA offers a set of device kernels for processing tiles, elevating CUDA C's level of abstraction.
+- **Modularity**: TiledCUDA enables users to construct their applications by processing larger tiles in time and space using the provided BaseTiles..
+- **Efficiency**: TiledCUDA offers highly efficient implementations of these kernels.
 
-- **High-level API**: TiledCUDA provides a high-level API that is easy to use and understand.
-- **Flexible**: TiledCUDA allows users to configure the kernel components according to their specific requirements.
-- **Efficient**: TiledCUDA provides efficient implementations of the kernel components.
+TiledCUDA builds kernels around the core concept of BaseTile, which is aligned with a shape that optimally utilizes TensorCore's capabilities. Larger tiles are then constructed from BaseTile in both temporal and spatial dimensions.
 
-## Design
+To enhance user-friendliness, TiledCUDA implements the TileIterator, which allows users to partition a large tile into sub-tiles and index or traverse these sub-tiles using a logical array-indexing-like syntax, eliminating the need for daunting and error-prone physical index computations.
 
-TiledCUDA builds kernels around the core concept of **BaseTile**, starting from the lowest level by encapsulating atomic instructions(`ldmatrix`, `stmatrix`, `mma`, etc.), and then composing them step-by-step in both the temporal and spatial domains.
+## Example
 
-To facilitate user-friendliness, TiledCUDA has implemented the **TileIterator**, which overloads the indexing operator and iterator, allowing users to control the traversal and execution of Tiles using more precise semantics.
+TiledCUDA implements `GlobalTile`, `SharedTile` and `RegTile` to customize the shape and layout of tiles located in the GPU's three memory hierarchies. Here's an example of a simple GEMM kernel written in TiledCUDA (the complete example can be found in [this directory](https://github.com/TiledTensor/TiledCUDA/tree/master/examples/cpp/gemm)):
 
-Within the **BaseTile**, TiledCUDA defines the minimum shape that can be executed by the hardware, and provides implementations based on different data types.
+<p align="center">
+<img src="docs/_static/TiledCUDA_overview.png" width=50%>
+</p>
 
-![](docs/_static/TiledCUDA_overview.png)
-
-A simple GEMM workflow based on TiledCUDA is shown in the figure above. TiledCUDA has implemented **GlobalTile**/**SharedTile** for Global/Shared memory levels to define the memory layout. Users can customize the shape and layout of different memory hierarchies.
-
-Users can use the **TileIterator** to iterate over the customized **GlobalTile**/**SharedTile** at the **BaseTile** level as the basic unit. Meanwhile, TiledCUDA has implemented different iteration methods for different **Warp Reuse** strategies.
-
-During the iteration process, the BaseTile is loaded into the **RegTile** one by one. We have implemented loading methods for both **GlobalTile** and **SharedTile**. **GlobalToRegLoader** utilizes vectorized access to implement the loading from global memory to registers, while **SharedToRegLoader** leverages the ldmatrix instruction to load from shared memory to registers.
-
-After the **BaseTile** is loaded into the RegTile, TiledCUDA has implemented the `tiled_wmma` method for the basic **RegTile**, which can perform matrix multiplication for the smallest BaseTile.
-
-After the wmma operation is completed, **RegToGlobal** and **RegToShared** provide the implementation to load back from the **RegTile** to the original memory, so that the computed results can be stored into the result memory tile.
-
-## Examples
-
-Here's an example of a simple GEMM kernel written in TiledCUDA:
+(*To simplify the demonstration, this example only involves two memory levels: global memory and registers. TiledCUDA also applies a similar concept to shared memory*.)
 
 ```cpp
 template <typename InType, typename AccType, typename IteratorA, typename RegA,
@@ -56,7 +44,7 @@ __global__ void simple_gemm(const InType* dA, const InType* dB, AccType* dC) {
         loader_b(gBs(k), rB);
         __syncthreads();
 
-        compute::gemm_(rA, rB, acc);
+        gemm(rA, rB, acc);
     }
     __syncthreads();
 
@@ -64,6 +52,34 @@ __global__ void simple_gemm(const InType* dA, const InType* dB, AccType* dC) {
     CStorer storer_c;
     storer_c(acc, gC);
 }
+```
+- The `TileIterator` is used to divide the `GlobalTile` into smaller sub-tiles and iterate over them. Various warp reuse methods are provided to support efficient repeated loading of data by warps within a thread block. TiledCUDA provides efficient loading and storing methods that transfer data between memory hierarchies by utilizing specialized hardware-accelerated instructions. Tiles of data are then cooperatively loaded into the `RegTile`, which is stored in each thread's local register file.
+
+- Once the data is loaded into a thread's local register file, `gemm` performs matrix multiplication using TensorCore's warp-level matrix multiply-and-accumulate (wmma) instruction on the `BaseTile`s. The specialized data distribution required by TensorCore is automatically maintained by TiledCUDA's `RegTile` layout.
+
+- After the `gemm` operation is completed, data in the `RegTile` is cooperatively stored back from registers to global memory using the `RegToGlobalStorer`.
+
+Here is how to declare the `Tile` at each level of memory, use `TileIterator` to chunk large tiles into sub-tiles, and declare loaders and storers to transfer tiles between memory hierarchies.
+
+```cpp
+using WarpLayout = RowMajor<2, 2>;
+
+// operand A
+using GlobalA = GlobalTile<InType, RowMajor<128, 256>>;
+using IteratorA = TileIterator<GlobalA, TileShape<128, 32>>;
+using RegA = RegTile<BaseTileRowMajor<__half>, RowMajor<8, 8>>;
+using ALoader = GlobalToRegLoader<RegA, WarpLayout, kRowReuseCont>;
+
+// operand B
+using GlobalB = GlobalTile<InType, ColMajor<256, 64>>;
+using IteratorB = TileIterator<GlobalB, TileShape<32, 64>>;
+using RegB = RegTile<BaseTileColMajor<__half>, ColMajor<8, 4>>;
+using BLoader = GlobalToRegLoader<RegB, WarpLayout, kColReuseCont>;
+
+// output C
+using GlobalC = GlobalTile<AccType, RowMajor<128, 64>>;
+using RegC = RegTile<BaseTileRowMajor<float>, RowMajor<8, 8>>;
+using CStorer = RegToGlobalStorer<GlobalC, RegC, WarpLayout>;
 ```
 
 ## Quick Start
@@ -85,7 +101,3 @@ TileCUDA requires a C++20 host compiler, CUDA 12.0 or later, and GCC version 10.
 - **Run all unit tests**: `./scripts/unittests/python.sh`
 - **Run a single cpp unit test**: `make unit_test_cpp CPP_UT=test_copy`
 - **Run all cpp unit tests**: `make unit_test_cpps`
-
-
-
-
