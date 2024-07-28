@@ -1,12 +1,10 @@
 # TiledCUDA
 
-## Introduction
-
 **TiledCUDA** is a kernel template library that is designed to be highly efficient and easy to use. It adopts a hardware bottom-up approach, providing efficient device kernels centered around Base Tiles whose shapes align with TensorCore's instruction shape and encapsulate hardware-dependent performance parameters. These components serve as building blocks, enabling users to process larger tiles composed of Base Tiles for their applications.
 
 TiledCUDA is designed to be:
 
-- **Higher-Level Programmin than CUDA C**: TiledCUDA offers a set of device kernels for processing tiles, elevating CUDA C's level of abstraction.
+- **Higher-Level Programming than CUDA C**: TiledCUDA offers a set of device kernels for processing tiles, elevating CUDA C's level of abstraction.
 - **Modularity**: TiledCUDA enables users to construct their applications by processing larger tiles in time and space using the provided BaseTiles..
 - **Efficiency**: TiledCUDA offers highly efficient implementations of these kernels.
 
