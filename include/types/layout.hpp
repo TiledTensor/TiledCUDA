@@ -105,8 +105,8 @@ struct SwizzledRowMajor<cutlass::half_t, kRows, kCols, 0> {
 
     using SmemLayoutAtom = decltype(composition(
         Swizzle<2, 3, 3>{}, cute::Layout<Shape<_8, _32>, Stride<_32, _1>>{}));
-    using SmemLayout = decltype(tile_to_shape(SmemLayoutAtom{},
-                                              Shape<Int<kRows>, Int<kCols>>{}));
+    using layout = decltype(tile_to_shape(SmemLayoutAtom{},
+                                          Shape<Int<kRows>, Int<kCols>>{}));
 };
 
 // FIXME(haruhi): This implementation is very inflexible and is almost
@@ -136,35 +136,47 @@ struct SwizzledRowMajor<float, kRows, kCols, 1> {
     using SmemLayout = RowMajor<kRows, kCols, kCols>;
 };
 
-/// @brief Swizzled layout transformer for a given layout.
-/// @tparam Element_ The element type of the layout.
-/// @tparam Layout_ The layout to be transformed.
-template <typename Element_, typename Layout_>
+// /// @brief Swizzled layout transformer for a given layout.
+// /// @tparam Element_ The element type of the layout.
+// /// @tparam Layout_ The layout to be transformed.
+// template <typename Element_, typename Layout_>
+// struct Swizzled {
+//     using Element = Element_;
+
+//     static constexpr int kRows = num_rows<Layout_>;
+//     static constexpr int kCols = num_cols<Layout_>;
+//     static constexpr Layout kType = layout_type<Layout_>;
+
+//     static constexpr int kSwizzleMode = kCols % 32 ? 1 : 0;
+
+//     // TODO: SwizzledRowMajor/SwizzledColMajor
+//     using SwizzledLayout =
+//         SwizzledRowMajor<Element, kRows, kCols, kSwizzleMode>;
+
+//     template <typename WarpLayout, typename Base>
+//     DEVICE auto get_thread_layout() {
+//         static constexpr int kWarpRows = num_rows<WarpLayout>;
+//         static constexpr int kWarpCols = num_cols<WarpLayout>;
+//         static constexpr int kWarpSize = kWarpRows * kWarpCols;
+//         static constexpr int kThreads = kWarpSize * 32;
+
+//         static constexpr int kThreadsCols = kCols / Base::kNumPerAccess;
+//         static constexpr int kThreadsRows = kThreads / kThreadsCols;
+
+//         return RowMajor<kThreadsRows, kThreadsCols, kThreadsCols>{};
+//     }
+// };
+
+template <typename Layout, const int kB, const int kM, const int kS>
 struct Swizzled {
-    using Element = Element_;
+    static_assert(int(cute::size(Layout{})) % 2 ^ kB * 2 ^ kM * 2 ^ kS == 0);
 
-    static constexpr int kRows = num_rows<Layout_>;
-    static constexpr int kCols = num_cols<Layout_>;
-    static constexpr Layout kType = layout_type<Layout_>;
-
-    static constexpr int kSwizzleMode = kCols % 32 ? 1 : 0;
-
-    // TODO: SwizzledRowMajor/SwizzledColMajor
-    using SwizzledLayout =
-        SwizzledRowMajor<Element, kRows, kCols, kSwizzleMode>;
-
-    template <typename WarpLayout, typename Base>
-    DEVICE auto get_thread_layout() {
-        static constexpr int kWarpRows = num_rows<WarpLayout>;
-        static constexpr int kWarpCols = num_cols<WarpLayout>;
-        static constexpr int kWarpSize = kWarpRows * kWarpCols;
-        static constexpr int kThreads = kWarpSize * 32;
-
-        static constexpr int kThreadsCols = kCols / Base::kNumPerAccess;
-        static constexpr int kThreadsRows = kThreads / kThreadsCols;
-
-        return RowMajor<kThreadsRows, kThreadsCols, kThreadsCols>{};
-    }
+    using LayoutAtom =
+        decltype(composition(cute::Swizzle<kB, kS, kM>{},
+                             cute::Layout<Shape<_8, _32>, Stride<_32, _1>>{}));
+    using layout = decltype(tile_to_shape(
+        LayoutAtom{}, cute::Shape<Int<cute::size<0>(Layout{})>,
+                                  Int<cute::size<1>(Layout{})>>{}));
 };
 
 }  // namespace tile_layout

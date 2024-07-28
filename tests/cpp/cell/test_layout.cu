@@ -6,7 +6,7 @@ namespace tiledcuda::testing {
 using namespace cell;
 namespace tl = tile_layout;
 
-TEST(TestLayout, test) {
+TEST(TestLayout, test_layout) {
     using Element = cutlass::half_t;
 
     using Layout1 = tl::RowMajor<4, 7>;
@@ -32,6 +32,23 @@ TEST(TestLayout, test) {
     EXPECT_EQ(type2, tl::Layout::kColMajor);
     auto layout_name2 = layout_type_to_str(type2);
     EXPECT_EQ(layout_name2, "ColMajor");
+}
+
+TEST(TestLayout, test_swizzled_layout) {
+    const int kRows = 8;
+    const int kCols = 32;
+    using RowMajor = tl::RowMajor<kRows, kCols>;
+    using SwizzledRowMajor = tl::Swizzled<RowMajor, 2, 3, 3>::layout;
+
+    auto layout1 = RowMajor{};
+    auto layout2 = SwizzledRowMajor{};
+
+    for (int i = 0; i < kRows; ++i) {
+        for (int j = 0; j < kCols; ++j) {
+            LOG(INFO) << layout1(i, j) << "->" << layout2(i, j);
+        }
+        LOG(INFO) << std::endl;
+    }
 }
 
 }  // namespace tiledcuda::testing

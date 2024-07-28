@@ -12,26 +12,22 @@ using namespace traits;
 namespace tl = tile_layout;
 
 template <typename Global_, typename Shared_, typename WarpLayout_,
-          typename Swizzled_, const tl::Layout kType>
+          const tl::Layout kType>
 struct GlobalToSharedLoaderImpl {
-    using Global = Global_;
-    using Shared = Shared_;
-    using DType = typename Global::DType;
-    using Base = TraitsBase<DType>;
+    using DType = Global_::DType;
 
     DEVICE void operator()(const DType* src, DType* dst);
 };
 
-template <typename Global_, typename Shared_, typename WarpLayout_,
-          typename Swizzled_>
-struct GlobalToSharedLoaderImpl<Global_, Shared_, WarpLayout_, Swizzled_,
-                                tl::Layout::kSwizzledRowMajor> {
+template <typename Global_, typename Shared_, typename WarpLayout_>
+struct GlobalToSharedLoaderImpl<Global_, Shared_, WarpLayout_,
+                                tl::Layout::kRowMajor> {
     using Global = Global_;
     using Shared = Shared_;
     using DType = typename Global::DType;
+
     using Base = TraitsBase<DType>;
     using WarpLayout = WarpLayout_;
-    using SwizzledFn = Swizzled_;
 
     static constexpr int kRows = Global::kRows;
     static constexpr int kCols = Global::kCols;
@@ -43,15 +39,14 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, WarpLayout_, Swizzled_,
     static constexpr int kWarpSize = kWarpRows * kWarpCols;
     static constexpr int kThreads = kWarpSize * 32;
 
-    // static constexpr Swizzled_ kSwizzled{};
-
     // To avoid bank conflict, the shared memory requires a swizzled layout
     static const int kSwizzleMode = kShmCols % 32 ? 1 : 0;
     using Swizzled =
         tl::SwizzledRowMajor<DType, kShmRows, kShmCols, kSwizzleMode>;
 
     using SrcLayout = tl::RowMajor<kRows, kCols, kCols>;
-    using DstLayout = typename Swizzled::SmemLayout;
+    using DstLayout = Shared::Layout;
+    // using DstLayout = typename Swizzled::SmemLayout;
 
     // threads in a thread block are laid out as a 2D tile
     // that has a shape of kThreadsRows x kThreadsCols.
@@ -78,7 +73,7 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, WarpLayout_, Swizzled_,
 };
 
 template <typename Global_, typename Shared_, typename WarpLayout_,
-          typename Swizzled_, const tl::Layout kType>
+          const tl::Layout kType>
 struct SharedToGlobalStorerImpl {
     using Global = Global_;
     using Shared = Shared_;
@@ -88,10 +83,9 @@ struct SharedToGlobalStorerImpl {
     DEVICE void operator()(const DType* src, DType* dst);
 };
 
-template <typename Global_, typename Shared_, typename WarpLayout_,
-          typename Swizzled_>
-struct SharedToGlobalStorerImpl<Global_, Shared_, WarpLayout_, Swizzled_,
-                                tl::Layout::kSwizzledRowMajor> {
+template <typename Global_, typename Shared_, typename WarpLayout_>
+struct SharedToGlobalStorerImpl<Global_, Shared_, WarpLayout_,
+                                tl::Layout::kRowMajor> {
     using Global = Global_;
     using Shared = Shared_;
     using DType = typename Global::DType;
@@ -116,7 +110,7 @@ struct SharedToGlobalStorerImpl<Global_, Shared_, WarpLayout_, Swizzled_,
     using Swizzled =
         tl::SwizzledRowMajor<DType, kShmRows, kShmCols, kSwizzleMode>;
 
-    using SrcLayout = typename Swizzled::SmemLayout;
+    using SrcLayout = Shared::Layout;
     using DstLayout = tl::RowMajor<kRows, kCols, kCols>;
 
     // threads in a thread block are laid out as a 2D tile
@@ -143,13 +137,12 @@ struct SharedToGlobalStorerImpl<Global_, Shared_, WarpLayout_, Swizzled_,
     }
 };
 
-template <typename Shared_, typename WarpLayout_, typename Swizzled_,
-          const tl::Layout kType_ = tl::Layout::kSwizzledRowMajor>
+template <typename Shared_, typename WarpLayout_,
+          const tl::Layout kType_ = tl::Layout::kRowMajor>
 struct GlobalToSharedLoader {
     using Shared = Shared_;
     using DType = typename Shared::DType;
     using WarpLayout = WarpLayout_;
-    using Swizzled = Swizzled_;
 
     static constexpr tl::Layout kType = kType_;
 
@@ -158,21 +151,20 @@ struct GlobalToSharedLoader {
         const DType* src_ptr = src.data();
         DType* dst_ptr = dst.mutable_data();
 
-        using Loader = GlobalToSharedLoaderImpl<Global, Shared, WarpLayout,
-                                                Swizzled, kType>;
+        using Loader =
+            GlobalToSharedLoaderImpl<Global, Shared, WarpLayout, kType>;
 
         Loader loader;
         loader(src_ptr, dst_ptr);
     }
 };
 
-template <typename Shared_, typename WarpLayout_, typename Swizzled_,
-          const tl::Layout kType_ = tl::Layout::kSwizzledRowMajor>
+template <typename Shared_, typename WarpLayout_,
+          const tl::Layout kType_ = tl::Layout::kRowMajor>
 struct SharedToGlobalStorer {
     using Shared = Shared_;
     using DType = typename Shared::DType;
     using WarpLayout = WarpLayout_;
-    using Swizzled = Swizzled_;
 
     static constexpr tl::Layout kType = kType_;
 
@@ -181,8 +173,8 @@ struct SharedToGlobalStorer {
         const DType* src_ptr = src.data();
         DType* dst_ptr = dst.mutable_data();
 
-        using Storer = SharedToGlobalStorerImpl<Global, Shared, WarpLayout,
-                                                Swizzled, kType>;
+        using Storer =
+            SharedToGlobalStorerImpl<Global, Shared, WarpLayout, kType>;
 
         Storer storer;
         storer(src_ptr, dst_ptr);
