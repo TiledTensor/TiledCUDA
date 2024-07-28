@@ -2,7 +2,7 @@
 
 #include "cuda_utils.hpp"
 
-namespace tiledcuda::cell {
+namespace tiledcuda {
 
 /// @brief: Cuda timer to measure the time taken by a kernel.
 /// Usage:
@@ -41,4 +41,4 @@ class CudaTimer {
     cudaStream_t stream;
 };
 
-}  // namespace tiledcuda::cell
+}  // namespace tiledcuda

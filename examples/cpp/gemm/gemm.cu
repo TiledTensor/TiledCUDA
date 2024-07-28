@@ -86,7 +86,7 @@ int main() {
                 typename Config::GlobalC, typename Config::RegC,
                 typename Config::CStorer><<<dim_grid, dim_block>>>(A, B, C);
     cudaDeviceSynchronize();
-    float time = timer.stop() / iter;
+    float time = timer.stop();
     std::cout << "elapsed time: " << time << " ms" << std::endl;
 
     h_c = d_c;
