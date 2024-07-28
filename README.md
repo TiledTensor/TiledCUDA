@@ -6,9 +6,7 @@
 - **Modularity**: TiledCUDA enables users to construct their applications by processing larger tiles in time and space using the provided BaseTiles.
 - **Efficiency**: TiledCUDA offers highly efficient implementations of these device kernels.
 
-TildedCUDA adopts a hardware bottom-up approach, building kernels around the core concept of **BaseTile**. The shapes of these `BaseTile`s align with TensorCore's instruction shape and encapsulate hardware-dependent performance parameters to optimally utilizes TensorCore's capabilities. They serve as building blocks. Larger tiles are then constructed from BaseTile in both temporal and spatial dimensions, enabling users to process larger tiles composed of BaseTiles for their applications.
-
-To enhance user-friendliness, TiledCUDA also provides the **TileIterator**, which allows users to partition a large tile into sub-tiles and index or traverse these sub-tiles using a logical array-indexing-like syntax, eliminating the need for daunting and error-prone physical index computations.
+TildedCUDA adopts a hardware bottom-up approach by building kernels around the core concept of the **BaseTile**. The shapes of these BaseTiles align with TensorCore's instruction shape and encapsulate hardware-dependent performance parameters to optimally utilize TensorCore's capabilities. Serving as building blocks, these BaseTiles are then combined to construct larger tiles in both temporal and spatial dimensions, enabling users to process larger tiles composed of BaseTiles for their applications.
 
 ## Example
 
