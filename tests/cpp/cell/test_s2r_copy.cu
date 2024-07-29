@@ -5,13 +5,11 @@
 #include <glog/logging.h>
 
 namespace tiledcuda::testing {
-
 using namespace cell;
 using namespace copy;
 namespace tl = tile_layout;
 
 namespace {
-
 template <typename Element>
 __device__ void init_value(Element* data, int numel) {
     for (int i = 0; i < numel; ++i) data[i] = static_cast<Element>(i % 2048);

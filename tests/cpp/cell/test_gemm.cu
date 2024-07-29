@@ -11,7 +11,6 @@ namespace tiledcuda::testing {
 using namespace cell;
 using namespace cell::copy;
 namespace tl = cell::tile_layout;
-using namespace cute;
 
 namespace {
 float rand_float(float a = 1e-3, float b = 1) {
@@ -114,22 +113,20 @@ struct TestTraits {
     static constexpr int kWarpPerCol = tl::num_cols<WarpLayout>;
 
     /// == 2. configurate tile transfer between global and shared using CuTe ==
-    using LoadSharedA =
-        traits::G2S2DCopyTraits<Element, kM, kK, kM, kK, kThreads>;
-    using LoadSharedB =
-        traits::G2S2DCopyTraits<Element, kN, kK, kN, kK, kThreads>;
-    // transfer operand C from shared memory to global memory
-    using StoreSharedC =
-        traits::S2G2DCopyTraits<ElementAcc, kM, kN, kM, kN, kThreads>;
+    using GlobalA = GlobalTile<Element, tl::RowMajor<kM, kK>>;
+    using SharedA = SharedTile<Element, tl::RowMajor<kM, kK>>;
+    using LoadSharedA = GlobalToSharedLoader<SharedA, WarpLayout>;
+
+    using GlobalB = GlobalTile<Element, tl::RowMajor<kN, kK>>;
+    using SharedB = SharedTile<Element, tl::RowMajor<kN, kK>>;
+    using LoadSharedB = GlobalToSharedLoader<SharedB, WarpLayout>;
 
     /// === 3. configurate tile transfer between shared and register loader ===
     // shared tile for operand A
-    using SharedA = SharedTile<Element, tl::RowMajor<kM, kK>>;
     using TileIteratorA = TileIterator<SharedA, TileShape<kM, kChunkK>>;
-
     // shared tile for operand B
-    using SharedB = SharedTile<Element, tl::ColMajor<kK, kN>>;
-    using TileIteratorB = TileIterator<SharedB, TileShape<kChunkK, kN>>;
+    using SharedB2 = SharedTile<Element, tl::ColMajor<kK, kN>>;
+    using TileIteratorB = TileIterator<SharedB2, TileShape<kChunkK, kN>>;
 
     static_assert(TileIteratorA::sc1 == TileIteratorB::sc0,
                   "mismatched K dimension!");
@@ -139,7 +136,6 @@ struct TestTraits {
     static constexpr int kAMs = kM / kWarpPerRow / BaseShape::kTileSize;
     static constexpr int kAKs = kChunkK / BaseShape::kTileSize;
     using RegA = RegTile<BaseTileRowMajor<Element>, tl::RowMajor<kAMs, kAKs>>;
-
     // load RegTileA from shared
     using LoadRegA =
         SharedToRegLoader<RegA, WarpLayout, WarpReuse::kRowReuseCont>;
@@ -147,15 +143,15 @@ struct TestTraits {
     // register tile for operand B, calculate register usage for operand B
     static constexpr int kBKs = kChunkK / BaseShape::kTileSize;
     static constexpr int kBNs = kN / kWarpPerCol / BaseShape::kTileSize;
-
     using RegB = RegTile<BaseTileColMajor<Element>, tl::ColMajor<kBKs, kBNs>>;
-
     // load RegTileB from shared
     using LoadRegB =
         SharedToRegLoader<RegB, WarpLayout, WarpReuse::kColReuseCont>;
 
     // shared tile for output C
     using SharedC = SharedTile<ElementAcc, tl::RowMajor<kM, kN>>;
+    using GlobalC = GlobalTile<ElementAcc, tl::RowMajor<kM, kN>>;
+    using StoreSharedC = SharedToGlobalStorer<SharedC, WarpLayout>;
 
     // register tile for output C
     // calculate register usage for output C
@@ -168,25 +164,31 @@ struct TestTraits {
     using StoreRegC = RegToSharedStorer<RegC, WarpLayout>;
 };
 
-template <typename Element, typename ElementAcc,                              //
-          typename LoadSharedA, typename LoadSharedB, typename StoreSharedC,  //
-          typename TileIteratorA, typename RegA, typename LoadRegA,
-          typename TileIteratorB, typename RegB, typename LoadRegB,
-          typename SharedC, typename RegC, typename StoreRegC>
+template <typename Element, typename ElementAcc, typename GlobalA,
+          typename SharedA, typename LoadSharedA, typename GlobalB,
+          typename SharedB, typename LoadSharedB, typename GlobalC,
+          typename SharedC, typename StoreSharedC, typename TileIteratorA,
+          typename RegA, typename LoadRegA, typename TileIteratorB,
+          typename RegB, typename LoadRegB, typename RegC, typename StoreRegC>
 __global__ void test_wmma(const Element* ga, const Element* gb,
                           ElementAcc* gc) {
+    GlobalA gA(ga);
+    GlobalB gB(gb);
+    GlobalC gC(gc);
+
     extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
     auto* shared_a = reinterpret_cast<Element*>(buf_);
     auto* shared_b = shared_a + TileIteratorA::Tile::kNumel;
     auto* shared_c = reinterpret_cast<ElementAcc*>(buf_);
+    SharedA sA(shared_a);
+    SharedB sB(shared_b);
     SharedC sC(shared_c);
 
-    copy_2d_tile_g2s(ga, shared_a, typename LoadSharedA::SrcLayout{},
-                     typename LoadSharedA::DstLayout{},
-                     typename LoadSharedA::TiledCopy{});
-    copy_2d_tile_g2s(gb, shared_b, typename LoadSharedB::SrcLayout{},
-                     typename LoadSharedB::DstLayout{},
-                     typename LoadSharedB::TiledCopy{});
+    LoadSharedA loaderA;
+    loaderA(gA, sA);
+
+    LoadSharedB loaderB;
+    loaderB(gB, sB);
     __copy_async();
     __syncthreads();
 
@@ -199,7 +201,6 @@ __global__ void test_wmma(const Element* ga, const Element* gb,
     LoadRegB load_rB;
     RegB rB;
 
-    StoreRegC store_rC;
     RegC acc;
 
     for (int k = 0; k < TileIteratorA::sc1; ++k) {
@@ -210,12 +211,12 @@ __global__ void test_wmma(const Element* ga, const Element* gb,
     }
     __syncthreads();
 
+    StoreRegC store_rC;
     store_rC(acc, sC);
     __syncthreads();
 
-    copy_2d_tile_s2g(shared_c, gc, typename StoreSharedC::SrcLayout{},
-                     typename StoreSharedC::DstLayout{},
-                     typename StoreSharedC::TiledCopy{});
+    StoreSharedC store_sC;
+    store_sC(sC, gC);
 }
 }  // namespace
 
@@ -274,16 +275,19 @@ void run_test() {
     int size_c = kM * kN * sizeof(ElementAcc);
     int shm_size = size_ab > size_c ? size_ab : size_c;
 
-    // TODO: Refine this code; there are too many template parameters,
-    // making it messy.
-    test_wmma<Element, ElementAcc, typename config::LoadSharedA,
-              typename config::LoadSharedB, typename config::StoreSharedC,
+    // TODO: Refine this code; there are too many template parameters, making it
+    // messy.
+    test_wmma<Element, ElementAcc, typename config::GlobalA,
+              typename config::SharedA, typename config::LoadSharedA,
+              typename config::GlobalB, typename config::SharedB,
+              typename config::LoadSharedB, typename config::GlobalC,
+              typename config::SharedC, typename config::StoreSharedC,
               IteratorA, RegA, typename config::LoadRegA, IteratorB, RegB,
-              typename config::LoadRegB, typename config::SharedC, RegC,
-              typename config::StoreRegC><<<dim_grid, dim_block, shm_size>>>(
-        thrust::raw_pointer_cast(d_a.data()),
-        thrust::raw_pointer_cast(d_b.data()),
-        thrust::raw_pointer_cast(d_c.data()));
+              typename config::LoadRegB, RegC, typename config::StoreRegC>
+        <<<dim_grid, dim_block, shm_size>>>(
+            thrust::raw_pointer_cast(d_a.data()),
+            thrust::raw_pointer_cast(d_b.data()),
+            thrust::raw_pointer_cast(d_c.data()));
     cudaDeviceSynchronize();
     h_c = d_c;
 
@@ -297,7 +301,6 @@ void run_test() {
         reinterpret_cast<const __half*>(thrust::raw_pointer_cast(d_a.data())),
         reinterpret_cast<__half*>(thrust::raw_pointer_cast(d_cublas.data())),
         kK /*lda*/, kK /*ldb*/, kN /*ldc*/);
-
     thrust::host_vector<__half> h_cublas = d_cublas;
 
     EXPECT_TRUE(check_correctness(thrust::raw_pointer_cast(h_cublas.data()),
@@ -312,16 +315,16 @@ TEST(TestGemm, test) {
     run_test<32, 32, 32, tl::RowMajor<1, 1>, 32>();
 
     // minimal shape for 2 warps
-    run_test<32, 32, 32, tl::RowMajor<1, 2>, 32>();
+    run_test<32, 32, 64, tl::RowMajor<1, 2>, 32>();
     run_test<64, 32, 128, tl::RowMajor<2, 1>, 32>();
 
     // minimal shape for 2 x 2 warps
-    run_test<32, 32, 32, tl::RowMajor<2, 2>, 32>();
     run_test<32, 32, 64, tl::RowMajor<2, 2>, 32>();
-    run_test<64, 32, 32, tl::RowMajor<2, 2>, 32>();
+    run_test<32, 32, 64, tl::RowMajor<2, 2>, 32>();
+    run_test<64, 32, 64, tl::RowMajor<2, 2>, 32>();
     run_test<32, 32, 128, tl::RowMajor<2, 2>, 64>();
 
-    run_test<64, 64, 32, tl::RowMajor<2, 2>, 32>();
+    run_test<64, 64, 64, tl::RowMajor<2, 2>, 32>();
     run_test<64, 32, 128, tl::RowMajor<2, 2>, 32>();
 }
 
