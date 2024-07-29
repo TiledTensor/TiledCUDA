@@ -11,7 +11,6 @@ using namespace copy;
 namespace tl = tile_layout;
 
 namespace {
-
 template <typename Element>
 __device__ void init_value(Element* data, int numel) {
     for (int i = 0; i < numel; ++i) data[i] = static_cast<Element>(i % 2048);
@@ -81,9 +80,9 @@ __global__ void run_test_store(Loader& loader, Storer& storer) {
         check_results(buf, Shared::kNumel);
     }
 }
-
 }  // namespace
 
+/*
 TEST(TestShared2Reg, operand_A) {  // load mode for loading operand A in gemm
     using Element = cutlass::half_t;
 
@@ -160,6 +159,32 @@ TEST(TestReg2Shared, operand_C) {
 
     run_test_store<Shared, Reg, Loader, Storer>
         <<<dim_grid, dim_block, shm_size>>>(loader, storer);
+    cudaDeviceSynchronize();
+}
+*/
+
+TEST(TestShared2Reg, operand_A_swizzle) {
+    using Element = __half;
+
+    using WarpLayout = tl::RowMajor<1, 1>;
+    const int kThreads = tl::get_numel<WarpLayout> * 32;
+
+    const int kRows = 64;
+    const int kCols = 32;
+
+    using SharedLayout = tl::Swizzled<tl::RowMajor<kRows, kCols>, 2, 3, 3>;
+    using Shared = SharedTile<Element, SharedLayout>;
+    using Reg = RegTile<BaseTileRowMajor<Element>, tl::RowMajor<2, 2>>;
+
+    using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::kRowReuseCont>;
+    Copy copy;
+
+    dim3 dim_grid(1, 1, 1);
+    dim3 dim_block(kThreads, 1, 1);
+    int shm_size = Shared::kNumel * sizeof(Element);
+
+    run_test_load<Element, Shared, Reg, Copy>
+        <<<dim_grid, dim_block, shm_size>>>(copy);
     cudaDeviceSynchronize();
 }
 

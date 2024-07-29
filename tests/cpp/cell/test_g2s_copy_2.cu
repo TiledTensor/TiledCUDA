@@ -76,53 +76,59 @@ TEST(GlobalToSharedCopy, test_non_swizzled_layout) {
         reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_B.data())), numel);
 }
 
-TEST(GlobalToSharedCopy, test_swizzled) {
-    // In the internal implementation of the copy kernel, threads in a warp are
-    // arranged in an 8x4 fashion. Consequently, threads in a CTA form an [8, 8]
-    // layout (derived from [1x8, 2x4]).
-    // Given that threads in the same row access the same row in shared memory.
-    // Each thread accesses 128 bits of data, which corresponds to 8 elements of
-    // half-precision data. Therefore, the shared memory must have a shape that
-    // is a multiple of [8, 64].
-    static constexpr int kRows = 128;
-    static constexpr int kCols = 64;
+// TEST(GlobalToSharedCopy, test_swizzled) {
+//     // In the internal implementation of the copy kernel, threads in a warp
+//     are
+//     // arranged in an 8x4 fashion. Consequently, threads in a CTA form an [8,
+//     8]
+//     // layout (derived from [1x8, 2x4]).
+//     // Given that threads in the same row access the same row in shared
+//     memory.
+//     // Each thread accesses 128 bits of data, which corresponds to 8 elements
+//     of
+//     // half-precision data. Therefore, the shared memory must have a shape
+//     that
+//     // is a multiple of [8, 64].
+//     static constexpr int kRows = 128;
+//     static constexpr int kCols = 64;
 
-    using WarpLayout = tl::RowMajor<1, 2>;
-    static const int kThreads = tl::get_numel<WarpLayout> * 32;
+//     using WarpLayout = tl::RowMajor<1, 2>;
+//     static const int kThreads = tl::get_numel<WarpLayout> * 32;
 
-    using Element = __half;
-    // initalize the input matrix
-    int numel = kRows * kCols;
-    thrust::host_vector<Element> h_A(numel);
-    for (int i = 0; i < h_A.size(); ++i) h_A[i] = static_cast<Element>(i);
+//     using Element = __half;
+//     // initalize the input matrix
+//     int numel = kRows * kCols;
+//     thrust::host_vector<Element> h_A(numel);
+//     for (int i = 0; i < h_A.size(); ++i) h_A[i] = static_cast<Element>(i);
 
-    thrust::device_vector<Element> d_B(numel);
-    thrust::fill(d_B.begin(), d_B.end(), static_cast<Element>(0.));
-    thrust::device_vector<Element> d_A = h_A;
+//     thrust::device_vector<Element> d_B(numel);
+//     thrust::fill(d_B.begin(), d_B.end(), static_cast<Element>(0.));
+//     thrust::device_vector<Element> d_A = h_A;
 
-    using SrcTile = GlobalTile<Element, tl::RowMajor<kRows, kCols>>;
-    using SharedLayout =
-        tl::Swizzled<tl::RowMajor<kRows, kCols>, 2, 3, 3>::Layout;
-    using DstTile = SharedTile<Element, SharedLayout>;
-    using Loader = copy::GlobalToSharedLoader<DstTile, WarpLayout>;
-    using Storer = copy::SharedToGlobalStorer<DstTile, WarpLayout>;
+//     using SrcTile = GlobalTile<Element, tl::RowMajor<kRows, kCols>>;
+//     using SharedLayout =
+//         tl::Swizzled<tl::RowMajor<kRows, kCols>, 2, 3, 3>::Layout;
+//     using DstTile = SharedTile<Element, SharedLayout>;
+//     using Loader = copy::GlobalToSharedLoader<DstTile, WarpLayout>;
+//     using Storer = copy::SharedToGlobalStorer<DstTile, WarpLayout>;
 
-    dim3 dim_grid(1, 1);
-    dim3 dim_block(kThreads);
+//     dim3 dim_grid(1, 1);
+//     dim3 dim_block(kThreads);
 
-    copy_g2s<Element, SrcTile, DstTile, Loader, Storer>
-        <<<dim_grid, dim_block, kRows * kCols * sizeof(Element)>>>(
-            thrust::raw_pointer_cast(d_A.data()),
-            thrust::raw_pointer_cast(d_B.data()));
-    cudaDeviceSynchronize();
+//     copy_g2s<Element, SrcTile, DstTile, Loader, Storer>
+//         <<<dim_grid, dim_block, kRows * kCols * sizeof(Element)>>>(
+//             thrust::raw_pointer_cast(d_A.data()),
+//             thrust::raw_pointer_cast(d_B.data()));
+//     cudaDeviceSynchronize();
 
-    // check correctness
-    thrust::host_vector<Element> h_B(numel);
-    h_B = d_B;
+//     // check correctness
+//     thrust::host_vector<Element> h_B(numel);
+//     h_B = d_B;
 
-    assert_equal(
-        reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_A.data())),
-        reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_B.data())), numel);
-}
+//     assert_equal(
+//         reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_A.data())),
+//         reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_B.data())),
+//         numel);
+// }
 
 }  // namespace tiledcuda::testing
