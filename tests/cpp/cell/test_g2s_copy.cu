@@ -31,7 +31,7 @@ __global__ void copy_g2s(const Element* src, Element* trg) {
 }
 }  // namespace
 
-TEST(TestG2ShmCopy, copy_2d_tile_g2s) {
+TEST(GlobalToSharedCopy, test1) {
     namespace traits = tiledcuda::cell::traits;
 
     // The simple test case for 2D copy. Copy a 16x32 matrix from global

@@ -21,7 +21,7 @@ enum class Layout {
     kRowMajor = 0,  // Tile layout for shared memory.
     kColMajor = 1,
     kSwizzledRowMajor = 2,
-    kSwizzledColMajor = 3,
+    kSwizzledColMajor = 3
 };
 
 // In the row major layout, the contiguous dimension in memory is the
@@ -80,60 +80,21 @@ HOST_DEVICE auto make_col_major_layout(const int row, const int col,
                              make_stride(Int<1>{}, stride));
 }
 
-// CuTe's swizzle functions, swizzle(B, M, S), permute elements in a
-// 2D coordinate space. This 2D coordinate space has 2^B rows and 2^S columns,
-// and each coordinate position has 2^M elements. Therefore, to apply a swizzle
-// function to a 2D data tile, the data tile should have a shape that is a
-// multiple of 2^B x 2^S x 2^M.
-/// @tparam Element: element type
-/// @tparam kRows: number of rows
-/// @tparam kCols: number of columns
-/// @tparam kSwizzleMode: The value should be either 0 or 1, indicating whether
-/// the size of the contiguous dimension is divisible by 32 or not.
-template <typename Element, const int kRows, const int kCols,
-          const int kSwizzleMode>
-struct SwizzledRowMajor {};
+// @brief: leverage CuTe's swizzle functions, swizzle(B, M, S), permute elements
+//         in a 2D coordinate space. This 2D coordinate space has 2^B rows and
+//         2^S columns, and each coordinate position has 2^M elements.
+//         Therefore, to apply a swizzle function to a 2D data tile, the data
+//         tile should have a shape that is a multiple of 2^B x 2^S x 2^M.
+template <typename Layout_, const int kB, const int kM, const int kS>
+struct Swizzled {
+    static_assert(int(cute::size(Layout_{})) % 2 ^ kB * 2 ^ kM * 2 ^ kS == 0);
 
-// FIXME(haruhi): This implementation is very inflexible and is almost
-// equivalent to a hard-coded swizzle function for 2D data tiles that have a
-// shape that is a multiple of 8x32.
-// Improve the implementation to make it more general.
-template <const int kRows, const int kCols>
-struct SwizzledRowMajor<cutlass::half_t, kRows, kCols, 0> {
-    static_assert(kRows % 8 == 0,
-                  "The number of rows must be a multiple of 8.");
-
-    using SmemLayoutAtom = decltype(composition(
-        Swizzle<2, 3, 3>{}, cute::Layout<Shape<_8, _32>, Stride<_32, _1>>{}));
-    using SmemLayout = decltype(tile_to_shape(SmemLayoutAtom{},
-                                              Shape<Int<kRows>, Int<kCols>>{}));
-};
-
-// FIXME(haruhi): This implementation is very inflexible and is almost
-// equivalent to a hard-coded swizzle function for 2D data tiles that have a
-// shape that is a multiple of 8x64.
-// Improve the implementation to make it more general.
-template <const int kRows, const int kCols>
-struct SwizzledRowMajor<cutlass::half_t, kRows, kCols, 1> {
-    static_assert(kRows % 8 == 0,
-                  "The number of rows must be a multiple of 8.");
-
-    using SmemLayoutAtom = decltype(composition(
-        Swizzle<3, 3, 3>{}, cute::Layout<Shape<_8, _64>, Stride<_64, _1>>{}));
-    using SmemLayout = decltype(tile_to_shape(SmemLayoutAtom{},
-                                              Shape<Int<kRows>, Int<kCols>>{}));
-};
-
-template <const int kRows, const int kCols>
-struct SwizzledRowMajor<float, kRows, kCols, 0> {
-    // FIXME: not implmented yet. placeholder for future implementation.
-    using SmemLayout = RowMajor<kRows, kCols, kCols>;
-};
-
-template <const int kRows, const int kCols>
-struct SwizzledRowMajor<float, kRows, kCols, 1> {
-    // FIXME: not implmented yet. placeholder for future implementation.
-    using SmemLayout = RowMajor<kRows, kCols, kCols>;
+    using LayoutAtom =
+        decltype(composition(cute::Swizzle<kB, kS, kM>{},
+                             cute::Layout<Shape<_8, _32>, Stride<_32, _1>>{}));
+    using Layout = decltype(tile_to_shape(
+        LayoutAtom{}, cute::Shape<Int<cute::size<0>(Layout_{})>,
+                                  Int<cute::size<1>(Layout_{})>>{}));
 };
 
 }  // namespace tile_layout

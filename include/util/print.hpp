@@ -4,7 +4,6 @@
 #include "util/debug.hpp"
 
 namespace tiledcuda::cell {
-
 namespace tl = tile_layout;
 
 /// @brief Print a tile of single-precision floating point numbers. NOTE: when

@@ -14,7 +14,8 @@ concept BaseType = std::is_same_v<Element, float> ||
 /// @tparam Element: the data type of the elements.
 template <typename Element>
 struct TraitsBase {
-    static constexpr int kAccessInBits = 128;  // 128 bits
+    // the maximal width of vectorized access.
+    static constexpr int kAccessInBits = 128;
     static constexpr int kElmentBits = cutlass::sizeof_bits<Element>::value;
     static constexpr int kNumPerAccess = kAccessInBits / kElmentBits;
 };
