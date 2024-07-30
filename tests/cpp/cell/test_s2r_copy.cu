@@ -80,12 +80,10 @@ __global__ void run_test_store(Loader& loader, Storer& storer) {
     storer(r_tile, s_tile);
     __syncthreads();
 
-#if defined(DEBUG)
     if (thread0()) {
         s_tile.dump_value();
         check_results(buf, Shared::kNumel);
     }
-#endif
 }
 }  // namespace
 
@@ -178,6 +176,7 @@ TEST(TestShared2Reg, operand_A_swizzle) {
     const int kCols = 32;
 
     using SharedLayout = tl::Swizzled<tl::RowMajor<kRows, kCols>, 2, 3, 3>;
+
     using Shared = SharedTile<Element, SharedLayout>;
     using Reg = RegTile<BaseTileRowMajor<Element>, tl::RowMajor<2, 2>>;
 

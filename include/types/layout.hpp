@@ -63,7 +63,7 @@ using ColMajor = MatrixLayout<kRow, kCol, 1, kStride>;
 //         tile should have a shape that is a multiple of 2^B x 2^S x 2^M.
 template <typename Layout_, const int kB, const int kM, const int kS>
 struct Swizzled {
-    // static_assert(Layout_::kNumel % (2 ^ kB * 2 ^ kM * 2 ^ kS) == 0);
+    static_assert(Layout_::kNumel % (1 << kB * 1 << kM * 1 << kS) == 0);
 
     static constexpr int kRows = Layout_::kRows;
     static constexpr int kCols = Layout_::kCols;
