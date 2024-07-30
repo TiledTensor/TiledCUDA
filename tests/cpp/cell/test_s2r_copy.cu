@@ -47,6 +47,12 @@ __global__ void run_test_load(Copy& copy) {
     Reg r_tile;
 
     copy(s_tile, r_tile);
+
+#if defined(DEBUG)
+    if (thread0()) {
+        r_tile.dump_value();
+    }
+#endif
 }
 
 template <typename Shared, typename Reg, typename Loader, typename Storer>
@@ -75,14 +81,15 @@ __global__ void run_test_store(Loader& loader, Storer& storer) {
     storer(r_tile, s_tile);
     __syncthreads();
 
+#if defined(DEBUG)
     if (thread0()) {
         s_tile.dump_value();
         check_results(buf, Shared::kNumel);
     }
+#endif
 }
 }  // namespace
 
-/*
 TEST(TestShared2Reg, operand_A) {  // load mode for loading operand A in gemm
     using Element = cutlass::half_t;
 
@@ -161,7 +168,6 @@ TEST(TestReg2Shared, operand_C) {
         <<<dim_grid, dim_block, shm_size>>>(loader, storer);
     cudaDeviceSynchronize();
 }
-*/
 
 TEST(TestShared2Reg, operand_A_swizzle) {
     using Element = __half;

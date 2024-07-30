@@ -17,7 +17,7 @@ if(WITH_TESTING)
     cuda_test(${TEST_NAME} SRCS "${CMAKE_CURRENT_SOURCE_DIR}/${FILE_PATH}")
   endforeach()
 
-  # cuda_test(test_gemm SRCS "${CMAKE_CURRENT_SOURCE_DIR}/cell/test_gemm.cu"
-  # "${PROJECT_SOURCE_DIR}/src/cuda_utils.cc" DEPS ${CUDA_CUBLAS_LIBRARIES})
-
+  cuda_test(test_gemm SRCS "${CMAKE_CURRENT_SOURCE_DIR}/cell/test_gemm.cu"
+            "${PROJECT_SOURCE_DIR}/src/cuda_utils.cc" DEPS
+            ${CUDA_CUBLAS_LIBRARIES})
 endif()

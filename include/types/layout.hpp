@@ -1,5 +1,4 @@
 #pragma once
-
 #include "config.hpp"
 
 #include <cute/layout.hpp>
@@ -34,6 +33,13 @@ struct MatrixLayout {
     static constexpr int kColStride = kColStride_;
 
     static constexpr int kNumel = kRows * kCols;
+
+    // FIXME: The current implementation for copying global to shared memory
+    // relies on CuTe's API. This is a temporary workaround to maintain
+    // compatibility with CuTe's APIs. Refactor this implementation in the
+    // future to remove this dependency.
+    using CuteLayout = cute::Layout<Shape<Int<kRows>, Int<kCols>>,
+                                    Stride<Int<kRowStride>, Int<kColStride>>>;
 
     DEVICE int operator()(int i, int j) const {
         return i * kRowStride + j * kColStride;
@@ -70,13 +76,15 @@ struct Swizzled {
     using LayoutAtom =
         decltype(composition(cute::Swizzle<kB, kS, kM>{},
                              cute::Layout<Shape<_8, _32>, Stride<_32, _1>>{}));
-    using SwizzledLayout = decltype(tile_to_shape(
+    using CuteLayout = decltype(tile_to_shape(
         LayoutAtom{}, cute::Shape<Int<Layout_::kRows>, Int<Layout_::kCols>>{}));
+
+    DEVICE Swizzled() : layout_(CuteLayout{}) {}
 
     DEVICE size_t operator()(int i, int j) const { return layout_(i, j); }
 
   private:
-    SwizzledLayout layout_;
+    CuteLayout layout_;
 };
 
 template <typename Layout>
@@ -94,23 +102,6 @@ static constexpr size_t col_stride = Layout::kColStride;
 template <typename Layout>
 static constexpr size_t get_numel = Layout::kNumel;
 
-// template <typename Layout_>
-// static constexpr size_t num_rows = cute::size<0>(Layout_{});
-
-// template <typename Layout_>
-// static constexpr size_t num_cols = cute::size<1>(Layout_{});
-
-// template <typename Layout_>
-// static constexpr size_t row_stride =
-// cute::size<0>(Layout_{}.layout().stride());
-
-// template <typename Layout_>
-// static constexpr size_t col_stride =
-// cute::size<1>(Layout_{}.layout().stride());
-
-// template <typename Layout_>
-// static constexpr size_t get_numel = size_t(size(Layout_{}));
-
 // We wrap CuTe's `Layout`, which consists of `Shape` and `Stride`, into an
 // intelligent row-major or column-major layout. In a row-major layout, the
 // column stride is 1, whereas in a column-major layout, the row stride is 1.
@@ -124,8 +115,6 @@ template <const int kShape1, const int kShape2, const int kStride1,
           const int kStride2>
 HOST_DEVICE auto make_tile_layout() {
     using Layout = MatrixLayout<kShape1, kShape2, kStride1, kStride2>;
-    // using Layout = cute::Layout<Shape<Int<kShape1>, Int<kShape2>>,
-    //                             Stride<Int<kStride1>, Int<kStride2>>>;
     return Layout{};
 }
 

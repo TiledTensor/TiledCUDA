@@ -65,10 +65,7 @@ struct S2G2DCopyTraits : public Base {
     static constexpr int kShmRows = kShmRows_;
     static constexpr int kShmCols = kShmCols_;
 
-    // using SrcLayout = tl::RowMajor<kShmRows, kShmCols, kShmCols>;
-    // using DstLayout = tl::RowMajor<kRows, kCols, kCols>;
-
-    using ScrLayout = cute::Layout<Shape<Int<kShmRows>, Int<kShmCols>>,
+    using SrcLayout = cute::Layout<Shape<Int<kShmRows>, Int<kShmCols>>,
                                    Stride<Int<kShmCols>, _1>>;
     using DstLayout =
         cute::Layout<Shape<Int<kRows>, Int<kCols>>, Stride<Int<kCols>, _1>>;
