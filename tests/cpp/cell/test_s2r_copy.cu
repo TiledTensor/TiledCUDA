@@ -5,7 +5,6 @@
 #include <glog/logging.h>
 
 namespace tiledcuda::testing {
-
 using namespace cell;
 using namespace copy;
 namespace tl = tile_layout;
