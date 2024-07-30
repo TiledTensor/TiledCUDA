@@ -40,7 +40,7 @@ TEST(TestLayout, test_swizzled_layout) {
     const int kRows = 8;
     const int kCols = 32;
     using RowMajor = tl::RowMajor<kRows, kCols>;
-    using SwizzledRowMajor = tl::Swizzled<RowMajor, 2, 3, 3>::Layout;
+    using SwizzledRowMajor = tl::Swizzled<RowMajor, 2, 3, 3>;
 
     auto layout1 = RowMajor{};
     auto layout2 = SwizzledRowMajor{};

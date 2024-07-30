@@ -57,13 +57,17 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, WarpLayout_,
     using CopyInst = Copy_Atom<DefaultCopy, DType>;
 #endif
 
+    using GlobalLayout = Global::Layout::CuteLayout;
+    using SharedLayout = Shared::Layout::CuteLayout;
     using TiledCopy = decltype(make_tiled_copy(
-        CopyInst{}, tl::RowMajor<kThreadRows, kThreadCols>{},
-        tl::ColMajor<1, kNumPerAccess>{}));
+        CopyInst{},
+        cute::Layout<Shape<Int<kThreadRows>, Int<kThreadCols>>,
+                     Stride<Int<kThreadCols>, _1>>{},
+        cute::Layout<Shape<_1, Int<kNumPerAccess>>>{}));
 
     DEVICE GlobalToSharedLoaderImpl()
-        : src_layout_(typename Global::Layout{}),
-          dst_layout_(typename Shared::Layout{}),
+        : src_layout_(GlobalLayout{}),
+          dst_layout_(SharedLayout{}),
           tiled_copy_(TiledCopy{}) {}
 
     DEVICE void operator()(const DType* src, DType* dst) {
@@ -71,8 +75,8 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, WarpLayout_,
     }
 
   private:
-    Global::Layout src_layout_;
-    Shared::Layout dst_layout_;
+    GlobalLayout src_layout_;
+    SharedLayout dst_layout_;
     TiledCopy tiled_copy_;
 };
 
@@ -87,8 +91,8 @@ struct SharedToGlobalStorerImpl {
 template <typename Global_, typename Shared_, typename WarpLayout_>
 struct SharedToGlobalStorerImpl<Global_, Shared_, WarpLayout_,
                                 tl::Layout::kRowMajor> {
-    using Global = Global_;
     using Shared = Shared_;
+    using Global = Global_;
     static_assert(Global::kRows == Shared::kRows &&
                       Global::kCols == Shared::kCols,
                   "Global and shared memory should have the same shape.");
@@ -117,16 +121,20 @@ struct SharedToGlobalStorerImpl<Global_, Shared_, WarpLayout_,
                   "number of threads per column in the thread layout.");
 
     // transfer data from global memory to shared memory has cp.async,
-    // while transfer data from shared memory to global memory does not have.
-    // for the latter case, the copy instruction should be the default one.
-    using TiledCopy =
-        decltype(make_tiled_copy(Copy_Atom<DefaultCopy, DType>{},
-                                 tl::RowMajor<kThreadRows, kThreadCols>{},
-                                 tl::ColMajor<1, kNumPerAccess>{}));
+    // while transfer data from shared memory to global memory does not
+    // have. For the latter case, the copy instruction should be the
+    // default one.
+    using GlobalLayout = Global::Layout::CuteLayout;
+    using SharedLayout = Shared::Layout::CuteLayout;
+    using TiledCopy = decltype(make_tiled_copy(
+        Copy_Atom<DefaultCopy, DType>{},
+        cute::Layout<Shape<Int<kThreadRows>, Int<kThreadCols>>,
+                     Stride<Int<kThreadCols>, _1>>{},
+        cute::Layout<Shape<_1, Int<kNumPerAccess>>>{}));
 
     DEVICE SharedToGlobalStorerImpl()
-        : src_layout_(typename Shared::Layout{}),
-          dst_layout_(typename Global::Layout{}),
+        : src_layout_(SharedLayout{}),
+          dst_layout_(GlobalLayout{}),
           tiled_copy_(TiledCopy{}) {}
 
     DEVICE void operator()(const DType* src, DType* dst) {
@@ -134,8 +142,8 @@ struct SharedToGlobalStorerImpl<Global_, Shared_, WarpLayout_,
     }
 
   private:
-    Shared::Layout src_layout_;
-    Global::Layout dst_layout_;
+    SharedLayout src_layout_;
+    GlobalLayout dst_layout_;
     TiledCopy tiled_copy_;
 };
 

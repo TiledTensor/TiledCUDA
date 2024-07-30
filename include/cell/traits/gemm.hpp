@@ -45,7 +45,9 @@ struct DynGemmTraits : public Base {
     static constexpr int kThreadsPerRow = CeilDiv<kThreads, kThreadsPerCol>;
 
     using SmemLayoutAtom = decltype(composition(
-        Swizzle<2, 3, 3>{}, tl::RowMajor<8, 4 * kNumPerAccess>{}));
+        Swizzle<2, 3, 3>{}, Layout<Shape<_8, Int<4 * kNumPerAccess>>,
+                                   Stride<Int<4 * kNumPerAccess>, _1>>{}));
+
     using SmemLayoutA =
         decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTM>, Int<kTK>>{}));
     using SmemLayoutB =
@@ -57,8 +59,11 @@ struct DynGemmTraits : public Base {
 #else
     using CopyInstG2S = Copy_Atom<DefaultCopy, Element>;
 #endif
+
     using TiledCopyG2S = decltype(make_tiled_copy(
-        CopyInstG2S{}, tl::RowMajor<kThreadsPerRow, kThreadsPerCol>{},
+        CopyInstG2S{},
+        Layout<Shape<Int<kThreadsPerRow>, Int<kThreadsPerCol>>,
+               Stride<Int<kThreadsPerCol>, _1>>{},
         Layout<Shape<_1, Int<Base::kNumPerAccess>>>{}));
 
     // copy from shared memory to global memory dose not have cp.async support,
@@ -66,7 +71,8 @@ struct DynGemmTraits : public Base {
     // `CopyAtom`.
     using TiledCopyS2G = decltype(make_tiled_copy(
         Copy_Atom<DefaultCopy, Element>{},
-        tl::RowMajor<kThreadsPerRow, kThreadsPerCol>{},
+        Layout<Shape<Int<kThreadsPerRow>, Int<kThreadsPerCol>>,
+               Stride<Int<kThreadsPerCol>, _1>>{},
         Layout<Shape<_1, Int<Base::kNumPerAccess>>>{}));
     using SmemLayoutC =
         decltype(tile_to_shape(SmemLayoutAtom{}, Shape<Int<kTM>, Int<kTN>>{}));

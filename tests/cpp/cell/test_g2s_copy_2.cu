@@ -37,6 +37,7 @@ TEST(GlobalToSharedCopy, test_non_swizzled_layout) {
     // Each thread accesses 128 bits of data, which corresponds to 8 elements of
     // half-precision data. Therefore, the shared memory must have a shape that
     // is a multiple of [32, 64].
+
     static constexpr int kRows = 128;
     static constexpr int kCols = 64;
 
@@ -101,9 +102,8 @@ TEST(GlobalToSharedCopy, test_swizzled) {
     thrust::device_vector<Element> d_A = h_A;
 
     using SrcTile = GlobalTile<Element, tl::RowMajor<kRows, kCols>>;
-    using SharedLayout =
-        tl::Swizzled<tl::RowMajor<kRows, kCols>, 2, 3, 3>::Layout;
-    using DstTile = SharedTile<Element, SharedLayout>;
+    using DstTile =
+        SharedTile<Element, tl::Swizzled<tl::RowMajor<kRows, kCols>, 2, 3, 3>>;
     using Loader = copy::GlobalToSharedLoader<DstTile, WarpLayout>;
     using Storer = copy::SharedToGlobalStorer<DstTile, WarpLayout>;
 
