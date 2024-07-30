@@ -178,6 +178,7 @@ TEST(TestShared2Reg, operand_A_swizzle) {
     const int kCols = 32;
 
     using SharedLayout = tl::Swizzled<tl::RowMajor<kRows, kCols>, 2, 3, 3>;
+
     using Shared = SharedTile<Element, SharedLayout>;
     using Reg = RegTile<BaseTileRowMajor<Element>, tl::RowMajor<2, 2>>;
 
