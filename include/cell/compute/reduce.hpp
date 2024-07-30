@@ -14,13 +14,15 @@ namespace detail {
 template <typename RegTile>
 struct Reduce {
     using DType = typename RegTile::DType::DType;
-    using Reduce = Reduce_;
+    using BaseShape = traits::BaseTileShape<DType>;
 
     static constexpr int kRows = RegTile::kRows;
     static constexpr int kCols = RegTile::kCols;
 
     template <typename Reduce>
-    DEVICE operator()(RegTile& tile, Reduce reduce) {}
+    DEVICE operator()(RegTile& tile, Reduce reduce) {
+        // TODO: Implement the reduction logic.
+    }
 
   private:
     template <typename Reduce>
