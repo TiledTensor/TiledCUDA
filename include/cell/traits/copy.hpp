@@ -22,14 +22,18 @@ struct G2S2DCopyTraits : public Base {
     static constexpr int kShmRows = kShmRows_;
     static constexpr int kShmCols = kShmCols_;
 
-    using SrcLayout = tl::RowMajor<kRows, kCols, kCols>;
-    using DstLayout = tl::RowMajor<kShmRows, kShmCols, kShmCols>;
+    using SrcLayout =
+        cute::Layout<Shape<Int<kRows>, Int<kCols>>, Stride<Int<kCols>, _1>>;
+    using DstLayout = cute::Layout<Shape<Int<kShmRows>, Int<kShmCols>>,
+                                   Stride<Int<kShmCols>, _1>>;
 
     // threads in a thread block are laid out as a 2D tile
     // that has a shape of kThreadsRows x kThreadsCols.
     static constexpr int kThreadsCols = kShmCols / Base::kNumPerAccess;
     static constexpr int kThreadsRows = kThreads / kThreadsCols;
-    using ThreadLayout = tl::RowMajor<kThreadsRows, kThreadsCols, kThreadsCols>;
+    using ThreadLayout =
+        cute::Layout<Shape<Int<kThreadsRows>, Int<kThreadsCols>>,
+                     Stride<Int<kThreadsCols>, _1>>;
 
     using ValueLayout = Layout<Shape<_1, Int<Base::kNumPerAccess>>>;
 
@@ -61,16 +65,21 @@ struct S2G2DCopyTraits : public Base {
     static constexpr int kShmRows = kShmRows_;
     static constexpr int kShmCols = kShmCols_;
 
-    using SrcLayout = tl::RowMajor<kShmRows, kShmCols, kShmCols>;
+    // using SrcLayout = tl::RowMajor<kShmRows, kShmCols, kShmCols>;
+    // using DstLayout = tl::RowMajor<kRows, kCols, kCols>;
 
-    using DstLayout = tl::RowMajor<kRows, kCols, kCols>;
+    using ScrLayout = cute::Layout<Shape<Int<kShmRows>, Int<kShmCols>>,
+                                   Stride<Int<kShmCols>, _1>>;
+    using DstLayout =
+        cute::Layout<Shape<Int<kRows>, Int<kCols>>, Stride<Int<kCols>, _1>>;
 
     // threads in a thread block are laid out as a 2D tile
     // that has a shape of kThreadsRows x kThreadsCols.
     static constexpr int kThreadsCols = kShmCols / Base::kNumPerAccess;
     static constexpr int kThreadsRows = kThreads / kThreadsCols;
-    using ThreadLayout = tl::RowMajor<kThreadsRows, kThreadsCols, kThreadsCols>;
-
+    using ThreadLayout =
+        cute::Layout<Shape<Int<kThreadsRows>, Int<kThreadsCols>>,
+                     Stride<Int<kThreadsCols>, _1>>;
     using ValueLayout = Layout<Shape<_1, Int<Base::kNumPerAccess>>>;
 
     // transfer data from global memory to shared memory has cp.async,
