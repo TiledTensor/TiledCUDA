@@ -1,5 +1,6 @@
 #pragma once
 
+#include "cell/compute/base.hpp"
 #include "cell/traits/base.hpp"
 #include "cuda_utils.hpp"
 #include "types/layout.hpp"
@@ -11,7 +12,7 @@ namespace tl = tile_layout;
 
 namespace detail {
 
-template <typename RegTile, const tl::Layout>
+template <typename RegTile, const tl::Layout kLayout>
 struct Reduce {
     using DType = typename RegTile::DType::DType;
     using BaseShape = traits::BaseTileShape<DType>;
@@ -93,4 +94,21 @@ struct Reduce<RegTile, tl::Layout::kColMajor> {
 };
 
 }  // namespace detail
+
+template <typename RegTile, const tl::Layout kLayout>
+struct SumReduce {
+    using DType = typename RegTile::DType::DType;
+    DEVICE void operator()(RegTile& src) {
+        detail::Reduce<RegTile, kLayout>(src, Add<DType>{});
+    }
+};
+
+template <typename RegTile, const tl::Layout kLayout>
+struct MaxReduce {
+    using DType = typename RegTile::DType::DType;
+    DEVICE void operator()(RegTile& src) {
+        detail::Reduce<RegTile, kLayout>(src, Max<DType>{});
+    }
+};
+
 }  // namespace tiledcuda::cell::compute
