@@ -63,14 +63,17 @@ struct Reduce<RegTile, tl::Layout::kRowMajor> {
             }
 
             // Shuffle the results to the leader thread.
-            top_row = shuffle_down_sync(kMaskAll, top_row, 2);
-            top_row = shuffle_down_sync(kMaskAll, top_row, 1);
+            top_row = reduce(top_row, shuffle_down_sync(kMaskAll, top_row, 2));
+            top_row = reduce(top_row, shuffle_down_sync(kMaskAll, top_row, 1));
 
-            bottom_row = shuffle_down_sync(kMaskAll, bottom_row, 2);
-            bottom_row = shuffle_down_sync(kMaskAll, bottom_row, 1);
+            bottom_row =
+                reduce(bottom_row, shuffle_down_sync(kMaskAll, bottom_row, 2));
+            bottom_row =
+                reduce(bottom_row, shuffle_down_sync(kMaskAll, bottom_row, 1));
 
-            top_row = shuffle_down_sync(kMaskAll, top_row, leader);
-            bottom_row = shuffle_down_sync(kMaskAll, bottom_row, leader);
+            // TODO(KuangjuX): This line seems unnecessary?
+            // top_row = shuffle_down_sync(kMaskAll, top_row, leader);
+            // bottom_row = shuffle_down_sync(kMaskAll, bottom_row, leader);
 
             // Store the results to the destination tile.
             dst(i, 0) = top_row;

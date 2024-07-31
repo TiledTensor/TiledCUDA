@@ -30,9 +30,6 @@ __global__ void reg_reduce(Element* src) {
     __syncthreads();
 
     // Execute reduce operation.
-    // compute::SumReduce<SrcReduceTile, kLayout> row_sum;
-    // row_sum(dst_load_tile, dst_reduce_tile);
-
     compute::MaxReduce<SrcReduceTile, kLayout> row_max;
     row_max(dst_load_tile, dst_reduce_tile);
 
@@ -40,13 +37,38 @@ __global__ void reg_reduce(Element* src) {
 
     if (thread(0)) {
         printf("Thread 0:\n");
-        dst_load_tile.dump_value();
         dst_reduce_tile.dump_value();
     }
 
     if (thread(4)) {
-        printf("Thread 1:\n");
-        dst_load_tile.dump_value();
+        printf("Thread 4:\n");
+        dst_reduce_tile.dump_value();
+    }
+
+    if (thread(8)) {
+        printf("Thread 8:\n");
+        dst_reduce_tile.dump_value();
+    }
+
+    __syncthreads();
+
+    compute::SumReduce<SrcReduceTile, kLayout> row_sum;
+    row_sum(dst_load_tile, dst_reduce_tile);
+
+    __syncthreads();
+
+    if (thread(0)) {
+        printf("Thread 0:\n");
+        dst_reduce_tile.dump_value();
+    }
+
+    if (thread(4)) {
+        printf("Thread 4:\n");
+        dst_reduce_tile.dump_value();
+    }
+
+    if (thread(8)) {
+        printf("Thread 8:\n");
         dst_reduce_tile.dump_value();
     }
 }
