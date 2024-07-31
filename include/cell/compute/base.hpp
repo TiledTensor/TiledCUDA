@@ -1,5 +1,7 @@
 #pragma once
 
+#include "cuda_utils.hpp"
+
 namespace tiledcuda::cell::compute {
 
 template <typename Element>
