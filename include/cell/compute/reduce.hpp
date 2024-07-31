@@ -2,6 +2,7 @@
 
 #include "cell/compute/base.hpp"
 #include "cell/traits/base.hpp"
+#include "cell/warp.hpp"
 #include "cuda_utils.hpp"
 #include "types/layout.hpp"
 #include "types/tile_shape.hpp"
@@ -80,11 +81,6 @@ struct Reduce<RegTile, tl::Layout::kRowMajor> {
             dst(i, 0) = top_row;
             dst(i, 1) = bottom_row;
         }
-    }
-
-  private:
-    DEVICE DType shuffle_down_sync(uint32_t mask, DType value, int delta) {
-        return __shfl_down_sync(mask, value, delta);
     }
 };
 
