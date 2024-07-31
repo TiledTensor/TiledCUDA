@@ -11,8 +11,77 @@ namespace tl = tile_layout;
 
 namespace detail {
 
-template <typename RegTile>
+template <typename RegTile, const tl::Layout>
 struct Reduce {
+    using DType = typename RegTile::DType::DType;
+    using BaseShape = traits::BaseTileShape<DType>;
+
+    static constexpr int kRows = RegTile::kRows;
+    static constexpr int kCols = RegTile::kCols;
+    static constexpr uint32_t kMaskAll = 0xFFFFFFFF;
+
+    template <typename Reduce>
+    DEVICE void operator()(RegTile& tile, Reduce reduce) {}
+};
+
+template <typename RegTile>
+struct Reduce<RegTile, tl::Layout::kRowMajor> {
+    using DType = typename RegTile::DType::DType;
+    using BaseShape = traits::BaseTileShape<DType>;
+
+    static constexpr int kRows = RegTile::kRows;
+    static constexpr int kCols = RegTile::kCols;
+    static constexpr uint32_t kMaskAll = 0xFFFFFFFF;
+
+    template <typename Reduce>
+    DEVICE void operator()(RegTile& tile, Reduce reduce) {
+        // 11100
+        const int leader = threadIdx.x & 0x1C;
+#pragma unroll
+        for (int i = 0; i < kRows; ++i) {
+            DType top_rows[kCols];
+            DType bottom_rows[kCols];
+#pragma unroll
+            for (int j = 0; j < kCols; ++j) {
+                auto base_tile = tile(i, j);
+                DType top_row_0 = reduce(base_tile(0, 0), base_tile(0, 1));
+                DType top_row_1 = reduce(base_tile(1, 0), base_tile(1, 1));
+                top_rows[j] = reduce(top_row_0, top_row_1);
+
+                DType bottom_row_0 = reduce(base_tile(0, 2), base_tile(0, 3));
+                DType bottom_row_1 = reduce(base_tile(1, 2), base_tile(1, 3));
+                bottom_rows[j] = reduce(bottom_row_0, bottom_row_1);
+            }
+
+            DType top_row = top_rows[0];
+            DType bottom_row = bottom_rows[0];
+
+            // Compute the reduction of the top and bottom rows.
+            for (int j = 1; j < kCols; ++j) {
+                top_row = reduce(top_row, top_rows[j]);
+                bottom_row = reduce(bottom_row, bottom_rows[j]);
+            }
+
+            // Shuffle the results to the leader thread.
+            top_row = shuffle_down_sync(kMaskAll, top_row, 2);
+            top_row = shuffle_down_sync(kMaskAll, top_row, 1);
+
+            bottom_row = shuffle_down_sync(kMaskAll, bottom_row, 2);
+            bottom_row = shuffle_down_sync(kMaskAll, bottom_row, 1);
+
+            top_row = shuffle_down_sync(kMaskAll, top_row, leader);
+            bottom_row = shuffle_down_sync(kMaskAll, bottom_row, leader);
+        }
+    }
+
+  private:
+    DEVICE DType shuffle_down_sync(uint32_t mask, DType value, int delta) {
+        return __shfl_down_sync(mask, value, delta);
+    }
+};
+
+template <typename RegTile>
+struct Reduce<RegTile, tl::Layout::kColMajor> {
     using DType = typename RegTile::DType::DType;
     using BaseShape = traits::BaseTileShape<DType>;
 
@@ -20,20 +89,7 @@ struct Reduce {
     static constexpr int kCols = RegTile::kCols;
 
     template <typename Reduce>
-    DEVICE operator()(RegTile& tile, Reduce reduce) {
-        // TODO: Implement the reduction logic.
-    }
+    DEVICE void operator()(RegTile& tile, Reduce reduce) {}
 
-  private:
-    template <typename Reduce>
-    DEVICE DType warp_reduce(DType data, unsigned mask, Reduce reduce) {
-#pragma unroll
-        for (int offset = 16; offset >= 1; offset /= 2) {
-            data = reduce(data, __shfl_down_sync(mask, data, offset, 32));
-        }
-
-        return data;
-    }
-};
 }  // namespace detail
 }  // namespace tiledcuda::cell::compute
