@@ -21,8 +21,8 @@ struct Reduce {
     static constexpr int kCols = RegTile::kCols;
     static constexpr uint32_t kMaskAll = 0xFFFFFFFF;
 
-    template <typename Reduce>
-    DEVICE void operator()(RegTile& src, Reduce reduce) {}
+    template <typename DstTile, typename Reduce>
+    DEVICE void operator()(const RegTile& src, DstTile& dst, Reduce reduce) {}
 };
 
 template <typename RegTile>
@@ -34,9 +34,8 @@ struct Reduce<RegTile, tl::Layout::kRowMajor> {
     static constexpr int kCols = RegTile::kCols;
     static constexpr uint32_t kMaskAll = 0xFFFFFFFF;
 
-    template <typename Reduce>
-    DEVICE void operator()(RegTile& src, Reduce reduce) {
-        // 11100
+    template <typename DstTile, typename Reduce>
+    DEVICE void operator()(const RegTile& src, DstTile& dst, Reduce reduce) {
         const int leader = threadIdx.x & 0x1C;
 #pragma unroll
         for (int i = 0; i < kRows; ++i) {
@@ -72,6 +71,10 @@ struct Reduce<RegTile, tl::Layout::kRowMajor> {
 
             top_row = shuffle_down_sync(kMaskAll, top_row, leader);
             bottom_row = shuffle_down_sync(kMaskAll, bottom_row, leader);
+
+            // Store the results to the destination tile.
+            dst(i, 0) = top_row;
+            dst(i, 1) = bottom_row;
         }
     }
 
@@ -89,8 +92,8 @@ struct Reduce<RegTile, tl::Layout::kColMajor> {
     static constexpr int kRows = RegTile::kRows;
     static constexpr int kCols = RegTile::kCols;
 
-    template <typename Reduce>
-    DEVICE void operator()(RegTile& tile, Reduce reduce) {}
+    template <typename DstTile, typename Reduce>
+    DEVICE void operator()(const RegTile& tile, DstTile& dst, Reduce reduce) {}
 };
 
 }  // namespace detail
@@ -98,16 +101,20 @@ struct Reduce<RegTile, tl::Layout::kColMajor> {
 template <typename RegTile, const tl::Layout kLayout>
 struct SumReduce {
     using DType = typename RegTile::DType::DType;
-    DEVICE void operator()(RegTile& src) {
-        detail::Reduce<RegTile, kLayout>(src, Add<DType>{});
+
+    template <typename DstTile>
+    DEVICE void operator()(const RegTile& src, DstTile& dst) {
+        detail::Reduce<RegTile, kLayout>(src, dst, Add<DType>{});
     }
 };
 
 template <typename RegTile, const tl::Layout kLayout>
 struct MaxReduce {
     using DType = typename RegTile::DType::DType;
-    DEVICE void operator()(RegTile& src) {
-        detail::Reduce<RegTile, kLayout>(src, Max<DType>{});
+
+    template <typename DstTile>
+    DEVICE void operator()(const RegTile& src, DstTile& dst) {
+        detail::Reduce<RegTile, kLayout>(src, dst, Max<DType>{});
     }
 };
 
