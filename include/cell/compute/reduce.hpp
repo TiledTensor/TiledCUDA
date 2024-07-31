@@ -1,6 +1,6 @@
 #pragma once
 
-#include "cell/compute/base.hpp"
+#include "cell/compute/math_functor.hpp"
 #include "cell/traits/base.hpp"
 #include "cell/warp.hpp"
 #include "cuda_utils.hpp"
