@@ -21,7 +21,7 @@ struct Reduce {
     static constexpr uint32_t kMaskAll = 0xFFFFFFFF;
 
     template <typename Reduce>
-    DEVICE void operator()(RegTile& tile, Reduce reduce) {}
+    DEVICE void operator()(RegTile& src, Reduce reduce) {}
 };
 
 template <typename RegTile>
@@ -34,7 +34,7 @@ struct Reduce<RegTile, tl::Layout::kRowMajor> {
     static constexpr uint32_t kMaskAll = 0xFFFFFFFF;
 
     template <typename Reduce>
-    DEVICE void operator()(RegTile& tile, Reduce reduce) {
+    DEVICE void operator()(RegTile& src, Reduce reduce) {
         // 11100
         const int leader = threadIdx.x & 0x1C;
 #pragma unroll
@@ -43,7 +43,7 @@ struct Reduce<RegTile, tl::Layout::kRowMajor> {
             DType bottom_rows[kCols];
 #pragma unroll
             for (int j = 0; j < kCols; ++j) {
-                auto base_tile = tile(i, j);
+                auto base_tile = src(i, j);
                 DType top_row_0 = reduce(base_tile(0, 0), base_tile(0, 1));
                 DType top_row_1 = reduce(base_tile(1, 0), base_tile(1, 1));
                 top_rows[j] = reduce(top_row_0, top_row_1);
@@ -90,6 +90,7 @@ struct Reduce<RegTile, tl::Layout::kColMajor> {
 
     template <typename Reduce>
     DEVICE void operator()(RegTile& tile, Reduce reduce) {}
+};
 
 }  // namespace detail
 }  // namespace tiledcuda::cell::compute
