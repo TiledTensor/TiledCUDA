@@ -10,6 +10,9 @@ namespace tiledcuda::cell::compute {
 
 namespace tl = tile_layout;
 
+// TODO(KuangjuX): Placed in a separate constants file
+static constexpr uint32_t MASK_ALL = 0xFFFFFFFF;
+
 namespace detail {
 
 template <typename RegTile, const tl::Layout kLayout>
@@ -19,7 +22,6 @@ struct Reduce {
 
     static constexpr int kRows = RegTile::kRows;
     static constexpr int kCols = RegTile::kCols;
-    static constexpr uint32_t kMaskAll = 0xFFFFFFFF;
 
     template <typename DstTile, typename Reduce>
     DEVICE void operator()(const RegTile& src, DstTile& dst, Reduce reduce) {}
@@ -32,7 +34,6 @@ struct Reduce<RegTile, tl::Layout::kRowMajor> {
 
     static constexpr int kRows = RegTile::kRows;
     static constexpr int kCols = RegTile::kCols;
-    static constexpr uint32_t kMaskAll = 0xFFFFFFFF;
 
     template <typename DstTile, typename Reduce>
     DEVICE void operator()(const RegTile& src, DstTile& dst, Reduce reduce) {
@@ -63,17 +64,17 @@ struct Reduce<RegTile, tl::Layout::kRowMajor> {
             }
 
             // Shuffle the results to the leader thread.
-            top_row = reduce(top_row, shuffle_down_sync(kMaskAll, top_row, 2));
-            top_row = reduce(top_row, shuffle_down_sync(kMaskAll, top_row, 1));
+            top_row = reduce(top_row, shuffle_down_sync(MASK_ALL, top_row, 2));
+            top_row = reduce(top_row, shuffle_down_sync(MASK_ALL, top_row, 1));
 
             bottom_row =
-                reduce(bottom_row, shuffle_down_sync(kMaskAll, bottom_row, 2));
+                reduce(bottom_row, shuffle_down_sync(MASK_ALL, bottom_row, 2));
             bottom_row =
-                reduce(bottom_row, shuffle_down_sync(kMaskAll, bottom_row, 1));
+                reduce(bottom_row, shuffle_down_sync(MASK_ALL, bottom_row, 1));
 
             // TODO(KuangjuX): This line seems unnecessary?
-            // top_row = shuffle_down_sync(kMaskAll, top_row, leader);
-            // bottom_row = shuffle_down_sync(kMaskAll, bottom_row, leader);
+            // top_row = shuffle_down_sync(MASK_ALL, top_row, leader);
+            // bottom_row = shuffle_down_sync(MASK_ALL, bottom_row, leader);
 
             // Store the results to the destination tile.
             dst(i, 0) = top_row;
