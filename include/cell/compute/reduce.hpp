@@ -104,7 +104,8 @@ struct SumReduce {
 
     template <typename DstTile>
     DEVICE void operator()(const RegTile& src, DstTile& dst) {
-        detail::Reduce<RegTile, kLayout>(src, dst, Add<DType>{});
+        detail::Reduce<RegTile, kLayout> row_sum;
+        row_sum(src, dst, Add<DType>{});
     }
 };
 
@@ -114,7 +115,8 @@ struct MaxReduce {
 
     template <typename DstTile>
     DEVICE void operator()(const RegTile& src, DstTile& dst) {
-        detail::Reduce<RegTile, kLayout>(src, dst, Max<DType>{});
+        detail::Reduce<RegTile, kLayout> row_max;
+        row_max(src, dst, Max<DType>{});
     }
 };
 

@@ -30,10 +30,59 @@ __global__ void reg_reduce(Element* src) {
     __syncthreads();
 
     // Execute reduce operation.
-    compute::SumReduce<SrcReduceTile, kLayout> row_sum;
-    row_sum(dst_load_tile, dst_reduce_tile);
+    // compute::SumReduce<SrcReduceTile, kLayout> row_sum;
+    // row_sum(dst_load_tile, dst_reduce_tile);
+
+    compute::MaxReduce<SrcReduceTile, kLayout> row_max;
+    row_max(dst_load_tile, dst_reduce_tile);
 
     __syncthreads();
+
+    if (thread(0)) {
+        printf("Thread 0:\n");
+        dst_load_tile.dump_value();
+        dst_reduce_tile.dump_value();
+    }
+
+    if (thread(4)) {
+        printf("Thread 1:\n");
+        dst_load_tile.dump_value();
+        dst_reduce_tile.dump_value();
+    }
+}
+
+template <typename Element, typename RegLayout, typename GlobalLayout,
+          typename BaseTile, typename WarpLayout, const tl::Layout kLayout,
+          const copy::WarpReuse kMode, const int kHeight, const int kWidth>
+void run_reg_reduce() {
+    int kNumel = 16 * 16 * kHeight * kWidth;
+    int kWarpSize = tl::get_numel<WarpLayout>;
+
+    thrust::host_vector<Element> h_src(kNumel);
+    for (int i = 0; i < kNumel; ++i) {
+        h_src[i] = (Element)i;
+    }
+
+    thrust::device_vector<Element> d_src = h_src;
+
+    reg_reduce<Element, RegLayout, GlobalLayout, BaseTile, WarpLayout, kLayout,
+               kMode, kHeight, kWidth>
+        <<<1, 32 * kWarpSize>>>(thrust::raw_pointer_cast(d_src.data()));
+}
+
+TEST(TestRegReduce, reg_reduce_0) {
+    using Element = float;
+    using WarpLayout = tl::RowMajor<1, 1>;
+    using RegLayout = tl::RowMajor<1, 1>;
+
+    const int kHeight = 1;
+    const int kWidth = 1;
+    const copy::WarpReuse kMode = copy::WarpReuse::kCont;
+
+    using GlobalLayout = tl::RowMajor<16 * kHeight, 16 * kWidth>;
+
+    run_reg_reduce<Element, RegLayout, GlobalLayout, BaseTileRowMajor<Element>,
+                   WarpLayout, tl::Layout::kRowMajor, kMode, kHeight, kWidth>();
 }
 
 }  // namespace tiledcuda::testing
