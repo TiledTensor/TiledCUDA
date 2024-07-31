@@ -34,38 +34,83 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
     using BaseShape = BaseTileShape<DType>;
 
     // strides to iterate over each 16x16 `BaseTile`.
-    static constexpr int kTileRstride = BaseShape::kRows * Shared::kRowStride;
-    static constexpr int kTileCstride = BaseShape::kCols;
+    // static constexpr int kTileRstride = BaseShape::kRows *
+    // Shared::kRowStride; static constexpr int kTileCstride = BaseShape::kCols;
 
     // row stride and col stride for a thread in a warp
-    static constexpr int kStride = LoadMat::kNumPerAccess;
-    static constexpr int kLaneRstride = Shared::kRowStride;
-    static constexpr int kLaneCstride = kStride;
+    // static constexpr int kStride = LoadMat::kNumPerAccess;
+    // static constexpr int kLaneRstride = Shared::kRowStride;
+    // static constexpr int kLaneCstride = kStride;
 
     static constexpr int kRowExec = kRowExec_;
     static constexpr int kColExec = kColExec_;
+
+    DEVICE SharedToRegLoaderImpl() : layout_(typename Shared::Layout{}) {}
 
     DEVICE void operator()(const DType* src, Reg& dst) {
         int lane_row = this->lane_row_id();
         int lane_col = this->lane_col_id();
 
-        const DType* data;
+        // const DType* data;
+        // const __half* data_ptr = reinterpret_cast<const __half*>(src);
 #pragma unroll
         for (int i = 0; i < kRowExec; ++i) {
 #pragma unroll
             for (int j = 0; j < kColExec; ++j) {
+                int x = i * 16 + lane_row;
+                int y = j * 16 + lane_col * 8;
+                int offset = layout_(x, y);
+
+                // printf(
+                //     "[%d,%d]-%d-1: %.0f, %.0f, %.0f, %.0f, %.0f, %.0f, %.0f,
+                //     "
+                //     "%.0f\n",
+                //     i, j, threadIdx.x, __half2float(data_ptr[offset]),
+                //     __half2float(data_ptr[offset + 1]),
+                //     __half2float(data_ptr[offset + 2]),
+                //     __half2float(data_ptr[offset + 3]),
+                //     __half2float(data_ptr[offset + 4]),
+                //     __half2float(data_ptr[offset + 5]),
+                //     __half2float(data_ptr[offset + 6]),
+                //     __half2float(data_ptr[offset + 7]));
+                this->ldmatrix(src + offset, dst(i, j).mutable_data());
+                // printf("%d-2\n", threadIdx.x);
+
                 // 2. advance pointer to the 16x16 `BaseTile` indexed by (i, j).
-                data = src + (i * kTileRstride + j * kTileCstride);
+                // data = src + (i * kTileRstride + j * kTileCstride);
 
-                // 3. advance the pointer to data accessed by the current thread
-                // inside a 16x16 `BaseTile`.
-                data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
+                // // 3. advance the pointer to data accessed by the current
+                // // thread inside a 16x16 `BaseTile`.
+                // data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
 
-                // issue the hardware-backed memory access instruction.
-                this->ldmatrix(data, dst(i, j).mutable_data());
+                // // issue the hardware-backed memory access instruction.
+                // this->ldmatrix(data, dst(i, j).mutable_data());
+
+                // if (thread(10)) {
+                //     // int x = i * kTileRstride + lane_row * kLaneRstride;
+                //     // int y = j * kTileCstride + lane_col * kLaneCstride;
+                //     int x = i * 16 + lane_row;
+                //     int y = j * 16 + lane_col;
+                //     printf(
+                //         "\niter-(%d, %d): lane pos = [%d, %d], pos = [%d, "
+                //         "%d]\n",
+                //         i, j, lane_row, lane_col, x, y);
+
+                //     const __half* data_ptr =
+                //         reinterpret_cast<const __half*>(src);
+
+                //     int offset = layout_(x, y);
+                //     printf("use layout:\n");
+                //     for (int i = 0; i < 8; ++i) {
+                //         printf("%.0f,", __half2float(data_ptr[offset + i]));
+                //     }
+                // }
             }
         }
     }
+
+  private:
+    typename Shared::Layout layout_;
 };
 
 /// @brief partial specialization for column-major shared memory tile.

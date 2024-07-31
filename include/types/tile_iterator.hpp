@@ -46,6 +46,8 @@ class TileIterator {
     static constexpr int sc0 = Tile::kRows / kStride0;
     static constexpr int sc1 = Tile::kCols / kStride1;
 
+    static constexpr bool kSwizzled = Tile::Layout::kSwizzled;
+
     HOST_DEVICE TileIterator() : data_(nullptr) {}
 
     DEVICE TileIterator(DType* data) : data_(data) {}
@@ -67,9 +69,16 @@ class TileIterator {
         int x = sc0 == 1 ? 0 : i;
         int y = sc0 == 1 ? i : 0;
 
-        using TileLayout =
-            decltype(tl::make_tile_layout<kStride0, kStride1, Tile::kRowStride,
-                                          Tile::kColStride>());
+        using LayoutMaker =
+            tl::LayoutMaker<kSwizzled, kStride0, kStride1, Tile::kRowStride,
+                            Tile::kColStride, kB, kM, kS>;
+        LayoutMaker maker;
+        using TileLayout = decltype(maker());
+
+        // using TileLayout = decltype(tl::make_tile_layout<kSwizzled>(
+        //     kStride0, kStride1, Tile::kRowStride, Tile::kColStride, kB, kM,
+        //     kS));
+
         using NewTile = SharedTile<DType, TileLayout>;
 
         int offset = Tile::kType == tl::Layout::kRowMajor
@@ -85,9 +94,16 @@ class TileIterator {
         assert(data_);               // The iterator is not initialized.
         assert(x < sc0 && y < sc1);  // indices must be within the strip count.
 
-        using TileLayout =
-            decltype(tl::make_tile_layout<kStride0, kStride1, Tile::kRowStride,
-                                          Tile::kColStride>());
+        // using TileLayout = decltype(tl::make_tile_layout<kSwizzled>(
+        //     kStride0, kStride1, Tile::kRowStride, Tile::kColStride, kB, kM,
+        //     kS));
+
+        using LayoutMaker =
+            tl::LayoutMaker<kSwizzled, kStride0, kStride1, Tile::kRowStride,
+                            Tile::kColStride, kB, kM, kS>;
+        LayoutMaker maker;
+        using TileLayout = decltype(maker());
+
         using NewTile = SharedTile<DType, TileLayout>;
 
         int offset = Tile::kType == tl::Layout::kRowMajor
@@ -104,9 +120,15 @@ class TileIterator {
 
         // Updated the layout for sub-tiles accessed by the sliced iterator.
         // Note: Only the shape changes; the stride remains the same.
-        using TileLayout = decltype(tl::make_tile_layout<kStride0, Tile::kCols,
-                                                         Tile::kRowStride,
-                                                         Tile::kColStride>());
+        using LayoutMaker =
+            tl::LayoutMaker<kSwizzled, kStride0, Tile::kCols, Tile::kRowStride,
+                            Tile::kColStride, kB, kM, kS>;
+        LayoutMaker maker;
+        using TileLayout = decltype(maker());
+
+        // using TileLayout = decltype(tl::make_tile_layout<kSwizzled>(
+        //     kStride0, Tile::kCols, Tile::kRowStride, Tile::kColStride, kB,
+        //     kM, kS));
 
         using NewTile = SharedTile<DType, TileLayout>;
         using Iter = TileIterator<NewTile, ChunkShape>;
@@ -127,9 +149,15 @@ class TileIterator {
 
         // Updated the layout for sub-tiles accessed by the sliced iterator.
         // Note: Only the shape changes; the stride remains the same.
-        using TileLayout = decltype(tl::make_tile_layout<Tile::kRows, kStride1,
-                                                         Tile::kRowStride,
-                                                         Tile::kColStride>());
+        using LayoutMaker =
+            tl::LayoutMaker<kSwizzled, Tile::kRows, kStride1, Tile::kRowStride,
+                            Tile::kColStride, kB, kM, kS>;
+        LayoutMaker maker;
+        using TileLayout = decltype(maker());
+
+        // using TileLayout = decltype(tl::make_tile_layout<kSwizzled>(
+        //     Tile::kRows, kStride1, Tile::kRowStride, Tile::kColStride, kB,
+        //     kM, kS));
 
         using NewTile = SharedTile<DType, TileLayout>;
         using Iter = TileIterator<NewTile, ChunkShape>;
@@ -150,6 +178,9 @@ class TileIterator {
     }
 
   private:
+    static constexpr int kB = Tile::Layout::kB;
+    static constexpr int kM = Tile::Layout::kM;
+    static constexpr int kS = Tile::Layout::kS;
     DType* data_;
 };
 

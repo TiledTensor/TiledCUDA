@@ -4,14 +4,17 @@
 namespace tiledcuda::testing {
 
 using namespace cell;
-using namespace cute;
 namespace tl = tile_layout;
 
 namespace {
-
-template <typename Element>
-__device__ void init_value(Element* data, int numel) {
-    for (int i = 0; i < numel; ++i) data[i] = static_cast<Element>(i);
+template <typename Element, typename Layout>
+__device__ void init_value(Element* data, Layout layout) {
+    int count = 0;
+    for (int i = 0; i < Layout::kRows; ++i) {
+        for (int j = 0; j < Layout::kCols; ++j) {
+            data[layout(i, j)] = static_cast<Element>(++count);
+        }
+    }
 }
 
 template <typename Iterator>
@@ -20,7 +23,7 @@ __global__ void test_tile_iterator() {
 
     extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
     auto* buf = reinterpret_cast<DType*>(buf_);
-    init_value(buf, Iterator::Tile::kNumel);
+    init_value(buf, typename Iterator::Tile::Layout{});
 
     typename Iterator::Tile s_tile(buf);
     printf("Shared tile:\n");
@@ -28,7 +31,7 @@ __global__ void test_tile_iterator() {
 
     Iterator tiles(buf);
 
-    printf("Iterate over rows.\n\n");
+    printf("\nIterate over rows.\n");
     for (int i = 0; i < Iterator::sc0; ++i) {
         printf("Iteration-[%d, _]:\n", i);
         tiles(i, _).to_tile().dump_value();
@@ -72,9 +75,10 @@ __global__ void test_tile_iterator() {
         }
     }
 }
-
 }  // namespace
 
+// FIXME(haruhi): Currently, these unit tests only output the values. Implement
+// stricter and more meaningful correctness checks.
 TEST(TestTile, test_row_major) {
     using Element = cutlass::half_t;
 
@@ -103,6 +107,28 @@ TEST(TestTile, test_col_major) {
     using Iterator = TileIterator<Tile, TileShape<2, 4>>;
 
     LOG(INFO) << std::endl << "Test Column-major" << std::endl;
+
+    int shm_size = Tile::kNumel * sizeof(Element);
+    // DONOT change this launch config. The unittest is implemented for a
+    // single thread.
+    test_tile_iterator<Iterator><<<1, 1, shm_size>>>();
+    cudaDeviceSynchronize();
+}
+
+TEST(TestTile, test_swizzled_row_major) {
+    using Element = float;
+
+    const int rows = 16;
+    const int cols = 16;
+
+    const int chunked_row = 8;
+    const int chunked_col = 8;
+
+    using Layout = tl::Swizzled<tl::RowMajor<rows, cols>, 1, 0, 2>;
+    using Tile = SharedTile<Element, Layout>;
+    using Iterator = TileIterator<Tile, TileShape<chunked_row, chunked_col>>;
+
+    LOG(INFO) << std::endl << "Test Row-major" << std::endl;
 
     int shm_size = Tile::kNumel * sizeof(Element);
     // DONOT change this launch config. The unittest is implemented for a
