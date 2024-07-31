@@ -36,6 +36,7 @@ __global__ void reg_reduce(Element* src) {
     __syncthreads();
 
     if (thread(0)) {
+        printf("Row Max:\n");
         printf("Thread 0:\n");
         dst_reduce_tile.dump_value();
     }
@@ -58,6 +59,7 @@ __global__ void reg_reduce(Element* src) {
     __syncthreads();
 
     if (thread(0)) {
+        printf("Row Sum:\n");
         printf("Thread 0:\n");
         dst_reduce_tile.dump_value();
     }
