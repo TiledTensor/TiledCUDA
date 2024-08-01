@@ -38,7 +38,8 @@ struct Reduce<RegTile, tl::Layout::kRowMajor> {
 
     template <typename DstTile, typename Reduce>
     DEVICE void operator()(const RegTile& src, DstTile& dst, Reduce reduce) {
-        const int leader = threadIdx.x & 0x1C;
+        // TODO(KuangjuX): This line is unused currently.
+        // const int leader = threadIdx.x & 0x1C;
 #pragma unroll
         for (int i = 0; i < kRows; ++i) {
             DType top_rows[kCols];

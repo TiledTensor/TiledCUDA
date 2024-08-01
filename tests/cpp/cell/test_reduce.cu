@@ -94,13 +94,28 @@ void run_reg_reduce() {
         <<<1, 32 * kWarpSize>>>(thrust::raw_pointer_cast(d_src.data()));
 }
 
-TEST(TestRegReduce, reg_reduce_0) {
+TEST(TestRegReduce, row_major_reg_reduce_0) {
     using Element = float;
     using WarpLayout = tl::RowMajor<1, 1>;
     using RegLayout = tl::RowMajor<1, 1>;
 
     const int kHeight = 1;
     const int kWidth = 1;
+    const copy::WarpReuse kMode = copy::WarpReuse::kCont;
+
+    using GlobalLayout = tl::RowMajor<16 * kHeight, 16 * kWidth>;
+
+    run_reg_reduce<Element, RegLayout, GlobalLayout, BaseTileRowMajor<Element>,
+                   WarpLayout, tl::Layout::kRowMajor, kMode, kHeight, kWidth>();
+}
+
+TEST(TestRegReduce, row_major_reg_reduce_1) {
+    using Element = float;
+    using WarpLayout = tl::RowMajor<1, 1>;
+    using RegLayout = tl::RowMajor<2, 2>;
+
+    const int kHeight = 2;
+    const int kWidth = 2;
     const copy::WarpReuse kMode = copy::WarpReuse::kCont;
 
     using GlobalLayout = tl::RowMajor<16 * kHeight, 16 * kWidth>;
