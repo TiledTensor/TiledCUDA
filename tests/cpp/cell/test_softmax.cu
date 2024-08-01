@@ -114,7 +114,7 @@ void run_reg_softmax() {
     }
 }
 
-TEST(TestRegReduce, row_major_reg_softmax_0) {
+TEST(TestRegSoftmax, row_major_reg_softmax_0) {
     using Element = float;
     using WarpLayout = tl::RowMajor<1, 1>;
     using RegLayout = tl::RowMajor<1, 1>;
@@ -130,7 +130,7 @@ TEST(TestRegReduce, row_major_reg_softmax_0) {
                     kWidth>();
 }
 
-TEST(TestRegReduce, row_major_reg_softmax_1) {
+TEST(TestRegSoftmax, row_major_reg_softmax_1) {
     using Element = float;
     using WarpLayout = tl::RowMajor<1, 1>;
     using RegLayout = tl::RowMajor<2, 2>;
