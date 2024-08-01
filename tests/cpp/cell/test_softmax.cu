@@ -14,7 +14,7 @@ using namespace cell;
 template <typename Element>
 void cpu_softmax(Element* src, Element* dst, int rows, int cols) {
     for (int i = 0; i < rows; ++i) {
-        float sum = 0;
+        Element sum = 0;
         for (int j = 0; j < cols; ++j) {
             sum += exp(src[i * cols + j]);
         }
