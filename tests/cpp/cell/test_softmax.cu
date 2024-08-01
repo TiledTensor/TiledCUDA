@@ -146,4 +146,20 @@ TEST(TestRegSoftmax, row_major_reg_softmax_1) {
                     kWidth>();
 }
 
+TEST(TestRegSoftmax, row_major_reg_softmax_2) {
+    const int kHeight = 2;
+    const int kWidth = 2;
+    using Element = float;
+    using WarpLayout = tl::RowMajor<kHeight, 1>;
+    using RegLayout = tl::RowMajor<1, kWidth>;
+
+    const copy::WarpReuse kMode = copy::WarpReuse::kCont;
+
+    using GlobalLayout = tl::RowMajor<16 * kHeight, 16 * kWidth>;
+
+    run_reg_softmax<Element, RegLayout, GlobalLayout, BaseTileRowMajor<Element>,
+                    WarpLayout, tl::Layout::kRowMajor, kMode, kHeight,
+                    kWidth>();
+}
+
 }  // namespace tiledcuda::testing

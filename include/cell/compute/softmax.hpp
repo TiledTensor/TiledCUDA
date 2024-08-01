@@ -1,3 +1,8 @@
+/**
+ * TODO(KuangjuX):  This version is numerically unstable and has not been tested
+ * with larger inputs using more warps, which makes it generally unsuitable for
+ * practical use.
+ */
 #pragma once
 
 #include "cell/compute/reduce.hpp"
