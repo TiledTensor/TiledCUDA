@@ -11,7 +11,8 @@
 namespace tiledcuda::testing {
 using namespace cell;
 
-void cpu_softmax(float* src, float* dst, int rows, int cols) {
+template <typename Element>
+void cpu_softmax(Element* src, Element* dst, int rows, int cols) {
     for (int i = 0; i < rows; ++i) {
         float sum = 0;
         for (int j = 0; j < cols; ++j) {
