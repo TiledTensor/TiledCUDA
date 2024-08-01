@@ -11,6 +11,18 @@
 namespace tiledcuda::testing {
 using namespace cell;
 
+void cpu_softmax(float* src, float* dst, int rows, int cols) {
+    for (int i = 0; i < rows; ++i) {
+        float sum = 0;
+        for (int j = 0; j < cols; ++j) {
+            sum += exp(src[i * cols + j]);
+        }
+        for (int j = 0; j < cols; ++j) {
+            dst[i * cols + j] = exp(src[i * cols + j]) / sum;
+        }
+    }
+}
+
 template <typename Element, typename RegLayout, typename GlobalLayout,
           typename BaseTile, typename WarpLayout, const tl::Layout kLayout,
           const copy::WarpReuse kMode, const int kHeight, const int kWidth>
@@ -81,10 +93,23 @@ void run_reg_softmax() {
     thrust::device_vector<Element> d_dst(kNumel);
     thrust::fill(d_dst.begin(), d_dst.end(), static_cast<Element>(0.));
 
+    thrust::host_vector<Element> h_dst = d_dst;
+    thrust::host_vector<Element> h_dst_ref(kNumel);
+    thrust::fill(h_dst_ref.begin(), h_dst_ref.end(), static_cast<Element>(0.));
+
     reg_softmax<Element, RegLayout, GlobalLayout, BaseTile, WarpLayout, kLayout,
                 kMode, kHeight, kWidth>
         <<<1, 32 * kWarpSize>>>(thrust::raw_pointer_cast(d_src.data()),
                                 thrust::raw_pointer_cast(d_dst.data()));
+
+    cpu_softmax(thrust::raw_pointer_cast(h_src.data()),
+                thrust::raw_pointer_cast(h_dst_ref.data()), 16 * kHeight,
+                16 * kWidth);
+
+    // Check the result
+    for (int i = 0; i < kNumel; ++i) {
+        EXPECT_NEAR(h_dst[i], h_dst_ref[i], 1e-3);
+    }
 }
 
 TEST(TestRegReduce, row_major_reg_softmax_0) {
