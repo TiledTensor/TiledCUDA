@@ -75,10 +75,6 @@ class TileIterator {
         LayoutMaker maker;
         using TileLayout = decltype(maker());
 
-        // using TileLayout = decltype(tl::make_tile_layout<kSwizzled>(
-        //     kStride0, kStride1, Tile::kRowStride, Tile::kColStride, kB, kM,
-        //     kS));
-
         using NewTile = SharedTile<DType, TileLayout>;
 
         int offset = Tile::kType == tl::Layout::kRowMajor
@@ -93,10 +89,6 @@ class TileIterator {
     DEVICE auto operator()(int x, int y) {
         assert(data_);               // The iterator is not initialized.
         assert(x < sc0 && y < sc1);  // indices must be within the strip count.
-
-        // using TileLayout = decltype(tl::make_tile_layout<kSwizzled>(
-        //     kStride0, kStride1, Tile::kRowStride, Tile::kColStride, kB, kM,
-        //     kS));
 
         using LayoutMaker =
             tl::LayoutMaker<kSwizzled, kStride0, kStride1, Tile::kRowStride,
@@ -126,10 +118,6 @@ class TileIterator {
         LayoutMaker maker;
         using TileLayout = decltype(maker());
 
-        // using TileLayout = decltype(tl::make_tile_layout<kSwizzled>(
-        //     kStride0, Tile::kCols, Tile::kRowStride, Tile::kColStride, kB,
-        //     kM, kS));
-
         using NewTile = SharedTile<DType, TileLayout>;
         using Iter = TileIterator<NewTile, ChunkShape>;
         static_assert(Iter::sc0 == 1);
@@ -154,10 +142,6 @@ class TileIterator {
                             Tile::kColStride, kB, kM, kS>;
         LayoutMaker maker;
         using TileLayout = decltype(maker());
-
-        // using TileLayout = decltype(tl::make_tile_layout<kSwizzled>(
-        //     Tile::kRows, kStride1, Tile::kRowStride, Tile::kColStride, kB,
-        //     kM, kS));
 
         using NewTile = SharedTile<DType, TileLayout>;
         using Iter = TileIterator<NewTile, ChunkShape>;

@@ -12,8 +12,6 @@ using namespace cell;
 using namespace copy;
 namespace tl = tile_layout;
 
-#define DEBUG
-
 namespace {
 template <typename Element>
 __device__ void init_value(Element* data, int numel) {
@@ -80,7 +78,6 @@ __global__ void run_test_swizzle(const Element* data, G2S1& copy1, G2S2& copy2,
 
 }  // namespace
 
-/*
 TEST(TestSwizzledLayout, test1) {
     using Element = cutlass::half_t;
 
@@ -127,7 +124,6 @@ TEST(TestSwizzledLayout, test1) {
             thrust::raw_pointer_cast(d_A.data()), copy1, copy2, copy3);
     cudaDeviceSynchronize();
 }
-*/
 
 TEST(TestSwizzledLayout, test2) {
     // unittest for loading gemm's operandA
@@ -136,7 +132,6 @@ TEST(TestSwizzledLayout, test2) {
     using WarpLayout = tl::RowMajor<1, 2>;
     const int kThreads = tl::get_numel<WarpLayout> * 32;
     static constexpr int kWarpPerRow = tl::num_rows<WarpLayout>;
-    // static constexpr int kWarpPerCol = tl::num_cols<WarpLayout>;
 
     const int kRows = 64;
     const int kCols = 64;

@@ -48,8 +48,6 @@ __global__ void test_gemm(const Element* ga, const Element* gb,
     __copy_async();
     __syncthreads();
 
-    // const int tid = 10;
-
     TileIteratorA sAs(shared_a);
     TileIteratorA2 sAs2(shared_a2);
     TileIteratorB sBs(shared_b);
@@ -65,30 +63,9 @@ __global__ void test_gemm(const Element* ga, const Element* gb,
 
     for (int k = 0; k < TileIteratorA::sc1; ++k) {
         load_rA(sAs(k), rA);
-        load_rA(sAs2(k), rA2);
-
-        // if (thread(tid)) {
-        //     printf("\nsA2:\n");
-        //     sAs2(k).dump_value();
-
-        //     printf("\nswizzled sA:\n");
-        //     __half* data = shared_a2;
-        //     for (int i = 0; i < TileIteratorA::Tile::kNumel; ++i) {
-        //         printf("%.0f, ", __half2float(data[i]));
-        //         if (i && (i + 1) % TileIteratorA::Tile::kCols == 0)
-        //             printf("\n");
-        //     }
-        //     printf("\n");
-
-        //     printf("\nrA:\n");
-        //     rA.dump_value();
-
-        //     printf("\nrA2:\n");
-        //     rA2.dump_value();
-        // }
+        load_rA(sAs2(k), rA2);  // for debugging swizzled layout
         load_rB(sBs(k), rB);
-
-        compute::gemm_(rA2, rB, acc);
+        compute::gemm_(rA, rB, acc);
     }
     __syncthreads();
 
@@ -111,7 +88,9 @@ void run_test() {
     thrust::host_vector<ElementAcc> h_af(kM * kK);
     thrust::host_vector<ElementAcc> h_a(kM * kK);
     for (int i = 0; i < h_a.size(); ++i) {
-        // h_af[i] = static_cast<Element>(i);
+#if defined(DEBUG)
+        h_af[i] = static_cast<Element>(i);
+#endif
         h_af[i] = rand_float();
         h_a[i] = static_cast<Element>(h_af[i]);
     }
@@ -119,7 +98,9 @@ void run_test() {
     thrust::host_vector<Element> h_bf(kK * kN);
     thrust::host_vector<Element> h_b(kK * kN);
     for (int i = 0; i < h_b.size(); ++i) {
-        // h_bf[i] = static_cast<Element>(i);
+#if defined(DEBUG)
+        h_bf[i] = static_cast<Element>(i);
+#endif
         h_bf[i] = rand_float();
         h_b[i] = static_cast<Element>(h_bf[i]);
     }
@@ -147,33 +128,6 @@ void run_test() {
     using IteratorA = typename config::TileIteratorA;
     using IteratorA2 = typename config::TileIteratorA2;
     using IteratorB = typename config::TileIteratorB;
-
-    using Layout1 = typename config::Layout1;
-    using Layout2 = typename config::Layout2;
-
-    Layout1 layout;
-    Layout2 swizzled;
-
-    LOG(INFO) << "swizzled shape = [" << Layout2::kSwizzledRow << ", "
-              << Layout2::kSwizzledCol << "], "
-              << "swizzled strides = [" << Layout2::kSwizzledRowStride << ", "
-              << Layout2::kSwizzledColStride << "]" << std::endl;
-
-    // std::cout << "RowMajor: " << std::endl;
-    // for (int i = 0; i < Layout2::kRows; ++i) {
-    //     for (int j = 0; j < Layout2::kCols; ++j) {
-    //         std::cout << layout(i, j) << ", ";
-    //     }
-    //     std::cout << std::endl;
-    // }
-
-    // std::cout << "Swizzled: " << std::endl;
-    // for (int i = 0; i < Layout2::kRows; ++i) {
-    //     for (int j = 0; j < Layout2::kCols; ++j) {
-    //         std::cout << swizzled(i, j) << ", ";
-    //     }
-    //     std::cout << std::endl;
-    // }
 
 #if defined(DEBUG)
     LOG(INFO) << "TileIteratorA: " << IteratorA{} << std::endl
@@ -242,21 +196,21 @@ TEST(TestGemm, test) {
     run_test<16, 32, 32, tl::RowMajor<1, 1>, 32>();
 
     // more settings
-    run_test<32, 32, 64, tl::RowMajor<1, 1>, 64>();
+    run_test<16, 32, 64, tl::RowMajor<1, 1>, 32>();
     run_test<32, 32, 32, tl::RowMajor<1, 1>, 32>();
 
     // minimal shape for 2 warps
-    // run_test<32, 32, 64, tl::RowMajor<1, 2>, 32>();
-    // run_test<64, 32, 128, tl::RowMajor<2, 1>, 32>();
+    run_test<32, 32, 64, tl::RowMajor<1, 2>, 32>();
+    run_test<64, 32, 128, tl::RowMajor<2, 1>, 32>();
 
-    // // minimal shape for 2 x 2 warps
-    // run_test<32, 32, 64, tl::RowMajor<2, 2>, 32>();
-    // run_test<32, 32, 64, tl::RowMajor<2, 2>, 32>();
-    // run_test<64, 32, 64, tl::RowMajor<2, 2>, 32>();
-    // run_test<32, 32, 128, tl::RowMajor<2, 2>, 64>();
+    // minimal shape for 2 x 2 warps
+    run_test<32, 32, 64, tl::RowMajor<2, 2>, 32>();
+    run_test<32, 32, 64, tl::RowMajor<2, 2>, 32>();
+    run_test<64, 32, 64, tl::RowMajor<2, 2>, 32>();
+    run_test<32, 32, 128, tl::RowMajor<2, 2>, 64>();
 
-    // run_test<64, 64, 64, tl::RowMajor<2, 2>, 32>();
-    // run_test<64, 32, 128, tl::RowMajor<2, 2>, 32>();
+    run_test<64, 64, 64, tl::RowMajor<2, 2>, 32>();
+    run_test<64, 32, 128, tl::RowMajor<2, 2>, 32>();
 }
 
 }  // namespace tiledcuda::testing

@@ -16,12 +16,10 @@ float rand_float(float a = 1e-3, float b = 1) {
     return a + r;
 }
 
-#define DEBUG
 bool check_correctness(const float* hc1, const float* hc2, int row, int col) {
     int numel = row * col;
     bool pass_unittest = true;
     static const float eps = 5e-2;
-    // static const float eps = 1.;
 
 #if defined(DEBUG)
     int cut_off = 128;
@@ -118,7 +116,7 @@ struct TestTraits {
     using LoadSharedA = GlobalToSharedLoader<SharedA, WarpLayout>;
     using TileIteratorA = TileIterator<SharedA, TileShape<kM, kChunkK>>;
 
-    // test swizzled layout
+    // for testing swizzled layout
     using Layout2 = tl::Swizzled<tl::RowMajor<kM, kK>, 2, 3, 3>;
     using SharedA2 = SharedTile<Element, Layout2>;
     using LoadSharedA2 = GlobalToSharedLoader<SharedA2, WarpLayout>;

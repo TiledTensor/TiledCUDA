@@ -112,10 +112,6 @@ struct Swizzled {
             Shape<Int<kSwizzledRow>, Int<kSwizzledCol>>,
             Stride<Int<kSwizzledRowStride>, Int<kSwizzledColStride>>>{}));
 
-    // using LayoutAtom =
-    //     decltype(composition(cute::Swizzle<kB, kS, kM>{},
-    //                          cute::Layout<Shape<_8, _32>, Stride<_32,
-    //                          _1>>{}));
     using CuteLayout = decltype(tile_to_shape(
         LayoutAtom{}, cute::Shape<Int<Layout_::kRows>, Int<Layout_::kCols>>{}));
 
