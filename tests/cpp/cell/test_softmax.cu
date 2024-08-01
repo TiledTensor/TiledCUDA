@@ -147,8 +147,8 @@ TEST(TestRegSoftmax, row_major_reg_softmax_1) {
 }
 
 TEST(TestRegSoftmax, row_major_reg_softmax_2) {
-    const int kHeight = 2;
-    const int kWidth = 2;
+    const int kHeight = 4;
+    const int kWidth = 1;
     using Element = float;
     using WarpLayout = tl::RowMajor<kHeight, 1>;
     using RegLayout = tl::RowMajor<1, kWidth>;
