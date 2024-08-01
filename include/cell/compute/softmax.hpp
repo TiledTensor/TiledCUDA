@@ -49,8 +49,6 @@ struct Softmax<RegTile, tl::Layout::kRowMajor> {
         compute::SumReduce<RegTile, tl::Layout::kRowMajor> row_sum;
         row_sum(tile, reduce_tile);
 
-        // __syncthreads();
-
 #pragma unroll
         for (int i = 0; i < kRows; ++i) {
             DType top_row_sum = reduce_tile(i, 0);

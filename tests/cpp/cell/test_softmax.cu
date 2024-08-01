@@ -115,12 +115,12 @@ void run_reg_softmax() {
 }
 
 TEST(TestRegSoftmax, row_major_reg_softmax_0) {
-    using Element = float;
-    using WarpLayout = tl::RowMajor<1, 1>;
-    using RegLayout = tl::RowMajor<1, 1>;
-
     const int kHeight = 1;
     const int kWidth = 1;
+    using Element = float;
+    using WarpLayout = tl::RowMajor<1, 1>;
+    using RegLayout = tl::RowMajor<kHeight, kWidth>;
+
     const copy::WarpReuse kMode = copy::WarpReuse::kCont;
 
     using GlobalLayout = tl::RowMajor<16 * kHeight, 16 * kWidth>;
@@ -131,12 +131,12 @@ TEST(TestRegSoftmax, row_major_reg_softmax_0) {
 }
 
 TEST(TestRegSoftmax, row_major_reg_softmax_1) {
-    using Element = float;
-    using WarpLayout = tl::RowMajor<1, 1>;
-    using RegLayout = tl::RowMajor<2, 2>;
-
     const int kHeight = 2;
     const int kWidth = 2;
+    using Element = float;
+    using WarpLayout = tl::RowMajor<1, 1>;
+    using RegLayout = tl::RowMajor<kHeight, kWidth>;
+
     const copy::WarpReuse kMode = copy::WarpReuse::kCont;
 
     using GlobalLayout = tl::RowMajor<16 * kHeight, 16 * kWidth>;
