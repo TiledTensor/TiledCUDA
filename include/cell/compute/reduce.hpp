@@ -38,8 +38,7 @@ struct Reduce<RegTile, tl::Layout::kRowMajor> {
 
     template <typename DstTile, typename Reduce>
     DEVICE void operator()(const RegTile& src, DstTile& dst, Reduce reduce) {
-        // TODO(KuangjuX): This line is unused currently.
-        // const int leader = threadIdx.x & 0x1C;
+        const int leader = threadIdx.x & 0x1C;
 #pragma unroll
         for (int i = 0; i < kRows; ++i) {
             DType top_rows[kCols];
@@ -74,9 +73,10 @@ struct Reduce<RegTile, tl::Layout::kRowMajor> {
             bottom_row =
                 reduce(bottom_row, shuffle_down_sync(MASK_ALL, bottom_row, 1));
 
-            // TODO(KuangjuX): This line seems unnecessary?
-            // top_row = shuffle_down_sync(MASK_ALL, top_row, leader);
-            // bottom_row = shuffle_down_sync(MASK_ALL, bottom_row, leader);
+            // Group the threads into groups of four, and broadcast the data
+            // from the first thread in each group to the other three threads.
+            top_row = shuffle_sync(MASK_ALL, top_row, leader);
+            bottom_row = shuffle_sync(MASK_ALL, bottom_row, leader);
 
             // Store the results to the destination tile.
             dst(i, 0) = top_row;

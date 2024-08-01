@@ -28,51 +28,47 @@ struct Softmax<RegTile, tl::Layout::kRowMajor> {
     static constexpr int kCols = RegTile::kCols;
 
     template <typename ReduceTile>
-    DEVICE void operator()(RegTile& tile) {
-        ReduceTile reduce_tile;
-
+    DEVICE void operator()(RegTile& tile, ReduceTile& reduce_tile) {
 #pragma unroll
         for (int i = 0; i < kRows; ++i) {
 #pragma unroll
             for (int j = 0; j < kCols; ++j) {
                 auto base_tile = tile(i, j);
 
-                base_tile(0, 0) = exp(base_tile(0, 0));
-                base_tile(0, 1) = exp(base_tile(0, 1));
-                base_tile(1, 0) = exp(base_tile(1, 0));
-                base_tile(1, 1) = exp(base_tile(1, 1));
-                base_tile(0, 2) = exp(base_tile(0, 2));
-                base_tile(0, 3) = exp(base_tile(0, 3));
-                base_tile(1, 2) = exp(base_tile(1, 2));
-                base_tile(1, 3) = exp(base_tile(1, 3));
+                tile(i, j)(0, 0) = exp(base_tile(0, 0));
+                tile(i, j)(0, 1) = exp(base_tile(0, 1));
+                tile(i, j)(1, 0) = exp(base_tile(1, 0));
+                tile(i, j)(1, 1) = exp(base_tile(1, 1));
+                tile(i, j)(0, 2) = exp(base_tile(0, 2));
+                tile(i, j)(0, 3) = exp(base_tile(0, 3));
+                tile(i, j)(1, 2) = exp(base_tile(1, 2));
+                tile(i, j)(1, 3) = exp(base_tile(1, 3));
             }
         }
 
-        compute::SumReduce<RegTile, kLayout> row_sum;
+        compute::SumReduce<RegTile, tl::Layout::kRowMajor> row_sum;
         row_sum(tile, reduce_tile);
 
-        __syncthreads();
+        // __syncthreads();
 
 #pragma unroll
         for (int i = 0; i < kRows; ++i) {
             DType top_row_sum = reduce_tile(i, 0);
             DType bottom_row_sum = reduce_tile(i, 1);
 
-            // TODO(KuangjuX): Shuffle the top and bottom row sum to get the
-            // correct value.
 #pragma unroll
             for (int j = 0; j < kCols; ++j) {
                 auto base_tile = tile(i, j);
 
-                base_tile(0, 0) = base_tile(0, 0) / top_row_sum;
-                base_tile(0, 1) = base_tile(0, 1) / top_row_sum;
-                base_tile(1, 0) = base_tile(1, 0) / top_row_sum;
-                base_tile(1, 1) = base_tile(1, 1) / top_row_sum;
+                tile(i, j)(0, 0) = base_tile(0, 0) / top_row_sum;
+                tile(i, j)(0, 1) = base_tile(0, 1) / top_row_sum;
+                tile(i, j)(1, 0) = base_tile(1, 0) / top_row_sum;
+                tile(i, j)(1, 1) = base_tile(1, 1) / top_row_sum;
 
-                base_tile(0, 2) = base_tile(0, 2) / bottom_row_sum;
-                base_tile(0, 3) = base_tile(0, 3) / bottom_row_sum;
-                base_tile(1, 2) = base_tile(1, 2) / bottom_row_sum;
-                base_tile(1, 3) = base_tile(1, 3) / bottom_row_sum;
+                tile(i, j)(0, 2) = base_tile(0, 2) / bottom_row_sum;
+                tile(i, j)(0, 3) = base_tile(0, 3) / bottom_row_sum;
+                tile(i, j)(1, 2) = base_tile(1, 2) / bottom_row_sum;
+                tile(i, j)(1, 3) = base_tile(1, 3) / bottom_row_sum;
             }
         }
     }
