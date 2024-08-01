@@ -93,7 +93,6 @@ void run_reg_softmax() {
     thrust::device_vector<Element> d_dst(kNumel);
     thrust::fill(d_dst.begin(), d_dst.end(), static_cast<Element>(0.));
 
-    thrust::host_vector<Element> h_dst = d_dst;
     thrust::host_vector<Element> h_dst_ref(kNumel);
     thrust::fill(h_dst_ref.begin(), h_dst_ref.end(), static_cast<Element>(0.));
 
@@ -101,6 +100,8 @@ void run_reg_softmax() {
                 kMode, kHeight, kWidth>
         <<<1, 32 * kWarpSize>>>(thrust::raw_pointer_cast(d_src.data()),
                                 thrust::raw_pointer_cast(d_dst.data()));
+
+    thrust::host_vector<Element> h_dst = d_dst;
 
     cpu_softmax(thrust::raw_pointer_cast(h_src.data()),
                 thrust::raw_pointer_cast(h_dst_ref.data()), 16 * kHeight,
