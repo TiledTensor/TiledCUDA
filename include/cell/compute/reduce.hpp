@@ -11,9 +11,6 @@ namespace tiledcuda::cell::compute {
 
 namespace tl = tile_layout;
 
-// TODO(KuangjuX): Placed in a separate constants file
-static constexpr uint32_t MASK_ALL = 0xFFFFFFFF;
-
 namespace detail {
 
 template <typename RegTile, const tl::Layout kLayout>

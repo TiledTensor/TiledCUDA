@@ -4,6 +4,8 @@
 
 namespace tiledcuda::cell {
 
+static constexpr uint32_t MASK_ALL = 0xFFFFFFFF;
+
 /**
  * @brief `shuffle_sync` provides a way of moving a value from one thread
  * to other threads in the warp in one instruction.
