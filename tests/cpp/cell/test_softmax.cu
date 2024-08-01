@@ -14,15 +14,18 @@ using namespace cell;
 template <typename Element, typename RegLayout, typename GlobalLayout,
           typename BaseTile, typename WarpLayout, const tl::Layout kLayout,
           const copy::WarpReuse kMode, const int kHeight, const int kWidth>
-__global__ void reg_softmax(Element* src) {
+__global__ void reg_softmax(Element* src, Element* dst) {
     using SrcLoadTile = GlobalTile<Element, GlobalLayout>;
     using DstLoadTile = RegTile<BaseTile, RegLayout>;
     using SrcReduceTile = DstLoadTile;
     using DstReduceTile = RegTile<Element, tl::RowMajor<kHeight, 2>>;
+    using SrcStoreTile = DstLoadTile;
+    using DstStoreTile = GlobalTile<Element, GlobalLayout>;
 
     SrcLoadTile src_load_tile(src);
     DstLoadTile dst_load_tile;
     DstReduceTile dst_reduce_tile;
+    DstStoreTile dst_store_tile(dst);
 
     // Load data from global memory to register file
     copy::GlobalToRegLoader<DstLoadTile, WarpLayout, kMode> loader;
@@ -54,6 +57,10 @@ __global__ void reg_softmax(Element* src) {
         printf("Thread 8:\n");
         dst_load_tile.dump_value();
     }
+
+    __syncthreads();
+    copy::RegToGlobalStorer<DstStoreTile, SrcStoreTile, WarpLayout> storer;
+    storer(dst_load_tile, dst_store_tile);
 }
 
 template <typename Element, typename RegLayout, typename GlobalLayout,
@@ -71,10 +78,13 @@ void run_reg_softmax() {
     }
 
     thrust::device_vector<Element> d_src = h_src;
+    thrust::device_vector<Element> d_dst(kNumel);
+    thrust::fill(d_dst.begin(), d_dst.end(), static_cast<Element>(0.));
 
     reg_softmax<Element, RegLayout, GlobalLayout, BaseTile, WarpLayout, kLayout,
                 kMode, kHeight, kWidth>
-        <<<1, 32 * kWarpSize>>>(thrust::raw_pointer_cast(d_src.data()));
+        <<<1, 32 * kWarpSize>>>(thrust::raw_pointer_cast(d_src.data()),
+                                thrust::raw_pointer_cast(d_dst.data()));
 }
 
 TEST(TestRegReduce, row_major_reg_softmax_0) {
