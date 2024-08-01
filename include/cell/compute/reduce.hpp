@@ -11,9 +11,6 @@ namespace tiledcuda::cell::compute {
 
 namespace tl = tile_layout;
 
-// TODO(KuangjuX): Placed in a separate constants file
-static constexpr uint32_t MASK_ALL = 0xFFFFFFFF;
-
 namespace detail {
 
 template <typename RegTile, const tl::Layout kLayout>
@@ -73,9 +70,10 @@ struct Reduce<RegTile, tl::Layout::kRowMajor> {
             bottom_row =
                 reduce(bottom_row, shuffle_down_sync(MASK_ALL, bottom_row, 1));
 
-            // TODO(KuangjuX): This line seems unnecessary?
-            // top_row = shuffle_down_sync(MASK_ALL, top_row, leader);
-            // bottom_row = shuffle_down_sync(MASK_ALL, bottom_row, leader);
+            // Group the threads into groups of four, and broadcast the data
+            // from the first thread in each group to the other three threads.
+            top_row = shuffle_sync(MASK_ALL, top_row, leader);
+            bottom_row = shuffle_sync(MASK_ALL, bottom_row, leader);
 
             // Store the results to the destination tile.
             dst(i, 0) = top_row;
