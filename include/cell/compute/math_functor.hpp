@@ -10,9 +10,21 @@ struct Add {
 };
 
 template <typename Element>
+struct Mul {
+    DEVICE Element operator()(Element a, Element b) const { return a * b; }
+};
+
+template <typename Element>
 struct Max {
     DEVICE Element operator()(Element a, Element b) const {
         return a > b ? a : b;
+    }
+};
+
+template <typename Element>
+struct Min {
+    DEVICE Element operator()(Element a, Element b) const {
+        return a < b ? a : b;
     }
 };
 
