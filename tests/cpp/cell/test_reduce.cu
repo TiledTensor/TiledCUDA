@@ -12,8 +12,9 @@ namespace tiledcuda::testing {
 using namespace cell;
 
 template <typename Element, typename RegLayout, typename GlobalLayout,
-          typename BaseTile, typename WarpLayout, const tl::Layout kLayout,
-          const copy::WarpReuse kMode, const int kHeight, const int kWidth>
+          typename ReduceLayout, typename BaseTile, typename WarpLayout,
+          const tl::Layout kLayout, const copy::WarpReuse kMode,
+          const int kHeight, const int kWidth>
 __global__ void reg_reduce(Element* src) {
     using SrcLoadTile = GlobalTile<Element, GlobalLayout>;
     using DstLoadTile = RegTile<BaseTile, RegLayout>;
@@ -88,9 +89,11 @@ __global__ void reg_reduce(Element* src) {
 template <typename Element, typename RegLayout, typename GlobalLayout,
           typename BaseTile, typename WarpLayout, const tl::Layout kLayout,
           const copy::WarpReuse kMode, const int kHeight, const int kWidth>
-void run_reg_reduce() {
+void run_row_major_reg_reduce() {
     int kNumel = 16 * 16 * kHeight * kWidth;
     int kWarpSize = tl::get_numel<WarpLayout>;
+
+    using ReduceLayout = tl::RowMajor<kHeight, 2>;
 
     thrust::host_vector<Element> h_src(kNumel);
     for (int i = 0; i < kNumel; ++i) {
@@ -99,8 +102,29 @@ void run_reg_reduce() {
 
     thrust::device_vector<Element> d_src = h_src;
 
-    reg_reduce<Element, RegLayout, GlobalLayout, BaseTile, WarpLayout, kLayout,
-               kMode, kHeight, kWidth>
+    reg_reduce<Element, RegLayout, GlobalLayout, ReduceLayout, BaseTile,
+               WarpLayout, kLayout, kMode, kHeight, kWidth>
+        <<<1, 32 * kWarpSize>>>(thrust::raw_pointer_cast(d_src.data()));
+}
+
+template <typename Element, typename RegLayout, typename GlobalLayout,
+          typename BaseTile, typename WarpLayout, const tl::Layout kLayout,
+          const copy::WarpReuse kMode, const int kHeight, const int kWidth>
+void run_col_major_reg_reduce() {
+    int kNumel = 16 * 16 * kHeight * kWidth;
+    int kWarpSize = tl::get_numel<WarpLayout>;
+
+    using ReduceLayout = tl::ColMajor<2, kWidth>;
+
+    thrust::host_vector<Element> h_src(kNumel);
+    for (int i = 0; i < kNumel; ++i) {
+        h_src[i] = (Element)i;
+    }
+
+    thrust::device_vector<Element> d_src = h_src;
+
+    reg_reduce<Element, RegLayout, GlobalLayout, ReduceLayout, BaseTile,
+               WarpLayout, kLayout, kMode, kHeight, kWidth>
         <<<1, 32 * kWarpSize>>>(thrust::raw_pointer_cast(d_src.data()));
 }
 
@@ -115,8 +139,9 @@ TEST(TestRegReduce, row_major_reg_reduce_0) {
 
     using GlobalLayout = tl::RowMajor<16 * kHeight, 16 * kWidth>;
 
-    run_reg_reduce<Element, RegLayout, GlobalLayout, BaseTileRowMajor<Element>,
-                   WarpLayout, tl::Layout::kRowMajor, kMode, kHeight, kWidth>();
+    run_row_major_reg_reduce<Element, RegLayout, GlobalLayout,
+                             BaseTileRowMajor<Element>, WarpLayout,
+                             tl::Layout::kRowMajor, kMode, kHeight, kWidth>();
 }
 
 TEST(TestRegReduce, row_major_reg_reduce_1) {
@@ -130,8 +155,41 @@ TEST(TestRegReduce, row_major_reg_reduce_1) {
 
     using GlobalLayout = tl::RowMajor<16 * kHeight, 16 * kWidth>;
 
-    run_reg_reduce<Element, RegLayout, GlobalLayout, BaseTileRowMajor<Element>,
-                   WarpLayout, tl::Layout::kRowMajor, kMode, kHeight, kWidth>();
+    run_row_major_reg_reduce<Element, RegLayout, GlobalLayout,
+                             BaseTileRowMajor<Element>, WarpLayout,
+                             tl::Layout::kRowMajor, kMode, kHeight, kWidth>();
+}
+
+TEST(TestRegReduce, col_major_reg_reduce_0) {
+    const int kHeight = 1;
+    const int kWidth = 1;
+    using Element = float;
+    using WarpLayout = tl::ColMajor<1, 1>;
+    using RegLayout = tl::ColMajor<kHeight, kWidth>;
+
+    const copy::WarpReuse kMode = copy::WarpReuse::kCont;
+
+    using GlobalLayout = tl::ColMajor<16 * kHeight, 16 * kWidth>;
+
+    run_col_major_reg_reduce<Element, RegLayout, GlobalLayout,
+                             BaseTileColMajor<Element>, WarpLayout,
+                             tl::Layout::kColMajor, kMode, kHeight, kWidth>();
+}
+
+TEST(TestRegReduce, col_major_reg_reduce_1) {
+    const int kHeight = 2;
+    const int kWidth = 2;
+    using Element = float;
+    using WarpLayout = tl::ColMajor<1, 1>;
+    using RegLayout = tl::ColMajor<kHeight, kWidth>;
+
+    const copy::WarpReuse kMode = copy::WarpReuse::kCont;
+
+    using GlobalLayout = tl::ColMajor<16 * kHeight, 16 * kWidth>;
+
+    run_col_major_reg_reduce<Element, RegLayout, GlobalLayout,
+                             BaseTileColMajor<Element>, WarpLayout,
+                             tl::Layout::kColMajor, kMode, kHeight, kWidth>();
 }
 
 }  // namespace tiledcuda::testing

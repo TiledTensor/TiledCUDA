@@ -56,6 +56,7 @@ struct Reduce<RegTile, tl::Layout::kRowMajor> {
             DType bottom_row = bottom_rows[0];
 
             // Compute the reduction of the top and bottom rows.
+#pragma unroll
             for (int j = 1; j < kCols; ++j) {
                 top_row = reduce(top_row, top_rows[j]);
                 bottom_row = reduce(bottom_row, bottom_rows[j]);
@@ -91,7 +92,53 @@ struct Reduce<RegTile, tl::Layout::kColMajor> {
     static constexpr int kCols = RegTile::kCols;
 
     template <typename DstTile, typename Reduce>
-    DEVICE void operator()(const RegTile& tile, DstTile& dst, Reduce reduce) {}
+    DEVICE void operator()(const RegTile& tile, DstTile& dst, Reduce reduce) {
+        const int leader = threadIdx.x & 0x1C;
+
+#pragma unroll
+        for (int i = 0; i < kCols; ++i) {
+            DType top_cols[kRows];
+            DType bottom_cols[kRows];
+#pragma unroll
+            for (int j = 0; j < kRows; ++j) {
+                auto base_tile = tile(j, i);
+                DType top_col_0 = reduce(base_tile(0, 0), base_tile(1, 0));
+                DType top_col_1 = reduce(base_tile(0, 1), base_tile(1, 1));
+                top_cols[j] = reduce(top_col_0, top_col_1);
+
+                DType bottom_col_0 = reduce(base_tile(2, 0), base_tile(3, 0));
+                DType bottom_col_1 = reduce(base_tile(2, 1), base_tile(3, 1));
+                bottom_cols[j] = reduce(bottom_col_0, bottom_col_1);
+            }
+
+            DType top_col = top_cols[0];
+            DType bottom_col = bottom_cols[0];
+
+            // Compute the reduction of the top and bottom columns.
+#pragma unroll
+            for (int j = 1; j < kRows; ++j) {
+                top_col = reduce(top_col, top_cols[j]);
+                bottom_col = reduce(bottom_col, bottom_cols[j]);
+            }
+
+            // Shuffle the results to the leader thread.
+            top_col = reduce(top_col, shuffle_down_sync(MASK_ALL, top_col, 2));
+            top_col = reduce(top_col, shuffle_down_sync(MASK_ALL, top_col, 1));
+            bottom_col =
+                reduce(bottom_col, shuffle_down_sync(MASK_ALL, bottom_col, 2));
+            bottom_col =
+                reduce(bottom_col, shuffle_down_sync(MASK_ALL, bottom_col, 1));
+
+            // Group the threads into groups of four, and broadcast the data
+            // from the first thread in each group to the other three threads.
+            top_col = shuffle_sync(MASK_ALL, top_col, leader);
+            bottom_col = shuffle_sync(MASK_ALL, bottom_col, leader);
+
+            // Store the results to the destination tile.
+            dst(0, i) = top_col;
+            dst(1, i) = bottom_col;
+        }
+    }
 };
 
 }  // namespace detail
