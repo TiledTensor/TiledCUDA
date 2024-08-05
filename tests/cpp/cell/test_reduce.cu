@@ -187,9 +187,9 @@ TEST(TestRegReduce, col_major_reg_reduce_1) {
 
     using GlobalLayout = tl::ColMajor<16 * kHeight, 16 * kWidth>;
 
-    run_col_major_reg_reduce<
-        Element, RegLayout, GlobalLayout, BaseTileColMajor<Element>, WarpLayout,
-        tl::Layout::kColgit Major, kMode, kHeight, kWidth>();
+    run_col_major_reg_reduce<Element, RegLayout, GlobalLayout,
+                             BaseTileColMajor<Element>, WarpLayout,
+                             tl::Layout::kColMajor, kMode, kHeight, kWidth>();
 }
 
 }  // namespace tiledcuda::testing
