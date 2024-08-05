@@ -74,14 +74,14 @@ struct ElementWise<RegTile, tl::Layout::kColMajor> {
     DEVICE void operator()(RegTile& tile, Functor functor) {}
 };
 
-template <typename RegTile, const tl::Layout kLayout>
-struct Exp {
-    using DType = typename RegTile::DType::DType;
+// template <typename RegTile, const tl::Layout kLayout>
+// struct Exp {
+//     using DType = typename RegTile::DType::DType;
 
-    DEVICE void operator()(RegTile& tile) {
-        ElementWise<RegTile, kLayout> element_wise;
-        element_wise(tile, [](DType x) { return exp(x); });
-    }
-};
+//     DEVICE void operator()(RegTile& tile) {
+//         ElementWise<RegTile, kLayout> element_wise;
+//         element_wise(tile, [](DType x) { return exp(x); });
+//     }
+// };
 
 }  // namespace tiledcuda::cell::compute

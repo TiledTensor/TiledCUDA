@@ -10,6 +10,11 @@ struct Add {
 };
 
 template <typename Element>
+struct Sub {
+    DEVICE Element operator()(Element a, Element b) const { return a - b; }
+};
+
+template <typename Element>
 struct Mul {
     DEVICE Element operator()(Element a, Element b) const { return a * b; }
 };
@@ -26,6 +31,11 @@ struct Min {
     DEVICE Element operator()(Element a, Element b) const {
         return a < b ? a : b;
     }
+};
+
+template <typename Element>
+struct Exp {
+    DEVICE Element operator()(Element a) const { return exp(a); }
 };
 
 }  // namespace tiledcuda::cell::compute
