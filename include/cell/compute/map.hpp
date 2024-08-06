@@ -156,6 +156,20 @@ struct RegExp {
 };
 
 template <typename RegTile, const tl::Layout kLayout>
+struct RegLog {
+    using DType = typename RegTile::DType::DType;
+
+    static constexpr int kRows = RegTile::kRows;
+    static constexpr int kCols = RegTile::kCols;
+
+    DEVICE void operator()(const RegTile& src, RegTile& dst) {
+        detail::UnaryMap<RegTile, kLayout> row_log;
+        row_log(src, dst, Log<DType>{});
+    }
+};
+}
+
+template <typename RegTile, const tl::Layout kLayout>
 struct RegSub {
     using DType = typename RegTile::DType::DType;
 
