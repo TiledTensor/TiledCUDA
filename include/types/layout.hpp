@@ -34,13 +34,6 @@ struct MatrixLayout {
 
     static constexpr int kNumel = kRows * kCols;
 
-    // FIXME: The current implementation for copying global to shared memory
-    // relies on CuTe's API. This is a temporary workaround to maintain
-    // compatibility with CuTe's APIs. Refactor this implementation in the
-    // future to remove this dependency.
-    using CuteLayout = cute::Layout<Shape<Int<kRows>, Int<kCols>>,
-                                    Stride<Int<kRowStride>, Int<kColStride>>>;
-
     DEVICE int operator()(int i, int j) const {
         return i * kRowStride + j * kColStride;
     }
