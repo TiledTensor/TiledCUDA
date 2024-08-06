@@ -67,4 +67,21 @@ struct Log<__half> {
 };
 #endif
 
+template <typename Element>
+struct Relu {
+    DEVICE Element operator()(Element a) const { return a > 0 ? a : 0; }
+};
+
+#if defined(__CUDA_ARCH__)
+template <>
+struct Relu<float> {
+    DEVICE float operator()(float a) const { return max(a, 0.f); }
+};
+
+template <>
+struct Relu<__half> {
+    DEVICE __half operator()(__half a) const { return __hmax(a, 0); }
+};
+#endif
+
 }  // namespace tiledcuda::cell::compute
