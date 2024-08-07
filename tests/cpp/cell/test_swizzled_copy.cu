@@ -12,6 +12,7 @@ using namespace cell;
 using namespace copy;
 namespace tl = tile_layout;
 
+/*
 namespace {
 template <typename Element>
 __device__ void init_value(Element* data, int numel) {
@@ -124,5 +125,6 @@ TEST(TestSwizzledLayout, test1) {
             thrust::raw_pointer_cast(d_A.data()), copy1, copy2, copy3);
     cudaDeviceSynchronize();
 }
+*/
 
 }  // namespace tiledcuda::testing

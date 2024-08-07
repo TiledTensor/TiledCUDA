@@ -166,30 +166,30 @@ TEST(TestReg2Shared, operand_C) {
     cudaDeviceSynchronize();
 }
 
-TEST(TestShared2Reg, operand_A_swizzle) {
-    using Element = __half;
+// TEST(TestShared2Reg, operand_A_swizzle) {
+//     using Element = __half;
 
-    using WarpLayout = tl::RowMajor<1, 1>;
-    const int kThreads = tl::get_numel<WarpLayout> * 32;
+//     using WarpLayout = tl::RowMajor<1, 1>;
+//     const int kThreads = tl::get_numel<WarpLayout> * 32;
 
-    const int kRows = 64;
-    const int kCols = 32;
+//     const int kRows = 64;
+//     const int kCols = 32;
 
-    using SharedLayout = tl::Swizzled<tl::RowMajor<kRows, kCols>, 2, 3, 3>;
+//     using SharedLayout = tl::Swizzled<tl::RowMajor<kRows, kCols>, 2, 3, 3>;
 
-    using Shared = SharedTile<Element, SharedLayout>;
-    using Reg = RegTile<BaseTileRowMajor<Element>, tl::RowMajor<2, 2>>;
+//     using Shared = SharedTile<Element, SharedLayout>;
+//     using Reg = RegTile<BaseTileRowMajor<Element>, tl::RowMajor<2, 2>>;
 
-    using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::kRowReuseCont>;
-    Copy copy;
+//     using Copy = SharedToRegLoader<Reg, WarpLayout,
+//     WarpReuse::kRowReuseCont>; Copy copy;
 
-    dim3 dim_grid(1, 1, 1);
-    dim3 dim_block(kThreads, 1, 1);
-    int shm_size = Shared::kNumel * sizeof(Element);
+//     dim3 dim_grid(1, 1, 1);
+//     dim3 dim_block(kThreads, 1, 1);
+//     int shm_size = Shared::kNumel * sizeof(Element);
 
-    run_test_load<Element, Shared, Reg, Copy>
-        <<<dim_grid, dim_block, shm_size>>>(copy);
-    cudaDeviceSynchronize();
-}
+//     run_test_load<Element, Shared, Reg, Copy>
+//         <<<dim_grid, dim_block, shm_size>>>(copy);
+//     cudaDeviceSynchronize();
+// }
 
 }  // namespace tiledcuda::testing

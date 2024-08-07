@@ -5,6 +5,7 @@
  */
 #pragma once
 
+#include "cell/traits/base.hpp"
 #include "types/layout.hpp"
 
 namespace tiledcuda::cell::copy::atom {
@@ -116,6 +117,87 @@ struct StoreMmmaBase {
             }
         }
     }
+};
+
+template <class Global, class Shared, const tl::Layout kType>
+struct GlobalToSharedBaseTileLoader {
+    using DType = Shared::DType;
+
+    DEVICE void copy(const DType* src, DType* dst);
+};
+
+template <class Global, class Shared>
+struct GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kRowMajor> {
+    using DType = Shared::DType;
+
+#ifdef CP_ASYNC_SM80_ENABLED
+    using CopyInst =
+        Copy_Atom<SM80_CP_ASYNC_CACHEGLOBAL<cute::uint128_t>, DType>;
+#else
+    using CopyInst = Copy_Atom<DefaultCopy, DType>;
+#endif
+
+    // The macro kernel breaks down the entire copy operation into iterations
+    // over 16x16 BaseTiles. To transfer a single BaseTile, threads in a warp
+    // are arranged in a 16x2 row-major layout. Each thread uses 128-bit data in
+    // a single access.
+    static constexpr int kThreadsPerRow = 16;
+    static constexpr int kThreadsPerCol = 2;
+
+    static constexpr int kWarpSize = 32;
+
+    static constexpr int kNumPerAccess =
+        traits::TraitsBase<DType>::kNumPerAccess;
+
+    using BaseShape = traits::BaseTileShape<DType>;
+
+    static constexpr int kExecCount =
+        BaseShape::kCols / kNumPerAccess / kThreadsPerCol;
+
+    static_assert(
+        kExecCount == 1,
+        "The current implementation requires that number of elements per "
+        "access should be equal to the number of columns in the BaseTile.");
+
+    using BaseTileGlobalLayout =
+        cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
+                     Stride<Int<Global::kRowStride>, _1>>;
+
+    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
+
+    using TiledCopy = decltype(make_tiled_copy(
+        CopyInst{},
+        cute::Layout<Shape<Int<kThreadsPerRow>, Int<kThreadsPerCol>>,
+                     Stride<Int<kThreadsPerCol>, _1>>{},
+        cute::Layout<Shape<_1, Int<kNumPerAccess>>>{}));
+
+    using DataLayoutPerThread = cute::Layout<Shape<Int<kNumPerAccess>, _1>,
+                                             Stride<_1, Int<kNumPerAccess>>>;
+
+    DEVICE GlobalToSharedBaseTileLoader() : tiled_copy_(TiledCopy{}) {}
+
+    DEVICE void copy(const DType* src, DType* dst) {
+        auto src_tensor = make_tensor(make_gmem_ptr(src), data_layout_);
+        auto dst_tensor = make_tensor(make_smem_ptr(dst), data_layout_);
+
+        cute::copy(tiled_copy_, src_tensor, dst_tensor);
+    }
+
+    /// @brief returns the lane row of the current thread within a warp.
+    DEVICE int lane_row_id() {
+        int lane_id = threadIdx.x % kWarpSize;
+        return lane_id / kThreadsPerCol;
+    }
+
+    /// @brief returns the lane col of the current thread within a warp.
+    DEVICE int lane_col_id() {
+        int lane_id = threadIdx.x % kWarpSize;
+        return lane_id % kThreadsPerCol;
+    }
+
+  private:
+    DataLayoutPerThread data_layout_;
+    TiledCopy tiled_copy_;
 };
 
 }  // namespace tiledcuda::cell::copy::atom
