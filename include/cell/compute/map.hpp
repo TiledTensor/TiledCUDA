@@ -140,6 +140,46 @@ struct BinaryMap<RegTile, tl::Layout::kColMajor> {
     }
 };
 
+template <typename ReduceTile>
+struct UnaryReduceTileMap {
+    using DType = typename ReduceTile::DType;
+
+    static constexpr int kRows = ReduceTile::kRows;
+    static constexpr int kCols = ReduceTile::kCols;
+
+    template <typename Functor>
+    DEVICE void operator()(const ReduceTile& src, ReduceTile& dst,
+                           Functor functor) {
+#pragma unroll
+        for (int i = 0; i < kRows; ++i) {
+#pragma unroll
+            for (int j = 0; j < kCols; ++j) {
+                dst(i, j) = functor(src(i, j));
+            }
+        }
+    }
+};
+
+template <typename ReduceTile>
+struct BinaryReduceTileMap {
+    using DType = typename ReduceTile::DType;
+
+    static constexpr int kRows = ReduceTile::kRows;
+    static constexpr int kCols = ReduceTile::kCols;
+
+    template <typename Functor>
+    DEVICE void operator()(const ReduceTile& lhs, const ReduceTile& rhs,
+                           ReduceTile& dst, Functor functor) {
+#pragma unroll
+        for (int i = 0; i < kRows; ++i) {
+#pragma unroll
+            for (int j = 0; j < kCols; ++j) {
+                dst(i, j) = functor(lhs(i, j), rhs(i, j));
+            }
+        }
+    }
+};
+
 template <typename RegTile, const tl::Layout kLayout>
 struct ReduceMap {
     using DType = typename RegTile::DType::DType;
@@ -168,15 +208,15 @@ struct ReduceMap<RegTile, tl::Layout::kRowMajor> {
             DType bottom_row_sum = reduce_tile(i, 1);
 #pragma unroll
             for (int j = 0; j < kCols; ++j) {
-                tile(i, j)(0, 0) = functor(src(i, j)(0, 0), top_row_sum);
-                tile(i, j)(0, 1) = functor(src(i, j)(0, 1), top_row_sum);
-                tile(i, j)(1, 0) = functor(src(i, j)(1, 0), top_row_sum);
-                tile(i, j)(1, 1) = functor(src(i, j)(1, 1), top_row_sum);
+                src(i, j)(0, 0) = functor(src(i, j)(0, 0), top_row_sum);
+                src(i, j)(0, 1) = functor(src(i, j)(0, 1), top_row_sum);
+                src(i, j)(1, 0) = functor(src(i, j)(1, 0), top_row_sum);
+                src(i, j)(1, 1) = functor(src(i, j)(1, 1), top_row_sum);
 
-                tile(i, j)(0, 2) = functor(src(i, j)(0, 2), bottom_row_sum);
-                tile(i, j)(0, 3) = functor(src(i, j)(0, 3), bottom_row_sum);
-                tile(i, j)(1, 2) = functor(src(i, j)(1, 2), bottom_row_sum);
-                tile(i, j)(1, 3) = functor(src(i, j)(1, 3), bottom_row_sum);
+                src(i, j)(0, 2) = functor(src(i, j)(0, 2), bottom_row_sum);
+                src(i, j)(0, 3) = functor(src(i, j)(0, 3), bottom_row_sum);
+                src(i, j)(1, 2) = functor(src(i, j)(1, 2), bottom_row_sum);
+                src(i, j)(1, 3) = functor(src(i, j)(1, 3), bottom_row_sum);
             }
         }
     }
@@ -209,7 +249,6 @@ struct RegLog {
         row_log(src, dst, Log<DType>{});
     }
 };
-}  // namespace detail
 
 template <typename RegTile, const tl::Layout kLayout>
 struct RegSub {
@@ -226,7 +265,7 @@ struct RegSub {
 };
 
 template <typename RegTile, const tl::Layout kLayout>
-struct RegSubReduce {
+struct RegSubReduceTile {
     using DType = typename RegTile::DType::DType;
 
     static constexpr int kRows = RegTile::kRows;
@@ -235,10 +274,23 @@ struct RegSubReduce {
     template <typename ReduceTile>
     DEVICE void operator()(const RegTile& src, ReduceTile& reduce_tile,
                            RegTile& dst) {
-        detail::ReduceMap<RegTile, kLayout> row_sub_reduce_max;
-        row_sub_reduce_max(src, reduce_tile, dst, Sub<DType>{});
+        detail::ReduceMap<RegTile, kLayout> row_sub_reduce_tile;
+        row_sub_reduce_tile(src, reduce_tile, dst, Sub<DType>{});
     }
 };
-}
+
+template <typename ReduceTile>
+struct ReduceSubReduceTile {
+    using DType = typename ReduceTile::DType;
+
+    static constexpr int kRows = ReduceTile::kRows;
+    static constexpr int kCols = ReduceTile::kCols;
+
+    DEVICE void operator()(const ReduceTile& lhs, const ReduceTile& rhs,
+                           ReduceTile& dst) {
+        detail::BinaryReduceTileMap<ReduceTile> reduce_sub_reduce_tile;
+        reduce_sub_reduce_tile(lhs, rhs, dst, Sub<DType>{});
+    }
+};
 
 }  // namespace tiledcuda::cell::compute
