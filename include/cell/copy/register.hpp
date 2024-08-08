@@ -4,6 +4,7 @@
 
 namespace tiledcuda::cell::copy {
 
+namespace detail {
 template <typename Element>
 struct DataCopy {
     DEVICE void operator()(const Element& src, Element& dst) { dst = src; }
@@ -27,10 +28,13 @@ struct RegCopy {
         }
     }
 };
+}  // namespace detail
 
 template <typename RegTile>
-using BaseTileCopy = RegCopy<RegTile, DataCopy<typename RegTile::DType>>;
+using BaseTileCopy =
+    detail::RegCopy<RegTile, detail::DataCopy<typename RegTile::DType>>;
 template <typename RegTile>
-using RegTileCopy = RegCopy<RegTile, BaseTileCopy<typename RegTile::DType>>;
+using RegTileCopy =
+    detail::RegCopy<RegTile, BaseTileCopy<typename RegTile::DType>>;
 
 }  // namespace tiledcuda::cell::copy
