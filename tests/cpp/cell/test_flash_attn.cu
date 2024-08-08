@@ -27,27 +27,27 @@ __global__ void flash_attn_reg_reduce(Element* src) {
 
     SrcLoadTile src_load_tile(src);
     DstLoadTile attn_block;
+    DstReduceTile last_max_vec;
     DstReduceTile max_vec;
     DstBroadcastTile max_broadcast_tile;
 
     // Load data from global memory to register file
     copy::GlobalToRegLoader<DstLoadTile, WarpLayout, kMode> loader;
     loader(src_load_tile, attn_block);
-    __syncthreads();
+
+    // Copy `max_vec` into `last_max_vec`
+    copy::BaseTileCopy<DstReduceTile> copy_max_reg;
+    copy_max_reg(max_vec, last_max_vec);
 
     // Execute reduce operation.
     compute::MaxReduce<SrcReduceTile, kLayout> row_max;
     // accumulate onto the max_vec
     row_max(attn_block, max_vec);
 
-    __syncthreads();
-
     compute::Broadcast<SrcBroadcastTile, DstBroadcastTile, kLayout>
         broadcast_max;
 
     broadcast_max(max_vec, max_broadcast_tile);
-
-    __syncthreads();
 
     if (thread(0)) {
         printf("Thread 0:\n");
@@ -60,8 +60,6 @@ __global__ void flash_attn_reg_reduce(Element* src) {
     compute::RegTileSub<DstBroadcastTile> sub_row_max;
     sub_row_max(attn_block, max_broadcast_tile, attn_block);
 
-    __syncthreads();
-
     if (thread(0)) {
         printf("Thread 0:\n");
         attn_block.dump_value();
@@ -70,8 +68,6 @@ __global__ void flash_attn_reg_reduce(Element* src) {
     // exponentiate the block in-place.
     compute::RegTileExp<DstBroadcastTile> exp_attn;
     exp_attn(attn_block, attn_block);
-
-    __syncthreads();
 
     if (thread(0)) {
         printf("Thread 0:\n");
