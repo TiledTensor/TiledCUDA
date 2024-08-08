@@ -24,7 +24,8 @@ struct ElementWise {
         for (int i = 0; i < kRows; ++i) {
 #pragma unroll
             for (int j = 0; j < kCols; ++j) {
-                dst(i, j) = f(src(i, j));
+                // dst(i, j) = f(src(i, j));
+                f(src(i, j), dst(i, j));
             }
         }
     }
@@ -44,7 +45,8 @@ struct Binary {
         for (int i = 0; i < kRows; ++i) {
 #pragma unroll
             for (int j = 0; j < kCols; ++j) {
-                dst(i, j) = f(lhs(i, j), rhs(i, j));
+                // dst(i, j) = f(lhs(i, j), rhs(i, j));
+                f(lhs(i, j), rhs(i, j), dst(i, j));
             }
         }
     }
@@ -57,6 +59,12 @@ using BaseTileExp = detail::ElementWise<RegTile, Exp<typename RegTile::DType>>;
 template <typename RegTile>
 using RegTileExp =
     detail::ElementWise<RegTile, BaseTileExp<typename RegTile::DType>>;
+
+template <typename RegTile>
+using BaseTileLog = detail::ElementWise<RegTile, Log<typename RegTile::DType>>;
+template <typename RegTile>
+using RegTileLog =
+    detail::ElementWise<RegTile, BaseTileLog<typename RegTile::DType>>;
 
 template <typename RegTile>
 using BaseTileAdd = detail::Binary<RegTile, Add<typename RegTile::DType>>;
