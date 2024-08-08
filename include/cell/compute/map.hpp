@@ -18,7 +18,8 @@ struct ElementWise {
     static constexpr int kRows = RegTile::kRows;
     static constexpr int kCols = RegTile::kCols;
 
-    DEVICE void operator(const RegTile& src, RegTile& dst, Functor f) {
+    DEVICE void operator()(const RegTile& src, RegTile& dst) {
+        Functor f;
 #pragma unroll
         for (int i = 0; i < kRows; ++i) {
 #pragma unroll
@@ -36,8 +37,9 @@ struct Binary {
     static constexpr int kRows = RegTile::kRows;
     static constexpr int kCols = RegTile::kCols;
 
-    DEVICE void operator(const RegTile& lhs, const RegTile& rhs, RegTile& dst,
-                         Functor f) {
+    DEVICE void operator()(const RegTile& lhs, const RegTile& rhs,
+                           RegTile& dst) {
+        Functor f;
 #pragma unroll
         for (int i = 0; i < kRows; ++i) {
 #pragma unroll
