@@ -106,28 +106,4 @@ static HOST std::ostream& operator<<(std::ostream& out,
     return out;
 }
 
-// template <typename Element, typename Functor>
-// DEVICE void element_wise(BaseTileRowMajor<Element>& src,
-//                          BaseTileRowMajor<Element>& dst, Functor f) {
-// #pragma unroll
-//     for (int i = 0; i < BaseTileRowMajor<Element>::kRows; ++i) {
-// #pragma unroll
-//         for (int j = 0; j < BaseTileRowMajor<Element>::kCols; ++j) {
-//             dst(i, j) = f(src(i, j));
-//         }
-//     }
-// }
-
-// template <typename Element, typename Functor>
-// DEVICE void element_wise(BaseTileColMajor<Element>& src,
-//                          BaseTileColMajor<Element>& dst, Functor f) {
-// #pragma unroll
-//     for (int j = 0; j < BaseTileColMajor<Element>::kCols; ++j) {
-// #pragma unroll
-//         for (int i = 0; i < BaseTileColMajor<Element>::kRows; ++i) {
-//             dst(i, j) = f(src(i, j));
-//         }
-//     }
-// }
-
 }  // namespace tiledcuda::cell
