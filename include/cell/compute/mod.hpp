@@ -1,6 +1,6 @@
 #pragma once
 
-// #include "cell/compute/broadcast.hpp"
+#include "cell/compute/broadcast.hpp"
 #include "cell/compute/elementwise.hpp"
 #include "cell/compute/gemm.hpp"
 #include "cell/compute/map.hpp"
