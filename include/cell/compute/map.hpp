@@ -76,4 +76,16 @@ template <typename RegTile>
 using RegTileSub =
     detail::Binary<RegTile, BaseTileSub<typename RegTile::DType>>;
 
+template <typename RegTile>
+using BaseTileMul = detail::Binary<RegTile, Mul<typename RegTile::DType>>;
+template <typename RegTile>
+using RegTileMul =
+    detail::Binary<RegTile, BaseTileMul<typename RegTile::DType>>;
+
+template <typename RegTile>
+using BaseTileDiv = detail::Binary<RegTile, Div<typename RegTile::DType>>;
+template <typename RegTile>
+using RegTileDiv =
+    detail::Binary<RegTile, BaseTileDiv<typename RegTile::DType>>;
+
 }  // namespace tiledcuda::cell::compute

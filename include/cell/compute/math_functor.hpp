@@ -35,6 +35,16 @@ struct Mul {
 };
 
 template <typename Element>
+struct Div {
+    DEVICE Element operator()(Element a, Element b) const { return a / b; }
+
+    DEVICE void operator()(const Element& lhs, const Element& rhs,
+                           Element& dst) {
+        dst = lhs / rhs;
+    }
+};
+
+template <typename Element>
 struct Max {
     DEVICE Element operator()(Element a, Element b) const {
         return a > b ? a : b;
