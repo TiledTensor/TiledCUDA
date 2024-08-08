@@ -7,8 +7,6 @@
 namespace tiledcuda::cell::compute {
 namespace tl = tile_layout;
 
-namespace detail {
-
 template <typename SrcTile, typename DstTile, const tl::Layout kLayout>
 struct Broadcast {
     using DType = typename DstTile::DType::DType;
@@ -75,5 +73,4 @@ struct Broadcast<SrcTile, DstTile, tl::Layout::kColMajor> {
     }
 };
 
-}  // namespace detail
 }  // namespace tiledcuda::cell::compute
