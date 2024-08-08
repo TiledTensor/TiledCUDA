@@ -44,6 +44,9 @@ __global__ void flash_attn_reg_reduce(Element* src) {
     // Copy `max_vec` into `last_max_vec`
     copy::BaseTileCopy<DstReduceTile> copy_max_reg;
     copy_max_reg(max_vec, last_max_vec);
+    // Copy `norm_vec` into `last_norm_vec`
+    copy::BaseTileCopy<DstReduceTile> copy_norm_reg;
+    copy_norm_reg(norm_vec, last_norm_vec);
 
     // Execute reduce operation.
     compute::MaxReduce<SrcReduceTile, kLayout> row_max;
@@ -85,23 +88,28 @@ __global__ void flash_attn_reg_reduce(Element* src) {
     sub_new_max(last_max_vec, max_vec, last_max_vec);
 
     // exponentiate this vector -- this is what we need to normalize by.
-    compute::BaseTilexp<DstReduceTile> exp_max;
+    compute::BaseTileExp<DstReduceTile> exp_max;
     exp_max(last_max_vec, last_max_vec);
 
     // and the norm vec is now normalized.
     compute::BaseTileMul<DstReduceTile> mul_norm;
     mul_norm(last_max_vec, norm_vec, norm_vec);
 
-    // Broadcast the norm vector.
+    // Accumulate the new attention block onto the now-rescaled norm-vec.
+    // Reduce Sum + Add
+    DstReduceTile sum_vec;
+    compute::SumReduce<SrcReduceTile, kLayout> row_sum;
+    row_sum(attn_block, sum_vec);
+    compute::BaseTileAdd<DstReduceTile> add_sum;
+    add_sum(sum_vec, norm_vec, norm_vec);
+
+    // Now the attention block is correctly normalized.
+    // Broadcast + Divide
     compute::Broadcast<SrcBroadcastTile, DstBroadcastTile, kLayout>
         broadcast_norm;
     broadcast_norm(norm_vec, norm_broadcast_tile);
-
-    // Accumulate the new attention block onto the now-rescaled norm-vec.
-    // TODO
-
-    // Now the attention block is correctly normalized.
-    // TODO
+    compute::RegTileDiv<DstBroadcastTile> div_norm;
+    div_norm(attn_block, norm_broadcast_tile, attn_block);
 
     // Normalize the previous norm vec accorfing to the new max.
     compute::BaseTileMul<DstReduceTile> mul_norm_new;
