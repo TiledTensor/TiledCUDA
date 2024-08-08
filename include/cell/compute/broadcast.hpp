@@ -47,5 +47,33 @@ struct Broadcast<SrcTile, DstTile, tl::Layout::kRowMajor> {
     }
 };
 
+template <typename SrcTile, typename DstTile>
+struct Broadcast<SrcTile, DstTile, tl::Layout::kColMajor> {
+    using DType = typename DstTile::DType::DType;
+
+    static constexpr int kRows = DstTile::kRows;
+    static constexpr int kCols = DstTile::kCols;
+
+    DEVICE void operator()(const SrcTile& src, DstTile& dst) {
+#pragma unroll
+        for (int j = 0; j < kCols; ++j) {
+            DType top_col = src(0, j);
+            DType bottom_col = src(1, j);
+#pragma unroll
+            for (int i = 0; i < kRows; ++i) {
+                dst(i, j)(0, 0) = top_col;
+                dst(i, j)(1, 0) = top_col;
+                dst(i, j)(0, 1) = top_col;
+                dst(i, j)(1, 1) = top_col;
+
+                dst(i, j)(2, 0) = bottom_col;
+                dst(i, j)(3, 0) = bottom_col;
+                dst(i, j)(2, 1) = bottom_col;
+                dst(i, j)(3, 1) = bottom_col;
+            }
+        }
+    }
+};
+
 }  // namespace detail
 }  // namespace tiledcuda::cell::compute
