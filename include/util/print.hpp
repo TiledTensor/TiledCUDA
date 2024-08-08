@@ -7,11 +7,11 @@ namespace tiledcuda::cell {
 namespace tl = tile_layout;
 
 /// @brief Print a tile of single-precision floating point numbers. NOTE: when
-// use print in the device function, do add (if(thread0())) to avoid printing
-// multiple times by multiple threads. usage:
-// if(thread0()) {
-//   print_tile(data, layout);
-// }
+/// use print in the device function, do add (if(thread0())) to avoid printing
+/// multiple times by multiple threads. usage:
+/// if(thread0()) {
+///   print_tile(data, layout);
+/// }
 template <typename Layout>
 DEVICE void print_tile(const float* data, const Layout& layout) {
     for (int i = 0; i < tl::num_rows<Layout>; ++i) {

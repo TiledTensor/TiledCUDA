@@ -33,39 +33,31 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
     using Reg = Reg_;
     using BaseShape = BaseTileShape<DType>;
 
-    // strides to iterate over each 16x16 `BaseTile`.
-    static constexpr int kTileRstride = BaseShape::kRows * Shared::kRowStride;
-    static constexpr int kTileCstride = BaseShape::kCols;
-
-    // row stride and col stride for a thread in a warp
-    static constexpr int kStride = LoadMat::kNumPerAccess;
-    static constexpr int kLaneRstride = Shared::kRowStride;
-    static constexpr int kLaneCstride = kStride;
-
     static constexpr int kRowExec = kRowExec_;
     static constexpr int kColExec = kColExec_;
+
+    DEVICE SharedToRegLoaderImpl() : layout_(typename Shared::Layout{}) {}
 
     DEVICE void operator()(const DType* src, Reg& dst) {
         int lane_row = this->lane_row_id();
         int lane_col = this->lane_col_id();
 
-        const DType* data;
+        int offset = 0;
 #pragma unroll
         for (int i = 0; i < kRowExec; ++i) {
 #pragma unroll
             for (int j = 0; j < kColExec; ++j) {
-                // 2. advance pointer to the 16x16 `BaseTile` indexed by (i, j).
-                data = src + (i * kTileRstride + j * kTileCstride);
+                offset = layout_(
+                    i * BaseShape::kRows + lane_row,
+                    j * BaseShape::kCols + lane_col * LoadMat::kNumPerAccess);
 
-                // 3. advance the pointer to data accessed by the current thread
-                // inside a 16x16 `BaseTile`.
-                data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
-
-                // issue the hardware-backed memory access instruction.
-                this->ldmatrix(data, dst(i, j).mutable_data());
+                this->ldmatrix(src + offset, dst(i, j).mutable_data());
             }
         }
     }
+
+  private:
+    typename Shared::Layout layout_;
 };
 
 /// @brief partial specialization for column-major shared memory tile.
@@ -79,17 +71,10 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
     using Reg = Reg_;
     using BaseShape = BaseTileShape<DType>;
 
-    // strides to iterate over each 16x128-bits `BaseTile`.
-    const int kTileRstride = BaseShape::kRows;
-    const int kTileCstride = BaseShape::kCols * Shared::kColStride;
-
-    // row stride and col stride for a thread in a warp
-    static constexpr int kStride = LoadMat::kNumPerAccess;
-    const int kLaneRstride = kStride;
-    const int kLaneCstride = Shared::kColStride;
-
     static constexpr int kRowExec = kRowExec_;
     static constexpr int kColExec = kColExec_;
+
+    DEVICE SharedToRegLoaderImpl() : layout_(typename Shared::Layout{}) {}
 
     DEVICE void operator()(const DType* src, Reg& dst) {
         // transpose the lane position if the shared memory is in column-major.
@@ -98,24 +83,21 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
         int lane_row = this->lane_col_id();
         int lane_col = this->lane_row_id();
 
-        const DType* data;
+        int offset = 0;
 #pragma unroll
         for (int i = 0; i < kColExec; ++i) {
 #pragma unroll
             for (int j = 0; j < kRowExec; ++j) {
-                // 2. advance pointer to the 16x16 `BaseTile` indexed by
-                // (i, j).
-                data = src + (j * kTileRstride + i * kTileCstride);
-
-                // 3. advance the pointer to data accessed by the current
-                // thread inside a 16x128-bits `BaseTile`.
-                data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
-
-                // issue the hardware-backed memory access instruction
-                this->ldmatrix(data, dst(j, i).mutable_data());
+                offset = layout_(
+                    j * BaseShape::kRows + lane_row * LoadMat::kNumPerAccess,
+                    i * BaseShape::kCols + lane_col);
+                this->ldmatrix(src + offset, dst(j, i).mutable_data());
             }
         }
     }
+
+  private:
+    typename Shared::Layout layout_;
 };
 
 template <typename Shared, typename Reg_, const int kRowExec_,

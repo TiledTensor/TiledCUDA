@@ -39,8 +39,13 @@ TEST(TestLayout, test_layout) {
 TEST(TestLayout, test_swizzled_layout) {
     const int kRows = 8;
     const int kCols = 32;
+
     using RowMajor = tl::RowMajor<kRows, kCols>;
     using SwizzledRowMajor = tl::Swizzled<RowMajor, 2, 3, 3>;
+
+    auto type = tl::layout_type<SwizzledRowMajor>;
+    auto layout_name = layout_type_to_str(type);
+    EXPECT_EQ(layout_name, "RowMajor");
 
     auto layout1 = RowMajor{};
     auto layout2 = SwizzledRowMajor{};
