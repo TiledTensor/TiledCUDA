@@ -75,9 +75,25 @@ void run_row_major_reg_broadcast() {
         <<<1, 32 * kWarpSize>>>(thrust::raw_pointer_cast(d_src.data()));
 }
 
-TEST(TestRegBroadcast, row_major_reg_broadcast) {
+TEST(TestRegBroadcast, row_major_reg_broadcast_0) {
     const int kHeight = 1;
     const int kWidth = 1;
+    using Element = float;
+    using WarpLayout = tl::RowMajor<1, 1>;
+    using RegLayout = tl::RowMajor<kHeight, kWidth>;
+
+    const copy::WarpReuse kMode = copy::WarpReuse::kCont;
+
+    using GlobalLayout = tl::RowMajor<16 * kHeight, 16 * kWidth>;
+
+    run_row_major_reg_broadcast<
+        Element, RegLayout, GlobalLayout, BaseTileRowMajor<Element>, WarpLayout,
+        tl::Layout::kRowMajor, kMode, kHeight, kWidth>();
+}
+
+TEST(TestRegBroadcast, row_major_reg_broadcast_1) {
+    const int kHeight = 2;
+    const int kWidth = 2;
     using Element = float;
     using WarpLayout = tl::RowMajor<1, 1>;
     using RegLayout = tl::RowMajor<kHeight, kWidth>;
