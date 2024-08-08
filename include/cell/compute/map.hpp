@@ -24,7 +24,6 @@ struct ElementWise {
         for (int i = 0; i < kRows; ++i) {
 #pragma unroll
             for (int j = 0; j < kCols; ++j) {
-                // dst(i, j) = f(src(i, j));
                 f(src(i, j), dst(i, j));
             }
         }
@@ -45,7 +44,6 @@ struct Binary {
         for (int i = 0; i < kRows; ++i) {
 #pragma unroll
             for (int j = 0; j < kCols; ++j) {
-                // dst(i, j) = f(lhs(i, j), rhs(i, j));
                 f(lhs(i, j), rhs(i, j), dst(i, j));
             }
         }
