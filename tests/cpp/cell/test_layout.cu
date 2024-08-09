@@ -1,11 +1,14 @@
+#include "cell/copy/global_to_shared.hpp"
 #include "common/test_utils.hpp"
 #include "types/mod.hpp"
 
-#include <sstream>
+#include <cute/layout.hpp>
+#include <thrust/host_vector.h>
 
 namespace tiledcuda::testing {
 
 using namespace cell;
+using namespace cute;
 namespace tl = tile_layout;
 
 TEST(TestLayout, test_layout) {
@@ -37,32 +40,41 @@ TEST(TestLayout, test_layout) {
 }
 
 TEST(TestLayout, test_swizzled_layout) {
-    const int kRows = 8;
+    using Element = __half;
+
+    const int kRows = 16;
     const int kCols = 32;
-    using RowMajor = tl::RowMajor<kRows, kCols>;
-    using SwizzledRowMajor = tl::Swizzled<RowMajor, 2, 3, 3>;
 
-    auto layout1 = RowMajor{};
-    auto layout2 = SwizzledRowMajor{};
-
-    std::stringstream ss;
-
-    ss << "original:" << std::endl;
-    for (int i = 0; i < kRows; ++i) {
-        for (int j = 0; j < kCols; ++j) {
-            ss << layout1(i, j) << ", ";
-        }
-        ss << std::endl;
+    thrust::host_vector<Element> data(kRows * kCols);
+    for (int i = 0; i < data.size(); ++i) {
+        data[i] = static_cast<Element>(i % 2048);
     }
 
-    ss << std::endl << "swizzled:" << std::endl;
-    for (int i = 0; i < kRows; ++i) {
-        for (int j = 0; j < kCols; ++j) {
-            ss << layout2(i, j) << ", ";
+    using RowMajor = tl::RowMajor<kRows, 16, kCols>;
+    RowMajor layout1;
+
+    // only siwizzle the first [16x16] half of the [kRows, kCols] matrix
+    using LayoutAtom = cute::Layout<Shape<_16, _16>, Stride<Int<kCols>, _1>>;
+    using Swizzled = tl::SwizzledRowMajor<16 /*16bits*/, LayoutAtom>;
+    Swizzled layout2;
+
+    Element* ptr = thrust::raw_pointer_cast(data.data());
+
+    printf("\nnon-swizzled:\n");
+    for (int i = 0; i < RowMajor::kRows; ++i) {
+        for (int j = 0; j < RowMajor::kCols; ++j) {
+            printf("%.0f, ", __half2float(ptr[layout1(i, j)]));
         }
-        ss << std::endl;
+        printf("\n");
     }
-    LOG(INFO) << ss.str();
+
+    printf("\nswizzled:\n");
+    for (int i = 0; i < kRows; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            printf("%.0f, ", __half2float(ptr[layout2(i, j)]));
+        }
+        printf("\n");
+    }
 }
 
 }  // namespace tiledcuda::testing

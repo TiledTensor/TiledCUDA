@@ -7,7 +7,7 @@ namespace tiledcuda::cell {
 
 namespace tl = tile_layout;
 
-template <typename Element_, typename Layout_>
+template <typename Element_, typename Layout_, const bool kSwizzled_ = false>
 class SharedTile {
   public:
     using DType = Element_;
@@ -22,6 +22,7 @@ class SharedTile {
     static constexpr int kColStride = tl::col_stride<Layout>;
 
     static constexpr tl::Layout kType = tl::layout_type<Layout>;
+    static constexpr bool kSwizzled = kSwizzled_;
 
     DEVICE SharedTile(DType* data) : data_(data), layout_(Layout{}) {}
 

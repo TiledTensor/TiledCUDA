@@ -52,22 +52,22 @@ struct CopyBase {
     // @brief This function returns the offset to the start position of the
     //        current warp in the shared memory according to the warp reuse
     //        mode.
-    template <typename Shared>
+    template <typename Tile>
     DEVICE int get_warp_offset() {
         // Tile shape for a single warp
         constexpr static int kWarpShapeRow =
-            Shared::kRows / tl::num_rows<WarpLayout>;
+            Tile::kRows / tl::num_rows<WarpLayout>;
         constexpr static int kWarpShapeCol =
-            Shared::kCols / tl::num_cols<WarpLayout>;
+            Tile::kCols / tl::num_cols<WarpLayout>;
 
         constexpr static int kWarpRstride =
-            Shared::kType == tl::Layout::kRowMajor
-                ? Shared::kRowStride * kWarpShapeRow
+            Tile::kType == tl::Layout::kRowMajor
+                ? Tile::kRowStride * kWarpShapeRow
                 : kWarpShapeRow;
         constexpr static int kWarpCstride =
-            Shared::kType == tl::Layout::kRowMajor
+            Tile::kType == tl::Layout::kRowMajor
                 ? kWarpShapeCol
-                : Shared::kColStride * kWarpShapeCol;
+                : Tile::kColStride * kWarpShapeCol;
 
         return detail::warp_offset_impl<kMode>(warp_row_id(), warp_col_id(),
                                                kWarpRstride, kWarpCstride);

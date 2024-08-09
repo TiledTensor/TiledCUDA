@@ -101,10 +101,11 @@ TEST(TestSwizzledLayout, test1) {
     using Global = GlobalTile<Element, tl::RowMajor<kRows, kCols>>;
 
     using SharedLayout = tl::RowMajor<kRows, kCols>;
-    using SwizzledSharedLayout = tl::Swizzled<SharedLayout, 2, 3, 3>;
 
     using Shared1 = SharedTile<Element, SharedLayout>;
-    using Shared2 = SharedTile<Element, SwizzledSharedLayout>;
+
+    const bool kUseSwizzledLayout = true;
+    using Shared2 = SharedTile<Element, SharedLayout, kUseSwizzledLayout>;
 
     using Reg = RegTile<BaseTileRowMajor<Element>, tl::RowMajor<kSc0, kSc1>>;
 
