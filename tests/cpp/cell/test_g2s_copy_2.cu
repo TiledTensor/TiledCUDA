@@ -20,7 +20,6 @@ __global__ void copy_g2s(const Element* src_ptr, Element* dst_ptr,
 
     SrcTile src(src_ptr);  // global memory tile
     DstTile inter(buf);    // shared memory tile
-
     SrcTile dst(dst_ptr);  // global memory tile
 
     loader(src, inter);
