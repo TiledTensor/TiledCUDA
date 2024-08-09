@@ -13,7 +13,8 @@ using namespace cell;
 namespace {
 template <typename Element, typename SrcTile, typename DstTile, typename Loader,
           typename Storer>
-__global__ void copy_g2s(const Element* src_ptr, Element* dst_ptr) {
+__global__ void copy_g2s(const Element* src_ptr, Element* dst_ptr,
+                         Loader& loader, Storer& storer) {
     extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
     auto* buf = reinterpret_cast<Element*>(buf_);
 
@@ -22,12 +23,10 @@ __global__ void copy_g2s(const Element* src_ptr, Element* dst_ptr) {
 
     SrcTile dst(dst_ptr);  // global memory tile
 
-    Loader loader;
     loader(src, inter);
     __copy_async();
     __syncthreads();
 
-    Storer storer;
     storer(inter, dst);
     __copy_async();
     __syncthreads();
@@ -54,7 +53,10 @@ void run_test() {
         SharedTile<Element, tl::RowMajor<kRows, kCols>, kUseSwizzledLayout>;
 
     using Loader = copy::GlobalToSharedLoader<DstTile, WarpLayout>;
+    Loader loader;
+
     using Storer = copy::SharedToGlobalStorer<DstTile, WarpLayout>;
+    Storer storer;
 
     dim3 dim_grid(1, 1);
     dim3 dim_block(kThreads);
@@ -62,7 +64,7 @@ void run_test() {
     copy_g2s<Element, SrcTile, DstTile, Loader, Storer>
         <<<dim_grid, dim_block, kRows * kCols * sizeof(Element)>>>(
             thrust::raw_pointer_cast(d_A.data()),
-            thrust::raw_pointer_cast(d_B.data()));
+            thrust::raw_pointer_cast(d_B.data()), loader, storer);
     cudaDeviceSynchronize();
 
     // check correctness

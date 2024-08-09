@@ -11,7 +11,6 @@ using namespace cell;
 using namespace cute;
 namespace tl = tile_layout;
 
-/*
 TEST(TestLayout, test_layout) {
     using Element = cutlass::half_t;
 
@@ -39,7 +38,6 @@ TEST(TestLayout, test_layout) {
     auto layout_name2 = layout_type_to_str(type2);
     EXPECT_EQ(layout_name2, "ColMajor");
 }
-*/
 
 TEST(TestLayout, test_swizzled_layout) {
     using Element = __half;

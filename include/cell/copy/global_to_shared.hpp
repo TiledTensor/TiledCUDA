@@ -64,7 +64,9 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
         int dst_lane_offset = dst_layout_(lane_row, lane_col);
 
         int src_offset = 0, dst_offset = 0;
+#pragma unroll
         for (int i = 0; i < kRowExec; ++i) {
+#pragma unroll
             for (int j = 0; j < kColExec; ++j) {
                 src_offset = i * kSrcRstride + j * kCstride + src_lane_offset;
                 dst_offset = i * kDstRstride + j * kCstride + src_lane_offset;

@@ -130,13 +130,6 @@ template <class Global, class Shared>
 struct GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kRowMajor> {
     using DType = Shared::DType;
 
-#ifdef CP_ASYNC_SM80_ENABLED
-    using CopyInst =
-        Copy_Atom<SM80_CP_ASYNC_CACHEGLOBAL<cute::uint128_t>, DType>;
-#else
-    using CopyInst = Copy_Atom<DefaultCopy, DType>;
-#endif
-
     // The macro kernel breaks down the entire copy operation into iterations
     // over 16x16 BaseTiles. To transfer a single BaseTile, threads in a warp
     // are arranged in a 16x2 row-major layout. Each thread uses 128-bit data in
@@ -165,6 +158,12 @@ struct GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kRowMajor> {
 
     using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
 
+#ifdef CP_ASYNC_SM80_ENABLED
+    using CopyInst =
+        Copy_Atom<SM80_CP_ASYNC_CACHEGLOBAL<cute::uint128_t>, DType>;
+#else
+    using CopyInst = Copy_Atom<DefaultCopy, DType>;
+#endif
     using TiledCopy = decltype(make_tiled_copy(
         CopyInst{},
         cute::Layout<Shape<Int<kThreadsPerRow>, Int<kThreadsPerCol>>,
