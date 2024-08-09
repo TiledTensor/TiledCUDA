@@ -69,7 +69,7 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
 #pragma unroll
             for (int j = 0; j < kColExec; ++j) {
                 src_offset = i * kSrcRstride + j * kCstride + src_lane_offset;
-                dst_offset = i * kDstRstride + j * kCstride + src_lane_offset;
+                dst_offset = i * kDstRstride + j * kCstride + dst_lane_offset;
 
                 this->copy(src + src_offset, dst + dst_offset);
             }
@@ -139,7 +139,7 @@ struct SharedToGlobalStorerImpl<Shared_, Global_, kRowExec_, kColExec_,
         for (int i = 0; i < kRowExec; ++i) {
             for (int j = 0; j < kColExec; ++j) {
                 src_offset = i * kSrcRstride + j * kCstride + src_lane_offset;
-                dst_offset = i * kDstRstride + j * kCstride + src_lane_offset;
+                dst_offset = i * kDstRstride + j * kCstride + dst_lane_offset;
 
                 this->copy(src + src_offset, dst + dst_offset);
             }
