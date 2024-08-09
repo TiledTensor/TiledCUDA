@@ -12,7 +12,6 @@ using namespace cell;
 using namespace copy;
 namespace tl = tile_layout;
 
-/*
 namespace {
 template <typename Element>
 __device__ void init_value(Element* data, int numel) {
@@ -102,10 +101,11 @@ TEST(TestSwizzledLayout, test1) {
     using Global = GlobalTile<Element, tl::RowMajor<kRows, kCols>>;
 
     using SharedLayout = tl::RowMajor<kRows, kCols>;
-    using SwizzledSharedLayout = tl::Swizzled<SharedLayout, 2, 3, 3>;
 
     using Shared1 = SharedTile<Element, SharedLayout>;
-    using Shared2 = SharedTile<Element, SwizzledSharedLayout>;
+
+    const bool kUseSwizzledLayout = true;
+    using Shared2 = SharedTile<Element, SharedLayout, kUseSwizzledLayout>;
 
     using Reg = RegTile<BaseTileRowMajor<Element>, tl::RowMajor<kSc0, kSc1>>;
 
@@ -125,6 +125,5 @@ TEST(TestSwizzledLayout, test1) {
             thrust::raw_pointer_cast(d_A.data()), copy1, copy2, copy3);
     cudaDeviceSynchronize();
 }
-*/
 
 }  // namespace tiledcuda::testing

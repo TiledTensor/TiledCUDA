@@ -123,9 +123,6 @@ template <typename Shared>
 struct SharedLayoutWrapper {
     static constexpr int kSizeOfTypeBits = int(sizeof(Shared::DType) * 8);
 
-    // static constexpr kSwizzled = Shared::kSwizzled;
-    // static constexpr Layout kType = Shared::kLayout;
-
     using Layout =
         detail::SharedLayoutWrapperImpl<Shared, Shared::kSwizzled,
                                         Shared::kType, kSizeOfTypeBits>::Layout;

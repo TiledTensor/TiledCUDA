@@ -20,10 +20,6 @@ __global__ void copy_g2s(const Element* src_ptr, Element* dst_ptr) {
     SrcTile src(src_ptr);  // global memory tile
     DstTile inter(buf);    // shared memory tile
 
-    // if (thread(0)) {
-    //     inter.dump_value();
-    // }
-
     SrcTile dst(dst_ptr);  // global memory tile
 
     Loader loader;
@@ -33,6 +29,8 @@ __global__ void copy_g2s(const Element* src_ptr, Element* dst_ptr) {
 
     Storer storer;
     storer(inter, dst);
+    __copy_async();
+    __syncthreads();
 }
 
 template <typename WarpLayout, const int kRows, const int kCols>
@@ -71,19 +69,16 @@ void run_test() {
     thrust::host_vector<Element> h_B(numel);
     h_B = d_B;
 
-    /*
     assert_equal(
-            reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_A.data())),
-            reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_B.data())),
-       numel);
-    */
+        reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_A.data())),
+        reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_B.data())), numel);
 }
 }  // namespace
 
 TEST(GlobalToSharedCopy, test_non_swizzled_layout) {
     run_test<tl::RowMajor<1, 1>, 16, 16>();
-    // run_test<tl::RowMajor<1, 1>, 32, 32>();
-    // run_test<tl::RowMajor<2, 2>, 64, 64>();
+    run_test<tl::RowMajor<1, 1>, 32, 32>();
+    run_test<tl::RowMajor<2, 2>, 64, 64>();
 }
 
 }  // namespace tiledcuda::testing
