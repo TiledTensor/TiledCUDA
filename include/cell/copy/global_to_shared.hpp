@@ -42,19 +42,17 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
 
     using LoadBase =
         GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kRowMajor>;
-
     using BaseShape = traits::BaseTileShape<DType>;
 
     static constexpr int kRowExec = kRowExec_;
     static constexpr int kColExec = kColExec_;
 
+    static constexpr int kNumPerAccess = LoadBase::kNumPerAccess;
+
     // strides to iterate over each 16x16 `BaseTile` in the shared memory
     static constexpr int kSrcRstride = BaseShape::kRows * Global::kCols;
     static constexpr int kDstRstride = BaseShape::kRows * Shared::kCols;
-
     static constexpr int kCstride = BaseShape::kCols;
-
-    static constexpr int kNumPerAccess = LoadBase::kNumPerAccess;
 
     DEVICE void operator()(const DType* src, DType* dst) {
         int lane_row = this->lane_row_id();

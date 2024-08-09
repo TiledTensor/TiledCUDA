@@ -19,6 +19,8 @@ DEVICE void print_tile(const float* data, const Layout& layout) {
             printf("%.1f, ", data[layout(i, j)]);
         }
         printf("\n");
+
+        if (i && (i + 1) % 16 == 0) printf("\n");
     }
 }
 
@@ -32,6 +34,8 @@ DEVICE void print_tile(const cutlass::half_t* data, const Layout& layout) {
             printf("%.1f, ", __half2float(data_[layout(i, j)]));
         }
         printf("\n");
+
+        if (i && (i + 1) % 16 == 0) printf("\n");
     }
 }
 
@@ -43,6 +47,8 @@ DEVICE void print_tile(const __half* data, const Layout& layout) {
             printf("%.1f, ", __half2float(data[layout(i, j)]));
         }
         printf("\n");
+
+        if (i && (i + 1) % 16 == 0) printf("\n");
     }
 }
 

@@ -31,11 +31,11 @@ __global__ void copy_g2s(const Element* src_ptr, Element* dst_ptr,
     __syncthreads();
 }
 
-template <typename WarpLayout, const int kRows, const int kCols>
+template <typename Element, typename WarpLayout, const int kRows,
+          const int kCols>
 void run_test() {
     static const int kThreads = tl::get_numel<WarpLayout> * 32;
 
-    using Element = __half;
     int numel = kRows * kCols;
     thrust::host_vector<Element> h_A(numel);
     for (int i = 0; i < h_A.size(); ++i)
@@ -77,9 +77,9 @@ void run_test() {
 }  // namespace
 
 TEST(GlobalToSharedCopy, test_non_swizzled_layout) {
-    run_test<tl::RowMajor<1, 1>, 16, 16>();
-    run_test<tl::RowMajor<1, 1>, 32, 32>();
-    run_test<tl::RowMajor<2, 2>, 64, 64>();
+    run_test<__half, tl::RowMajor<1, 1>, 16, 16>();
+    run_test<__half, tl::RowMajor<1, 1>, 32, 32>();
+    run_test<__half, tl::RowMajor<2, 2>, 64, 64>();
 }
 
 }  // namespace tiledcuda::testing

@@ -4,7 +4,6 @@
 #include "util/print.hpp"
 
 namespace tiledcuda::cell {
-
 namespace tl = tile_layout;
 
 template <typename Element_, typename Layout_, const bool kSwizzled_ = false>
