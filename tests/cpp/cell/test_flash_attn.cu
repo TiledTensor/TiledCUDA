@@ -13,6 +13,9 @@
 namespace tiledcuda::testing {
 using namespace cell;
 
+/**
+ * @brief Reduce/Map operation for the flash attention.
+ */
 template <typename Element, typename RegLayout, typename GlobalLayout,
           typename ReduceLayout, typename BaseTile, typename WarpLayout,
           const tl::Layout kLayout, const copy::WarpReuse kMode,
@@ -29,7 +32,10 @@ __global__ void flash_attn_reg_reduce(Element* src) {
     DstLoadTile attn_block;
     DstReduceTile last_max_vec;
     DstReduceTile max_vec;
+    DstReduceTile last_norm_vec;
+    DstReduceTile norm_vec;
     DstBroadcastTile max_broadcast_tile;
+    DstBroadcastTile norm_broadcast_tile;
 
     // Load data from global memory to register file
     copy::GlobalToRegLoader<DstLoadTile, WarpLayout, kMode> loader;
@@ -38,6 +44,9 @@ __global__ void flash_attn_reg_reduce(Element* src) {
     // Copy `max_vec` into `last_max_vec`
     copy::BaseTileCopy<DstReduceTile> copy_max_reg;
     copy_max_reg(max_vec, last_max_vec);
+    // Copy `norm_vec` into `last_norm_vec`
+    copy::BaseTileCopy<DstReduceTile> copy_norm_reg;
+    copy_norm_reg(norm_vec, last_norm_vec);
 
     // Execute reduce operation.
     compute::MaxReduce<SrcReduceTile, kLayout> row_max;
@@ -73,6 +82,42 @@ __global__ void flash_attn_reg_reduce(Element* src) {
         printf("Thread 0:\n");
         attn_block.dump_value();
     }
+
+    // subtract new max from old max to find the new normalization.
+    compute::BaseTileSub<DstReduceTile> sub_new_max;
+    sub_new_max(last_max_vec, max_vec, last_max_vec);
+
+    // exponentiate this vector -- this is what we need to normalize by.
+    compute::BaseTileExp<DstReduceTile> exp_max;
+    exp_max(last_max_vec, last_max_vec);
+
+    // and the norm vec is now normalized.
+    compute::BaseTileMul<DstReduceTile> mul_norm;
+    mul_norm(last_max_vec, norm_vec, norm_vec);
+
+    // Accumulate the new attention block onto the now-rescaled norm-vec.
+    // Reduce Sum + Add
+    DstReduceTile sum_vec;
+    compute::SumReduce<SrcReduceTile, kLayout> row_sum;
+    row_sum(attn_block, sum_vec);
+    compute::BaseTileAdd<DstReduceTile> add_sum;
+    add_sum(sum_vec, norm_vec, norm_vec);
+
+    // Now the attention block is correctly normalized.
+    // Broadcast + Divide
+    compute::Broadcast<SrcBroadcastTile, DstBroadcastTile, kLayout>
+        broadcast_norm;
+    broadcast_norm(norm_vec, norm_broadcast_tile);
+    compute::RegTileDiv<DstBroadcastTile> div_norm;
+    div_norm(attn_block, norm_broadcast_tile, attn_block);
+
+    // Normalize the previous norm vec accorfing to the new max.
+    compute::BaseTileMul<DstReduceTile> mul_norm_new;
+    mul_norm_new(last_max_vec, last_norm_vec, last_norm_vec);
+
+    // Normalize the previous norm vec according to the new norm.
+    compute::BaseTileDiv<DstReduceTile> div_norm_new;
+    div_norm_new(last_norm_vec, norm_vec, last_norm_vec);
 }
 
 template <typename Element, typename RegLayout, typename GlobalLayout,
