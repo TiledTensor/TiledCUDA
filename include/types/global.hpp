@@ -7,7 +7,7 @@ namespace tiledcuda::cell {
 
 namespace tl = tile_layout;
 
-template <typename Element_, typename Layout_>
+template <typename Element_, typename Layout_, const bool kSwizzled_ = false>
 struct GlobalTile {
     using DType = Element_;
     using Layout = Layout_;
@@ -21,6 +21,7 @@ struct GlobalTile {
     static constexpr int kColStride = tl::col_stride<Layout>;
 
     static constexpr tl::Layout kType = tl::layout_type<Layout>;
+    static constexpr bool kSwizzled = kSwizzled_;
 
     DEVICE GlobalTile(DType* data) : data_(data), layout_(Layout{}) {}
 
