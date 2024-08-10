@@ -90,11 +90,6 @@ struct SwizzledRowMajor<16, AtomLayout> {
         int j_new = (s % BaseShape::kCols);
         int index = layout_(i_new, j_new);
 
-        // if (thread(21)) {
-        //     printf("swizzle tid-21: [%d, %d] -> [%d, %d], index = %d\n\n", i,
-        //     j,
-        //            i_new, j_new, index);
-        // }
         return index;
     }
 

@@ -188,18 +188,6 @@ struct GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kRowMajor> {
         cute::copy(tiled_copy_, src_tensor, dst_tensor);
     }
 
-    // /// @brief returns the lane row of the current thread within a warp.
-    // DEVICE int lane_row_id() {
-    //     int lane_id = threadIdx.x % kWarpSize;
-    //     return lane_id / kThreadsPerCol;
-    // }
-
-    // /// @brief returns the lane col of the current thread within a warp.
-    // DEVICE int lane_col_id() {
-    //     int lane_id = threadIdx.x % kWarpSize;
-    //     return lane_id % kThreadsPerCol;
-    // }
-
     DEVICE int lane_row_id() {
         int lane_id = threadIdx.x % warpSize;
         return lane_id % tl::num_rows<ThreadLayout>;

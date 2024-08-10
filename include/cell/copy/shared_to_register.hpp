@@ -33,16 +33,6 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
     using Reg = Reg_;
     using BaseShape = BaseTileShape<DType>;
 
-    // strides to iterate over each 16x16 `BaseTile`.
-    static constexpr int kBaseTileRstride =
-        BaseShape::kRows * Shared::kRowStride;
-    static constexpr int kBaseTileCstride = BaseShape::kCols;
-
-    // row stride and col stride for a thread in a warp
-    // static constexpr int kStride = LoadMat::kNumPerAccess;
-    // static constexpr int kLaneRstride = Shared::kRowStride;
-    // static constexpr int kLaneCstride = kStride;
-
     static constexpr int kRowExec = kRowExec_;
     static constexpr int kColExec = kColExec_;
 
@@ -63,23 +53,12 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
 
         int offset = in_base_tile_(lane_row, lane_col);
 
-        // if (thread(21)) {
-        //     printf("ldmatrix tid-21: offset = %d\n", offset);
-        // }
-
-        // const DType* data;
 #pragma unroll
         for (int i = 0; i < kRowExec; ++i) {
 #pragma unroll
             for (int j = 0; j < kColExec; ++j) {
                 // 2. advance pointer to the 16x16 `BaseTile` indexed by(i, j).
-                // offset += i * kTileRstride + j * kTileCstride;
-
                 offset += base_tiles_(i, j);
-
-                // 3. advance the pointer to data accessed by the current thread
-                // inside a 16x16 `BaseTile`.
-                // data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
 
                 // issue the hardware-backed memory access instruction.
                 this->ldmatrix(&src[offset], dst(i, j).mutable_data());

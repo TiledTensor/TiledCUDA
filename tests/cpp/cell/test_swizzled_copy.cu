@@ -17,10 +17,12 @@ namespace tl = tile_layout;
 namespace {
 template <typename Element>
 __device__ void init_value(Element* data, int numel) {
-    for (int i = 0; i < numel; ++i) data[i] = static_cast<Element>(i % 2048);
+    for (int i = 0; i < numel; ++i) {
+        data[i] = static_cast<Element>(0.);
+    }
 }
 
-#define DEBUG
+// #define DEBUG
 
 template <typename Reg, typename DType>
 DEVICE void check_results(const Reg& r_tile, const Reg& r_tile_swizzled,
@@ -45,10 +47,7 @@ __global__ void swizzled_copy(const Element* data, G2S1& g2s,
                               G2S2& g2s_swizzled, S2R& s2r) {
     extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
     auto* buf = reinterpret_cast<Element*>(buf_);
-    init_value(buf, Shared1::kNumel);
-    init_value(buf + Shared1::kNumel, Shared2::kNumel);
-
-    const int tid = 0;
+    init_value(buf, Shared1::kNumel + Shared2::kNumel);
 
     GIterator g_tiles(data);
 
@@ -64,25 +63,8 @@ __global__ void swizzled_copy(const Element* data, G2S1& g2s,
     for (int k = 0; k < GIterator::sc1; ++k) {
         g2s(g_tiles(k), s_tile);
         g2s_swizzled(g_tiles(k), s_swizzled_tile);
-
         __copy_async();
         __syncthreads();
-
-        // if (thread(tid)) {
-        //     printf("\niterate over global tiles: %d\n", k);
-
-        //     printf("s_tile:\n");
-        //     g_tiles(k).dump_value();
-
-        //     printf("\ns_tile_swizzled:\n");
-        //     s_swizzled_tile.dump_value();
-
-        //     // __half* data = buf + Shared1::kNumel;
-        //     // for (int i = 0; i < Shared2::kNumel; ++i) {
-        //     //     printf("%.0f, ", __half2float(data[i]));
-        //     //     if (i && (i + 1) % Shared2::kCols == 0) printf("\n");
-        //     // }
-        // }
 
         for (int i = 0; i < SIterator1::sc1; ++i) {
             s2r(s_tiles(i), r_tile);
@@ -92,7 +74,7 @@ __global__ void swizzled_copy(const Element* data, G2S1& g2s,
             check_results<Reg, Element>(r_tile, r_tile_swizzled, Reg::kRows,
                                         Reg::kCols);
 
-            if (thread(tid)) {
+            if (thread(17)) {
                 printf("\niteration [%d, %d]\n", k, i);
                 printf("r_tile:\n");
                 r_tile.dump_value();
@@ -131,7 +113,13 @@ void run_test() {
     const int kSc1 = kChunkShm / BaseShape::kCols;
 
     using Reg = RegTile<BaseTileRowMajor<Element>, tl::RowMajor<kSc0, kSc1>>;
-    LOG(INFO) << "Reg: " << Reg{} << std::endl;
+
+#ifdef DEBUG
+    LOG(INFO) << "GIterator: " << GIterator{} << std::endl
+              << "SIterator1: " << SIterator1{} << std::endl
+              << "SIterator2: " << SIterator2{} << std::endl
+              << "Reg: " << Reg{} << std::endl;
+#endif
 
     using G2S1 = GlobalToSharedLoader<Shared1, WarpLayout>;
     using G2S2 = GlobalToSharedLoader<Shared2, WarpLayout>;
@@ -152,11 +140,9 @@ void run_test() {
     G2S2 g2s_swizzled;
     S2R s2r;
 
-    auto test_func = &swizzled_copy<Element,              //
-                                    Global, GIterator,    //
-                                    Shared1, SIterator1,  //
-                                    Shared2, SIterator2,  //
-                                    Reg, G2S1, G2S2, S2R>;
+    auto test_func =
+        &swizzled_copy<Element, Global, GIterator, Shared1, SIterator1, Shared2,
+                       SIterator2, Reg, G2S1, G2S2, S2R>;
 
     // maximal statically allocated smem per block
     const int kMaxSmemPerBlock = 48 * 1024;
@@ -168,14 +154,32 @@ void run_test() {
     test_func<<<dim_grid, dim_block, shm_size>>>(
         thrust::raw_pointer_cast(d_A.data()), g2s, g2s_swizzled, s2r);
     cudaDeviceSynchronize();
+
+    std::ostringstream ss;
+    ss << "[" << kRows << ", " << kCols << ", " << kShmRows << ", " << kShmCols
+       << ", " << kChunkShm << "]";
+    LOG(INFO) << std::endl << ss.str() << " passed!" << std::endl;
 }
 }  // namespace
 
 TEST(TestSwizzledLayout, test1) {
-    // run_test<tl::RowMajor<1, 1>, 16, 64, 16, 32, 32>();
-    // run_test<tl::RowMajor<2, 2>, 128, 128, 128, 64, 32>();
+    run_test<tl::RowMajor<1, 2>, 16, 64, 16, 32, 32>();
+    run_test<tl::RowMajor<1, 2>, 16, 128, 16, 64, 32>();
+    run_test<tl::RowMajor<1, 2>, 32, 32, 32, 32, 16>();
+    run_test<tl::RowMajor<2, 2>, 32, 32, 32, 32, 16>();
+    run_test<tl::RowMajor<2, 2>, 32, 32, 32, 32, 32>();
+    run_test<tl::RowMajor<2, 2>, 32, 64, 32, 32, 32>();
+    run_test<tl::RowMajor<2, 1>, 32, 64, 32, 32, 32>();
+    run_test<tl::RowMajor<2, 1>, 32, 128, 32, 64, 32>();
+    run_test<tl::RowMajor<2, 1>, 64, 128, 64, 64, 32>();
 
-    run_test<tl::RowMajor<2, 1>, 64, 32, 64, 32, 32>();
+    // run_test<tl::RowMajor<4, 1>, 64, 64, 64, 64, 64>();
+
+    // run_test<tl::RowMajor<4, 1>, 64, 128, 64, 128, 128>();
+
+    // run_test<tl::RowMajor<4, 1>, 64, 256, 64, 128, 128>();
+
+    // run_test<tl::RowMajor<8, 1>, 128, 512, 128, 256, 128>();
 }
 
 }  // namespace tiledcuda::testing
