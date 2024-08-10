@@ -53,6 +53,7 @@ using RowMajor = MatrixLayout<kRow, kCol, kStride, 1>;
 template <const int kRow, const int kCol, const int kStride = kRow>
 using ColMajor = MatrixLayout<kRow, kCol, 1, kStride>;
 
+namespace detail {
 /// @brief Swizzled layout for 16x16 BaseTile.
 template <const int kElemBits, typename AtomLayout>
 struct SwizzledRowMajor {};
@@ -94,7 +95,6 @@ struct SwizzledRowMajor<16, AtomLayout> {
     AtomLayout layout_;
 };
 
-namespace detail {
 template <typename Shared, const bool kSwizzled, const Layout kType,
           const int kSizeOfTypeBits>
 struct SharedLayoutWrapperImpl {};

@@ -126,6 +126,8 @@ struct GlobalToSharedBaseTileLoader {
     DEVICE void copy(const DType* src, DType* dst);
 };
 
+/// @brief  Implement loading a `16x16` BaseTile from global memory to shared
+///         memory.
 template <class Global, class Shared>
 struct GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kRowMajor> {
     using DType = Shared::DType;
@@ -145,7 +147,7 @@ struct GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kRowMajor> {
     using BaseShape = traits::BaseTileShape<DType>;
 
     static constexpr int kExecCount =
-        BaseShape::kCols / kNumPerAccess / kThreadsPerCol;
+        BaseShape::kCols / (kNumPerAccess * kThreadsPerCol);
 
     static_assert(
         kExecCount == 1,
@@ -225,7 +227,7 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kRowMajor> {
     using BaseShape = traits::BaseTileShape<DType>;
 
     static constexpr int kExecCount =
-        BaseShape::kCols / kNumPerAccess / kThreadsPerCol;
+        BaseShape::kCols / (kNumPerAccess * kThreadsPerCol);
 
     static_assert(
         kExecCount == 1,

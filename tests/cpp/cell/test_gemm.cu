@@ -148,41 +148,34 @@ struct TestTraits {
     using LoadRegB =
         SharedToRegLoader<RegB, WarpLayout, WarpReuse::kColReuseCont>;
 
-    // shared tile for output C
-    using SharedC = SharedTile<ElementAcc, tl::RowMajor<kM, kN>>;
-    using GlobalC = GlobalTile<ElementAcc, tl::RowMajor<kM, kN>>;
-    using StoreSharedC = SharedToGlobalStorer<SharedC, WarpLayout>;
-
     // register tile for output C
     // calculate register usage for output C
     static constexpr int kCMs = kM / kWarpPerRow / BaseShape::kTileSize;
     static constexpr int kCNs = kN / kWarpPerCol / BaseShape::kTileSize;
+
     using RegC =
         RegTile<BaseTileRowMajor<ElementAcc>, tl::RowMajor<kCMs, kCNs>>;
-
-    // store RegTileC to shared
-    using StoreRegC = RegToSharedStorer<RegC, WarpLayout>;
+    using GlobalC = GlobalTile<ElementAcc, tl::RowMajor<kM, kN>>;
+    using CStorer = copy::RegToGlobalStorer<GlobalC, RegC, WarpLayout>;
 };
 
-template <typename Element, typename ElementAcc, typename GlobalA,
-          typename SharedA, typename LoadSharedA, typename GlobalB,
-          typename SharedB, typename LoadSharedB, typename GlobalC,
-          typename SharedC, typename StoreSharedC, typename TileIteratorA,
-          typename RegA, typename LoadRegA, typename TileIteratorB,
-          typename RegB, typename LoadRegB, typename RegC, typename StoreRegC>
+template <typename Element, typename ElementAcc,                     //
+          typename GlobalA, typename SharedA, typename LoadSharedA,  //
+          typename GlobalB, typename SharedB, typename LoadSharedB,  //
+          typename TileIteratorA, typename RegA, typename LoadRegA,
+          typename TileIteratorB, typename RegB, typename LoadRegB,
+          typename GlobalC, typename RegC, typename StoreC>
 __global__ void test_wmma(const Element* ga, const Element* gb,
                           ElementAcc* gc) {
     GlobalA gA(ga);
     GlobalB gB(gb);
-    GlobalC gC(gc);
 
     extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
     auto* shared_a = reinterpret_cast<Element*>(buf_);
     auto* shared_b = shared_a + TileIteratorA::Tile::kNumel;
-    auto* shared_c = reinterpret_cast<ElementAcc*>(buf_);
+
     SharedA sA(shared_a);
     SharedB sB(shared_b);
-    SharedC sC(shared_c);
 
     LoadSharedA loaderA;
     loaderA(gA, sA);
@@ -211,12 +204,10 @@ __global__ void test_wmma(const Element* ga, const Element* gb,
     }
     __syncthreads();
 
-    StoreRegC store_rC;
-    store_rC(acc, sC);
-    __syncthreads();
-
-    StoreSharedC store_sC;
-    store_sC(sC, gC);
+    // store from register to global
+    GlobalC gC(gc);
+    StoreC store_rC;
+    store_rC(acc, gC);
 }
 }  // namespace
 
@@ -271,19 +262,16 @@ void run_test() {
 
     dim3 dim_grid(1, 1, 1);
     dim3 dim_block(config::kThreads, 1, 1);
-    int size_ab = (kM + kN) * kK * sizeof(Element);
-    int size_c = kM * kN * sizeof(ElementAcc);
-    int shm_size = size_ab > size_c ? size_ab : size_c;
+    int shm_size = (kM + kN) * kK * sizeof(Element);
 
     // TODO: Refine this code; there are too many template parameters, making it
     // messy.
-    test_wmma<Element, ElementAcc, typename config::GlobalA,
-              typename config::SharedA, typename config::LoadSharedA,
-              typename config::GlobalB, typename config::SharedB,
-              typename config::LoadSharedB, typename config::GlobalC,
-              typename config::SharedC, typename config::StoreSharedC,
-              IteratorA, RegA, typename config::LoadRegA, IteratorB, RegB,
-              typename config::LoadRegB, RegC, typename config::StoreRegC>
+    test_wmma<
+        Element, ElementAcc, typename config::GlobalA, typename config::SharedA,
+        typename config::LoadSharedA, typename config::GlobalB,
+        typename config::SharedB, typename config::LoadSharedB, IteratorA, RegA,
+        typename config::LoadRegA, IteratorB, RegB, typename config::LoadRegB,
+        typename config::GlobalC, RegC, typename config::CStorer>
         <<<dim_grid, dim_block, shm_size>>>(
             thrust::raw_pointer_cast(d_a.data()),
             thrust::raw_pointer_cast(d_b.data()),
@@ -310,7 +298,7 @@ void run_test() {
 
 TEST(TestGemm, test) {
     // minimal shape for 1 warp
-    run_test<16, 32, 32, tl::RowMajor<1, 1>, 16>();
+    run_test<16, 16, 16, tl::RowMajor<1, 1>, 16>();
     run_test<32, 32, 64, tl::RowMajor<1, 1>, 16>();
     run_test<32, 32, 32, tl::RowMajor<1, 1>, 32>();
 

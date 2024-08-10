@@ -55,7 +55,7 @@ TEST(TestLayout, test_swizzled_layout) {
 
     // only siwizzle the first [16x16] half of the [kRows, kCols] matrix
     using LayoutAtom = cute::Layout<Shape<_16, _16>, Stride<Int<kCols>, _1>>;
-    using Swizzled = tl::SwizzledRowMajor<16 /*16bits*/, LayoutAtom>;
+    using Swizzled = tl::detail::SwizzledRowMajor<16 /*16bits*/, LayoutAtom>;
     Swizzled layout2;
 
     Element* ptr = thrust::raw_pointer_cast(data.data());
