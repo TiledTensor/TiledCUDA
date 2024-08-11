@@ -4,9 +4,14 @@
 #include "util/print.hpp"
 
 namespace tiledcuda::cell {
-
 namespace tl = tile_layout;
 
+// FIXME(haruhi): The last boolean template parameter kSwizzled_ is not
+// meaningful for GlobalTile. This issue arises from the current implementation
+// of TileIterator, which always creates a SharedTile containing a kSwizzled_
+// flag. This is a temporary workaround to make TileIterator functional for both
+// GlobalTile and SharedTile. This should be addressed and properly fixed in the
+// future.
 template <typename Element_, typename Layout_, const bool kSwizzled_ = false>
 struct GlobalTile {
     using DType = Element_;

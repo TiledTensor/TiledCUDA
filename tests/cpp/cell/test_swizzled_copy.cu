@@ -176,14 +176,16 @@ TEST(TestSwizzledLayout, test1) {
     run_test<tl::RowMajor<1, 2>, 16, 64, 16, 32, 32>();
     run_test<tl::RowMajor<1, 2>, 16, 128, 16, 64, 32>();
     run_test<tl::RowMajor<1, 2>, 32, 32, 32, 32, 16>();
+
     run_test<tl::RowMajor<2, 2>, 32, 32, 32, 32, 16>();
     run_test<tl::RowMajor<2, 2>, 32, 32, 32, 32, 32>();
-    run_test<tl::RowMajor<2, 2>, 32, 64, 32, 32, 32>();
+    run_test<tl::RowMajor<2, 2>, 128, 256, 128, 128, 64>();
+
     run_test<tl::RowMajor<2, 1>, 32, 64, 32, 32, 32>();
     run_test<tl::RowMajor<2, 1>, 32, 128, 32, 64, 32>();
+    run_test<tl::RowMajor<2, 1>, 64, 256, 64, 128, 64>();
     run_test<tl::RowMajor<4, 1>, 64, 64, 64, 64, 32>();
-    run_test<tl::RowMajor<4, 1>, 64, 64, 64, 64, 64>();
-    run_test<tl::RowMajor<2, 1>, 64, 128, 64, 64, 32>();
+    run_test<tl::RowMajor<4, 1>, 64, 128, 64, 64, 64>();
     run_test<tl::RowMajor<4, 1>, 128, 64, 128, 64, 64>();
     run_test<tl::RowMajor<4, 1>, 64, 64, 64, 64, 64>();
     run_test<tl::RowMajor<4, 1>, 64, 128, 64, 128, 128>();
