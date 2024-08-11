@@ -79,6 +79,72 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
     typename LoadBase::BaseTileSharedLayout dst_layout_;
 };
 
+template <typename Global_, typename Shared_, const int kRowExec_,
+          const int kColExec_>
+struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
+                                tl::Layout::kColMajor>
+    : public GlobalToSharedBaseTileLoader<Global_, Shared_,
+                                          tl::Layout::kColMajor> {
+    using Global = Global_;
+    using Shared = Shared_;
+
+    static_assert(Global::kRows == Shared::kRows &&
+                      Global::kCols == Shared::kCols,
+                  "Global and shared memory should have the same shape.");
+    static_assert(Global::kType == Shared::kType,
+                  "The layout of Global memory and Shared memory tile should "
+                  "be the same.");
+    static_assert(Global::kType == tl::Layout::kColMajor,
+                  "The layout of Global memory and Shared memory tile should "
+                  "be column-major.");
+
+    using DType = Global::DType;
+
+    static_assert(std::is_same_v<typename Shared::DType, DType>,
+                  "The data type of Shared and Global must be the same.");
+
+    using LoadBase =
+        GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kColMajor>;
+    using BaseShape = traits::BaseTileShape<DType>;
+
+    static constexpr int kRowExec = kRowExec_;
+    static constexpr int kColExec = kColExec_;
+
+    static constexpr int kNumPerAccess = LoadBase::kNumPerAccess;
+
+    // strides to iterate over each 16x16 `BaseTile` in the shared memory
+    static constexpr int kRstride = BaseShape::kRows;
+    static constexpr int kSrcCstride = BaseShape::kCols * Global::kRows;
+    static constexpr int kDstCstride = BaseShape::kCols * Shared::kRows;
+
+    DEVICE void operator()(const DType* src, DType* dst) {
+        int lane_row = this->lane_row_id() * kNumPerAccess;
+        int lane_col = this->lane_col_id();
+
+        int src_lane_offset = src_layout_(lane_row, lane_col);
+        int dst_lane_offset = dst_layout_(lane_row, lane_col);
+
+        int src_offset = 0, dst_offset = 0;
+
+        // In the column-major layout, rows are contiguous in memory, we
+        // made the inner loop iterate over rows
+#pragma unroll
+        for (int i = 0; i < kColExec; ++i) {
+#pragma unroll
+            for (int j = 0; j < kRowExec; ++j) {
+                src_offset = j * kRstride + i * kSrcCstride + src_lane_offset;
+                dst_offset = j * kRstride + i * kDstCstride + dst_lane_offset;
+
+                this->copy(&src[src_offset], &dst[dst_offset]);
+            }
+        }
+    }
+
+  private:
+    typename LoadBase::BaseTileGlobalLayout src_layout_;
+    typename LoadBase::BaseTileSharedLayout dst_layout_;
+};
+
 template <typename Shared, typename Global, const int kRowExec_,
           const int kColExec_, const tl::Layout kType>
 struct SharedToGlobalStorerImpl {

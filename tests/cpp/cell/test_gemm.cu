@@ -118,16 +118,15 @@ struct TestTraits {
     using SharedA = SharedTile<Element, tl::RowMajor<kM, kK>, kSwizzled>;
     using LoadSharedA = GlobalToSharedLoader<SharedA, WarpLayout>;
 
-    using GlobalB = GlobalTile<Element, tl::RowMajor<kN, kK>>;
-    using SharedB = SharedTile<Element, tl::RowMajor<kN, kK>>;
+    using GlobalB = GlobalTile<Element, tl::ColMajor<kK, kN>>;
+    using SharedB = SharedTile<Element, tl::ColMajor<kK, kN>, kSwizzled>;
     using LoadSharedB = GlobalToSharedLoader<SharedB, WarpLayout>;
 
     /// === 3. configurate tile transfer between shared and register loader ===
     // shared tile for operand A
     using TileIteratorA = TileIterator<SharedA, TileShape<kM, kChunkK>>;
     // shared tile for operand B
-    using SharedB2 = SharedTile<Element, tl::ColMajor<kK, kN>>;
-    using TileIteratorB = TileIterator<SharedB2, TileShape<kChunkK, kN>>;
+    using TileIteratorB = TileIterator<SharedB, TileShape<kChunkK, kN>>;
 
     static_assert(TileIteratorA::sc1 == TileIteratorB::sc0,
                   "mismatched K dimension!");
