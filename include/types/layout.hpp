@@ -86,8 +86,7 @@ struct SwizzledRowMajor<16, AtomLayout> {
 
     DEVICE int operator()(int i, int j) const {
         int s = swizzled_(i, j);
-        int index = layout_(s / BaseShape::kCols, s % BaseShape::kCols);
-        return index;
+        return layout_(s / BaseShape::kCols, s % BaseShape::kCols);
     }
 
   private:

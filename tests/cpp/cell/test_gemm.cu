@@ -114,7 +114,8 @@ struct TestTraits {
 
     /// == 2. configurate tile transfer between global and shared using CuTe ==
     using GlobalA = GlobalTile<Element, tl::RowMajor<kM, kK>>;
-    using SharedA = SharedTile<Element, tl::RowMajor<kM, kK>>;
+    static const bool kSwizzled = true;
+    using SharedA = SharedTile<Element, tl::RowMajor<kM, kK>, kSwizzled>;
     using LoadSharedA = GlobalToSharedLoader<SharedA, WarpLayout>;
 
     using GlobalB = GlobalTile<Element, tl::RowMajor<kN, kK>>;
