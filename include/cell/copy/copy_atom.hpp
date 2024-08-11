@@ -132,14 +132,13 @@ template <class Global, class Shared>
 struct GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kRowMajor> {
     using DType = Shared::DType;
 
+    // NOTE: Please keep this thread layout striclty consistent with the thread
+    // layout for ldmatrix.
     // The macro kernel breaks down the entire copy operation into iterations
     // over 16x16 BaseTiles. To transfer a single BaseTile, threads in a warp
     // are arranged in a 16x2 row-major layout. Each thread uses 128-bit data in
     // a single access.
-    // NOTE: Please keep this thread layout striclty consistent with the thread
-    // layout for ldmatrix.
     using ThreadLayout = tile_layout::ColMajor<16, 2>;
-
     static constexpr int kThreadsPerRow = tl::num_rows<ThreadLayout>;
     static constexpr int kThreadsPerCol = tl::num_cols<ThreadLayout>;
 
@@ -215,13 +214,9 @@ template <class Shared, class Global>
 struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kRowMajor> {
     using DType = Shared::DType;
 
-    // The macro kernel breaks down the entire copy operation into iterations
-    // over 16x16 BaseTiles. To transfer a single BaseTile, threads in a warp
-    // are arranged in a 16x2 row-major layout. Each thread uses 128-bit data in
-    // a single access.
-    static constexpr int kThreadsPerRow = 16;
-    static constexpr int kThreadsPerCol = 2;
-
+    using ThreadLayout = tile_layout::ColMajor<16, 2>;
+    static constexpr int kThreadsPerRow = tl::num_rows<ThreadLayout>;
+    static constexpr int kThreadsPerCol = tl::num_cols<ThreadLayout>;
     static constexpr int kWarpSize = 32;
 
     static constexpr int kNumPerAccess =
@@ -231,7 +226,6 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kRowMajor> {
 
     static constexpr int kExecCount =
         BaseShape::kCols / (kNumPerAccess * kThreadsPerCol);
-
     static_assert(
         kExecCount == 1,
         "The current implementation requires that number of elements per "
@@ -260,16 +254,15 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kRowMajor> {
         cute::copy(tiled_copy_, src_tensor, dst_tensor);
     }
 
-    /// @brief returns the lane row of the current thread within a warp.
     DEVICE int lane_row_id() {
-        int lane_id = threadIdx.x % kWarpSize;
-        return lane_id / kThreadsPerCol;
+        int lane_id = threadIdx.x % warpSize;
+        return lane_id % tl::num_rows<ThreadLayout>;
     }
 
     /// @brief returns the lane col of the current thread within a warp.
     DEVICE int lane_col_id() {
-        int lane_id = threadIdx.x % kWarpSize;
-        return lane_id % kThreadsPerCol;
+        int lane_id = threadIdx.x % warpSize;
+        return lane_id / tl::num_rows<ThreadLayout>;
     }
 
   private:

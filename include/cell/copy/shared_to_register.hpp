@@ -51,15 +51,15 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
         int lane_row = this->lane_row_id();
         int lane_col = this->lane_col_id() * LoadMat::kNumPerAccess;
 
-        int offset = in_base_tile_(lane_row, lane_col);
+        int lane_offset = in_base_tile_(lane_row, lane_col);
+        int offset = 0;
 
 #pragma unroll
         for (int i = 0; i < kRowExec; ++i) {
 #pragma unroll
             for (int j = 0; j < kColExec; ++j) {
-                // 2. advance pointer to the 16x16 `BaseTile` indexed by(i, j).
-                offset += base_tiles_(i, j);
-
+                // advance pointer to the 16x16 `BaseTile` indexed by(i, j).
+                offset = base_tiles_(i, j) + lane_offset;
                 // issue the hardware-backed memory access instruction.
                 this->ldmatrix(&src[offset], dst(i, j).mutable_data());
             }
@@ -187,7 +187,6 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
         }
     };
 };
-
 }  // namespace  detail
 
 /// @brief partial specialization for loading data from shared memory to
@@ -213,11 +212,6 @@ struct SharedToRegLoader : public Base {
                       "The current implementation requires Shared::kCols must "
                       "be divisible by tl::num_cols<WarpLayout>");
 
-        // 1. advance the pointer to input data to the current warp according to
-        // warp reuse mode.
-        const DType* src_ptr = src.data();
-        src_ptr += Base::template get_warp_offset<Shared>();
-
         // how many times a `BaseTile` is executed along the row and column
         // direction.
         static constexpr int kRowExec =
@@ -225,11 +219,16 @@ struct SharedToRegLoader : public Base {
         static constexpr int kColExec =
             Base::template col_exec_count<BaseShape, Shared::kCols>();
 
+        // advance the pointer to input data to the current warp according to
+        // warp reuse mode.
+        const DType* src_ptr = src.data();
+        int offset = Base::template get_warp_offset<Shared>();
+
         using Loader =
             detail::SharedToRegLoaderImpl<Shared, Reg, kRowExec, kColExec,
                                           Shared::kType, CopyInst::kLoadMat>;
         Loader loader;
-        loader(src_ptr, dst);
+        loader(src_ptr + offset, dst);
     }
 };
 
@@ -274,13 +273,12 @@ struct RegToSharedStorer : public Base {
         // the same shared memory location, thus the warp reuse mode is set to
         // `Cont`.
         int offset = Base::template get_warp_offset<Shared>();
-        dst_ptr += offset;
 
         using Storer =
             detail::RegToSharedStorerImpl<Shared, Reg, kRowExec, kColExec,
                                           CopyInst::kStoreShared32>;
         Storer storer;
-        storer(src, dst_ptr);
+        storer(src, dst_ptr + offset);
     }
 };
 

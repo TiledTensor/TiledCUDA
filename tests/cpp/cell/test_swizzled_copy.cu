@@ -24,23 +24,20 @@ __global__ void init_halfs(__half* data, int64_t numel) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     if (tid < numel) {
         data[tid] = __float2half(tid % 2048);
-        // printf("[%d] = %.4f\n", tid, __half2float(data[tid]));
     }
 }
-
-// #define DEBUG
 
 template <typename Reg, typename DType>
 DEVICE void check_results(const Reg& r_tile, const Reg& r_tile_swizzled,
                           int rows, int cols) {
+    const int numel = BaseTileRowMajor<DType>::kNumel;
+
     for (int i = 0; i < rows; ++i) {
         for (int j = 0; j < cols; ++j) {
             const DType* data1 = r_tile(i, j).data();
             const DType* data2 = r_tile_swizzled(i, j).data();
 
-            for (int n = 0; n < rows * cols; ++n) {
-                assert(data1[n] == data2[n]);
-            }
+            for (int n = 0; n < numel; ++n) assert(data1[n] == data2[n]);
         }
     }
 }
@@ -80,7 +77,8 @@ __global__ void swizzled_copy(const Element* data, G2S1& g2s,
             check_results<Reg, Element>(r_tile, r_tile_swizzled, Reg::kRows,
                                         Reg::kCols);
 
-            if (thread(17)) {
+#ifdef DEBUG
+            if (thread(0)) {
                 printf("\niteration [%d, %d]\n", k, i);
                 printf("r_tile:\n");
                 r_tile.dump_value();
@@ -88,6 +86,7 @@ __global__ void swizzled_copy(const Element* data, G2S1& g2s,
                 printf("\nr_tile_swizzled:\n");
                 r_tile_swizzled.dump_value();
             }
+#endif
         }
     }
 }
@@ -123,7 +122,12 @@ void run_test() {
     LOG(INFO) << "GIterator: " << GIterator{} << std::endl
               << "SIterator1: " << SIterator1{} << std::endl
               << "SIterator2: " << SIterator2{} << std::endl
-              << "Reg: " << Reg{} << std::endl;
+              << "GlobalTile Shape: [" << kRows << ", " << kCols << "]"
+              << std::endl
+              << "SharedTile Shape: [" << kShmRows << ", " << kShmCols << "]"
+              << std::endl
+              << "sc0: " << kSc0 << ", sc1: " << kSc1 << std::endl
+              << "RegTile Shape: " << Reg{} << std::endl;
 #endif
 
     using G2S1 = GlobalToSharedLoader<Shared1, WarpLayout>;
@@ -177,15 +181,14 @@ TEST(TestSwizzledLayout, test1) {
     run_test<tl::RowMajor<2, 2>, 32, 64, 32, 32, 32>();
     run_test<tl::RowMajor<2, 1>, 32, 64, 32, 32, 32>();
     run_test<tl::RowMajor<2, 1>, 32, 128, 32, 64, 32>();
+    run_test<tl::RowMajor<4, 1>, 64, 64, 64, 64, 32>();
+    run_test<tl::RowMajor<4, 1>, 64, 64, 64, 64, 64>();
     run_test<tl::RowMajor<2, 1>, 64, 128, 64, 64, 32>();
-
-    // run_test<tl::RowMajor<4, 1>, 64, 64, 64, 64, 64>();
-
-    // run_test<tl::RowMajor<4, 1>, 64, 128, 64, 128, 128>();
-
-    // run_test<tl::RowMajor<4, 1>, 64, 256, 64, 128, 128>();
-
-    // run_test<tl::RowMajor<8, 1>, 128, 512, 128, 256, 128>();
+    run_test<tl::RowMajor<4, 1>, 128, 64, 128, 64, 64>();
+    run_test<tl::RowMajor<4, 1>, 64, 64, 64, 64, 64>();
+    run_test<tl::RowMajor<4, 1>, 64, 128, 64, 128, 128>();
+    run_test<tl::RowMajor<4, 1>, 64, 256, 64, 128, 128>();
+    run_test<tl::RowMajor<8, 1>, 128, 512, 128, 256, 128>();
 }
 
 }  // namespace tiledcuda::testing
