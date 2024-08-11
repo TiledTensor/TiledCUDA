@@ -4,8 +4,6 @@
 #include "types/mod.hpp"
 
 #include <glog/logging.h>
-#include <thrust/device_vector.h>
-#include <thrust/host_vector.h>
 
 #include <sstream>
 
@@ -19,6 +17,14 @@ template <typename Element>
 __device__ void init_value(Element* data, int numel) {
     for (int i = 0; i < numel; ++i) {
         data[i] = static_cast<Element>(0.);
+    }
+}
+
+__global__ void init_halfs(__half* data, int64_t numel) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid < numel) {
+        data[tid] = __float2half(tid % 2048);
+        // printf("[%d] = %.4f\n", tid, __half2float(data[tid]));
     }
 }
 
@@ -97,7 +103,6 @@ void run_test() {
     using GIterator = TileIterator<Global, TileShape<kRows, kShmCols>>;
 
     // for non-swizzled layout
-
     using Shared1 = SharedTile<Element, tl::RowMajor<kShmRows, kShmCols>,
                                false /*enable swizzled layout on shared*/>;
     using SIterator1 = TileIterator<Shared1, TileShape<kShmRows, kChunkShm>>;
@@ -129,12 +134,12 @@ void run_test() {
     dim3 dim_block(kThreads, 1, 1);
     int shm_size = (Shared1::kNumel + Shared2::kNumel) * sizeof(Element);
 
-    // initalize the input matrix
-    int numel = kRows * kCols;
-    thrust::host_vector<Element> h_A(numel);
-    for (int i = 0; i < h_A.size(); ++i)
-        h_A[i] = static_cast<Element>(i % 2048);
-    thrust::device_vector<Element> d_A = h_A;
+    const int numel = kRows * kCols;
+    __half* dA;
+    CudaCheck(cudaMalloc(&dA, numel * sizeof(__half)));
+    const int threads = 128;
+    const int blocks = CeilDiv<numel, threads>;
+    init_halfs<<<blocks, threads>>>(dA, numel);
 
     G2S1 g2s;
     G2S2 g2s_swizzled;
@@ -151,9 +156,10 @@ void run_test() {
             test_func, cudaFuncAttributeMaxDynamicSharedMemorySize, shm_size);
     }
 
-    test_func<<<dim_grid, dim_block, shm_size>>>(
-        thrust::raw_pointer_cast(d_A.data()), g2s, g2s_swizzled, s2r);
+    test_func<<<dim_grid, dim_block, shm_size>>>(dA, g2s, g2s_swizzled, s2r);
     cudaDeviceSynchronize();
+
+    CudaCheck(cudaFree(dA));
 
     std::ostringstream ss;
     ss << "[" << kRows << ", " << kCols << ", " << kShmRows << ", " << kShmCols
