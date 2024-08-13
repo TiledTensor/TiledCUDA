@@ -11,6 +11,9 @@ namespace tl = tile_layout;
 
 namespace detail {
 
+// TODO(KuangjuX): Distinguish whether the `Layout` is Row Major or Column
+// Major. Different Layouts have different directions of memory continuity,
+// which will affect the memory access performance.
 template <typename RegTile, typename Functor>
 struct ElementWise {
     using DType = typename RegTile::DType;
@@ -30,6 +33,9 @@ struct ElementWise {
     }
 };
 
+// TODO(KuangjuX): Distinguish whether the `Layout` is Row Major or Column
+// Major. Different Layouts have different directions of memory continuity,
+// which will affect the memory access performance.
 template <typename SrcRegTile, typename DstRegTile, typename Functor>
 struct ElementWise2 {
     static constexpr int kRows = SrcRegTile::kRows;
@@ -50,6 +56,9 @@ struct ElementWise2 {
     }
 };
 
+// TODO(KuangjuX): Distinguish whether the `Layout` is Row Major or Column
+// Major. Different Layouts have different directions of memory continuity,
+// which will affect the memory access performance.
 template <typename RegTile, typename Functor>
 struct Binary {
     using DType = typename RegTile::DType;

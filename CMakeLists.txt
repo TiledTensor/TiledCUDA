@@ -21,5 +21,6 @@ include_directories(include)
 add_subdirectory(src)
 add_subdirectory(tests/cpp)
 
+# TODO(KuangjuX): Traverse and query the examples under the `examples` directory, and include them.
 add_subdirectory(examples/cpp/gemm)
 add_subdirectory(examples/cpp/b2b_gemm)
