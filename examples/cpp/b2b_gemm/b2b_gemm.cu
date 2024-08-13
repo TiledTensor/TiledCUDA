@@ -76,6 +76,9 @@ int main() {
         h_b[i] = static_cast<InType>(rand_float());
     }
 
+    thrust::host_vector<InType> h_acc(kM * kN);
+    thrust::fill(h_acc.begin(), h_acc.end(), 0.);
+
     thrust::host_vector<InType> h_c(kN * kP);
     for (int i = 0; i < h_c.size(); ++i) {
         h_c[i] = static_cast<InType>(rand_float());
@@ -124,7 +127,27 @@ int main() {
 
     cudaDeviceSynchronize();
 
-    printf("Back2Back GEMM completed successfully.\n");
+    h_d = d_d;
+
+    {  // check correctness
+        thrust::host_vector<AccType> h_d2(kM * kP);
+        thrust::fill(h_d2.begin(), h_d2.end(), 0.);
+        naive_back2back_gemm(kM, kN, kK, kP,
+                             thrust::raw_pointer_cast(h_a.data()),
+                             thrust::raw_pointer_cast(h_b.data()),
+                             thrust::raw_pointer_cast(h_c.data()), h_d2.data(),
+                             thrust::raw_pointer_cast(h_acc.data()));
+
+        bool passed =
+            check_results(thrust::raw_pointer_cast(h_d.data()),
+                          thrust::raw_pointer_cast(h_d2.data()), kM * kP);
+
+        if (passed) {
+            std::cout << "Test passed." << std::endl;
+        } else {
+            std::cerr << "Test failed." << std::endl;
+        }
+    }
 
     return 0;
 }
