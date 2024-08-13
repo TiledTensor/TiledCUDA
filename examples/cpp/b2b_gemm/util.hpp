@@ -66,7 +66,7 @@ template <typename InType, typename AccType, typename B2BGemmShape>
 struct B2BGemmTraits {
     using BaseShape = traits::BaseTileShape<InType>;
     static constexpr int kChunkK = 32;
-    // TODO: kChunkN must be match for k-dimension for operand A and B.
+    // TODO: kChunkN must be match for N-dimension for operand `Acc` and `C`.
     static constexpr int kChunkN = 64;
 
     using WarpLayout = tl::RowMajor<2, 2>;
