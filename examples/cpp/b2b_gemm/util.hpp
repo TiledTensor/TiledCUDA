@@ -21,8 +21,8 @@ float rand_float(float a = 1e-3, float b = 1) {
     return a + r;
 }
 
-// In this implementation, A and C are interpreted as being laid out in
-// row-major, and B is interpreted as being laid out in column-major.
+// In this implementation, A and D are interpreted as being laid out in
+// row-major, and B, C is interpreted as being laid out in column-major.
 void naive_back2back_gemm(int kM, int kN, int kK, int kP, const __half* A,
                           const __half* B, const __half* C, float* D,
                           __half* acc) {
