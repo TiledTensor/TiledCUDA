@@ -145,18 +145,18 @@ struct Relu<__half> {
 
 template <typename Element>
 struct ConvertToHalf {
-    DEVICE Element operator()(__half a) const {}
+    DEVICE Element operator()(Element a) const {}
 
-    DEVICE void operator()(const __half& src, Element& dst) {}
+    DEVICE void operator()(const Element& src, __half& dst) {}
 };
 
 #if defined(__CUDA_ARCH__)
 template <>
 struct ConvertToHalf<float> {
-    DEVICE float operator()(__half a) const { return __half2float(a); }
+    DEVICE float operator()(float a) const { return __float2half(a); }
 
-    DEVICE void operator()(const __half& src, float& dst) {
-        dst = __half2float(src);
+    DEVICE void operator()(const float& src, __half& dst) {
+        dst = __float2half(src);
     }
 };
 

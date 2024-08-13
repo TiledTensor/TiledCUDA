@@ -3,8 +3,8 @@
 template <typename InType, typename AccType, typename IteratorA, typename RegA,
           typename LoaderA, typename IteratorB, typename RegB, typename LoaderB,
           typename IteratorC, typename RegC, typename LoaderC, typename RegAcc,
-          typename GlobalD, typename RegD, typename DStorer,
-          typename ConvertAcc>
+          typename RegAccCast, typename GlobalD, typename RegD,
+          typename DStorer, typename ConvertAcc>
 __global__ void simple_back2back_gemm(const InType* dA, const InType* dB,
                                       const InType* dC, AccType* dD) {
     IteratorA iter_g2r_a(dA);
@@ -20,6 +20,7 @@ __global__ void simple_back2back_gemm(const InType* dA, const InType* dB,
     LoaderC loader_c;
 
     RegAcc acc;
+    RegAccCast acc_half;
 
     RegD rD;
 
@@ -41,7 +42,7 @@ __global__ void simple_back2back_gemm(const InType* dA, const InType* dB,
 
         // Convert acc to half precision
         ConvertAcc cast_acc;
-        auto acc_half = cast_acc(acc);
+        cast_acc(acc, acc_half);
 
         // Compute GEMM using acc_half, C tiles
         compute::gemm_(acc_half, rC, rD);
@@ -55,4 +56,75 @@ __global__ void simple_back2back_gemm(const InType* dA, const InType* dB,
     storer_d(rD, gD);
 }
 
-int main() {}
+int main() {
+    using InType = __half;
+    using AccType = float;
+
+    const int kM = 128;
+    const int kN = 128;
+    const int kK = 128;
+    const int kP = 128;
+
+    // initialize data
+    thrust::host_vector<InType> h_a(kM * kK);
+    for (int i = 0; i < h_a.size(); ++i) {
+        h_a[i] = static_cast<InType>(rand_float());
+    }
+
+    thrust::host_vector<InType> h_b(kK * kN);
+    for (int i = 0; i < h_b.size(); ++i) {
+        h_b[i] = static_cast<InType>(rand_float());
+    }
+
+    thrust::host_vector<InType> h_c(kN * kP);
+    for (int i = 0; i < h_c.size(); ++i) {
+        h_c[i] = static_cast<InType>(rand_float());
+    }
+
+    thrust::host_vector<AccType> h_d(kM * kP);
+    thrust::fill(h_c.begin(), h_c.end(), 0.);
+
+    thrust::device_vector<InType> d_a = h_a;
+    thrust::device_vector<InType> d_b = h_b;
+    thrust::device_vector<InType> d_c = h_c;
+    thrust::device_vector<AccType> d_d = h_d;
+
+    const InType* A = thrust::raw_pointer_cast(d_a.data());
+    const InType* B = thrust::raw_pointer_cast(d_b.data());
+    const InType* C = thrust::raw_pointer_cast(d_c.data());
+    AccType* D = thrust::raw_pointer_cast(d_d.data());
+
+    using Config = B2BGemmTraits<InType, AccType, B2BGemmShape<kM, kN, kK, kP>>;
+
+    using RegA = typename Config::RegA;
+    using RegB = typename Config::RegB;
+    using RegC = typename Config::RegC;
+    using RegD = typename Config::RegD;
+    using RegAcc = typename Config::RegAcc;
+    using RegAccCast = typename Config::RegAccCast;
+
+    using IteratorA = typename Config::IteratorA;
+    using IteratorB = typename Config::IteratorB;
+    using IteratorC = typename Config::IteratorC;
+
+    using LoaderA = typename Config::ALoader;
+    using LoaderB = typename Config::BLoader;
+    using LoaderC = typename Config::CLoader;
+    using DStorer = typename Config::DStorer;
+
+    using ConvertAcc = typename Config::ConvertHalf;
+
+    dim3 grid(1, 1, 1);
+    dim3 block(Config::kThreads, 1, 1);
+
+    simple_back2back_gemm<InType, AccType, IteratorA, RegA, LoaderA, IteratorB,
+                          RegB, LoaderB, IteratorC, RegC, LoaderC, RegAcc,
+                          RegAccCast, typename Config::GlobalD, RegD, DStorer,
+                          ConvertAcc><<<grid, block>>>(A, B, C, D);
+
+    cudaDeviceSynchronize();
+
+    printf("Back2Back GEMM completed successfully.\n");
+
+    return 0;
+}

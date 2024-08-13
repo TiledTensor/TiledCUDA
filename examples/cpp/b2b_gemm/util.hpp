@@ -14,12 +14,12 @@ namespace tl = tile_layout;
 template <const int kM, const int kN, const int kK, const int kP>
 using B2BGemmShape = TileShape<kM, kN, kK, kP>;
 
-// float rand_float(float a = 1e-3, float b = 1) {
-//     float random = ((float)rand()) / (float)RAND_MAX;
-//     float diff = b - a;
-//     float r = random * diff;
-//     return a + r;
-// }
+float rand_float(float a = 1e-3, float b = 1) {
+    float random = ((float)rand()) / (float)RAND_MAX;
+    float diff = b - a;
+    float r = random * diff;
+    return a + r;
+}
 
 // // In this implementation, A and C are interpreted as being laid out in
 // // row-major, and B is interpreted as being laid out in column-major.
@@ -52,10 +52,11 @@ using B2BGemmShape = TileShape<kM, kN, kK, kP>;
 // }
 
 template <typename InType, typename AccType, typename B2BGemmShape>
-struct Back2BackGemmTraits {
+struct B2BGemmTraits {
     using BaseShape = traits::BaseTileShape<InType>;
     static constexpr int kChunkK = 32;
-    static constexpr int kChunkN = 32;
+    // TODO: kChunkN must be match for k-dimension for operand A and B.
+    static constexpr int kChunkN = 64;
 
     using WarpLayout = tl::RowMajor<2, 2>;
     static constexpr int kThreads = tl::get_numel<WarpLayout> * 32;
@@ -90,7 +91,7 @@ struct Back2BackGemmTraits {
                                             copy::WarpReuse::kColReuseCont>;
 
     // operand C
-    using GlobalC = GlobalTile<AccType, tl::ColMajor<kN, kP>>;
+    using GlobalC = GlobalTile<InType, tl::ColMajor<kN, kP>>;
     using IteratorC = TileIterator<GlobalC, TileShape<kChunkN, kP>>;
 
     static constexpr int kCNs = kChunkN / BaseShape::kTileSize;
@@ -108,9 +109,16 @@ struct Back2BackGemmTraits {
     using RegD = RegTile<BaseTileRowMajor<AccType>, tl::RowMajor<kDMs, kDPs>>;
     using DStorer = copy::RegToGlobalStorer<GlobalD, RegD, WarpLayout>;
 
+    static constexpr int kAccMs = kM / kWarpPerRow / BaseShape::kTileSize;
+    static constexpr int kAccNs = kN / kWarpPerCol / BaseShape::kTileSize;
+
     // Reg Acc
-    using RegAcc = RegTile<BaseTileRowMajor<AccType>, tl::RowMajor<kM, kN>>;
+    using RegAcc =
+        RegTile<BaseTileRowMajor<AccType>, tl::RowMajor<kAccMs, kAccNs>>;
+    using RegAccCast =
+        RegTile<BaseTileRowMajor<InType>, tl::RowMajor<kAccMs, kAccNs>>;
 
     // Convert the accumulator to half
-    using ConvertHalf = compute::RegTileConvertHalf<RegAcc>;
+    // using ConvertHalf = compute::RegTileConvertHalf<RegAcc>;
+    using ConvertHalf = compute::RegTileConvertHalf<RegAcc, RegAccCast>;
 };

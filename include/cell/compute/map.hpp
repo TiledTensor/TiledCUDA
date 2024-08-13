@@ -30,6 +30,26 @@ struct ElementWise {
     }
 };
 
+template <typename SrcRegTile, typename DstRegTile, typename Functor>
+struct ElementWise2 {
+    static constexpr int kRows = SrcRegTile::kRows;
+    static constexpr int kCols = SrcRegTile::kCols;
+
+    static_assert(kRows == DstRegTile::kRows, "kRows must be equal");
+    static_assert(kCols == DstRegTile::kCols, "kCols must be equal");
+
+    DEVICE void operator()(const SrcRegTile& src, DstRegTile& dst) {
+        Functor f;
+#pragma unroll
+        for (int i = 0; i < kRows; ++i) {
+#pragma unroll
+            for (int j = 0; j < kCols; ++j) {
+                f(src(i, j), dst(i, j));
+            }
+        }
+    }
+};
+
 template <typename RegTile, typename Functor>
 struct Binary {
     using DType = typename RegTile::DType;
@@ -64,12 +84,23 @@ template <typename RegTile>
 using RegTileLog =
     detail::ElementWise<RegTile, BaseTileLog<typename RegTile::DType>>;
 
-template <typename RegTile>
+// template <typename RegTile>
+// using BaseTileConvertHalf =
+//     detail::ElementWise<RegTile, ConvertToHalf<typename RegTile::DType>>;
+// template <typename RegTile>
+// using RegTileConvertHalf =
+//     detail::ElementWise<RegTile, BaseTileConvertHalf<typename
+//     RegTile::DType>>;
+
+template <typename SrcRegTile, typename DstRegTile>
 using BaseTileConvertHalf =
-    detail::ElementWise<RegTile, ConvertToHalf<typename RegTile::DType>>;
-template <typename RegTile>
+    detail::ElementWise2<SrcRegTile, DstRegTile,
+                         ConvertToHalf<typename SrcRegTile::DType>>;
+template <typename SrcRegTile, typename DstRegTile>
 using RegTileConvertHalf =
-    detail::ElementWise<RegTile, BaseTileConvertHalf<typename RegTile::DType>>;
+    detail::ElementWise2<SrcRegTile, DstRegTile,
+                         BaseTileConvertHalf<typename SrcRegTile::DType,
+                                             typename DstRegTile::DType>>;
 
 template <typename RegTile>
 using BaseTileAdd = detail::Binary<RegTile, Add<typename RegTile::DType>>;

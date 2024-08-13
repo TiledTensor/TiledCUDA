@@ -20,3 +20,6 @@ include(dependencies)
 include_directories(include)
 add_subdirectory(src)
 add_subdirectory(tests/cpp)
+
+add_subdirectory(examples/cpp/gemm)
+add_subdirectory(examples/cpp/b2b_gemm)
