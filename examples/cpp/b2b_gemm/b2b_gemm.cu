@@ -54,3 +54,5 @@ __global__ void simple_back2back_gemm(const InType* dA, const InType* dB,
     DStorer storer_d;
     storer_d(rD, gD);
 }
+
+int main() {}
