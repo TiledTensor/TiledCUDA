@@ -82,43 +82,43 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
     using Reg = Reg_;
     using BaseShape = BaseTileShape<DType>;
 
-    // strides to iterate over each 16x128-bits `BaseTile`.
-    const int kTileRstride = BaseShape::kRows;
-    const int kTileCstride = BaseShape::kCols * Shared::kColStride;
-
-    // row stride and col stride for a thread in a warp
-    static constexpr int kStride = LoadMat::kNumPerAccess;
-    const int kLaneRstride = kStride;
-    const int kLaneCstride = Shared::kColStride;
-
     static constexpr int kRowExec = kRowExec_;
     static constexpr int kColExec = kColExec_;
+
+    using BaseTilesLayout =
+        tl::MatrixLayout<kRowExec, kColExec, BaseShape::kRows,
+                         BaseShape::kCols * Shared::kColStride>;
+
+    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
+
+    DEVICE SharedToRegLoaderImpl()
+        : base_tiles_(BaseTilesLayout{}),
+          in_base_tile_(BaseTileSharedLayout{}) {}
 
     DEVICE void operator()(const DType* src, Reg& dst) {
         // transpose the lane position if the shared memory is in column-major.
         // 16 threads are mapped to the strided dimension of the data while the
         // 2 threads are mapped to the contiguous dimension of the data.
-        int lane_row = this->lane_col_id();
+        int lane_row = this->lane_col_id() * LoadMat::kNumPerAccess;
         int lane_col = this->lane_row_id();
 
-        const DType* data;
-#pragma unroll
+        int lane_offset = in_base_tile_(lane_row, lane_col);
+        int offset = 0;
+
         for (int i = 0; i < kColExec; ++i) {
 #pragma unroll
             for (int j = 0; j < kRowExec; ++j) {
-                // 2. advance pointer to the 16x16 `BaseTile` indexed by
-                // (i, j).
-                data = src + (j * kTileRstride + i * kTileCstride);
-
-                // 3. advance the pointer to data accessed by the current
-                // thread inside a 16x128-bits `BaseTile`.
-                data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
+                offset = base_tiles_(j, i) + lane_offset;
 
                 // issue the hardware-backed memory access instruction
-                this->ldmatrix(data, dst(j, i).mutable_data());
+                this->ldmatrix(&src[offset], dst(j, i).mutable_data());
             }
         }
     }
+
+  private:
+    BaseTilesLayout base_tiles_;
+    BaseTileSharedLayout in_base_tile_;
 };
 
 template <typename Shared, typename Reg_, const int kRowExec_,

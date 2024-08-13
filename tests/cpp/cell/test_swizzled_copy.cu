@@ -76,7 +76,6 @@ __global__ void swizzled_copy(const Element* data, G2S1& g2s,
 
             check_results<Reg, Element>(r_tile, r_tile_swizzled, Reg::kRows,
                                         Reg::kCols);
-
 #ifdef DEBUG
             if (thread(0)) {
                 printf("\niteration [%d, %d]\n", k, i);
@@ -91,9 +90,13 @@ __global__ void swizzled_copy(const Element* data, G2S1& g2s,
     }
 }
 
+/// @brief This unit test verifies the correctness of the swizzled row-major
+///        format for loading operand A in GEMM.
 template <typename WarpLayout, const int kRows, const int kCols,
           const int kShmRows, const int kShmCols, const int kChunkShm>
-void run_test() {
+void run_test_rowmajor() {
+    static_assert(kShmRows == kRows, "kShmRows must be equal to kRows");
+
     using Element = __half;
     const int kThreads = tl::get_numel<WarpLayout> * 32;
     static constexpr int kWarpPerRow = tl::num_rows<WarpLayout>;
@@ -170,27 +173,121 @@ void run_test() {
        << ", " << kChunkShm << "]";
     LOG(INFO) << std::endl << ss.str() << " passed!" << std::endl;
 }
+
+/// @brief This unit test verifies the correctness of the swizzled column-major
+///        format for loading operand B in GEMM.
+template <typename WarpLayout, const int kRows /*K*/, const int kCols /*N*/,
+          const int kShmRows, const int kShmCols, const int kChunkShm>
+void run_test_colmajor() {
+    using Element = __half;
+    const int kThreads = tl::get_numel<WarpLayout> * 32;
+    static constexpr int kWarpPerCol = tl::num_cols<WarpLayout>;
+
+    static_assert(kShmCols == kCols, "kShmCols must be equal to kCols.");
+
+    using Global = GlobalTile<Element, tl::ColMajor<kRows, kCols>>;
+    using GIterator = TileIterator<Global, TileShape<kShmRows, kShmCols>>;
+
+    // for non-swizzled layout
+    using Shared1 = SharedTile<Element, tl::ColMajor<kShmRows, kShmCols>,
+                               false /*enable swizzled layout on shared*/>;
+    using SIterator1 = TileIterator<Shared1, TileShape<kChunkShm, kShmCols>>;
+
+    // for swizzled layout
+    using Shared2 = SharedTile<Element, tl::ColMajor<kShmRows, kShmCols>,
+                               true /*enable swizzled layout on shared*/>;
+    using SIterator2 = TileIterator<Shared2, TileShape<kChunkShm, kShmCols>>;
+
+    using BaseShape = traits::BaseTileShape<Element>;
+
+    const int kSc0 = kChunkShm / BaseShape::kRows;
+    const int kSc1 = kShmCols / BaseShape::kCols / kWarpPerCol;
+
+    using Reg = RegTile<BaseTileColMajor<Element>, tl::ColMajor<kSc0, kSc1>>;
+
+#ifdef DEBUG
+    LOG(INFO) << std::endl
+              << "GIterator: " << GIterator{} << std::endl
+              << "SIterator1: " << SIterator1{} << std::endl
+              << "SIterator2: " << SIterator2{} << std::endl
+              << "GlobalTile Shape: [" << kRows << ", " << kCols << "]"
+              << std::endl
+              << "SharedTile Shape: [" << kShmRows << ", " << kShmCols << "]"
+              << std::endl
+              << "sc0: " << kSc0 << ", sc1: " << kSc1 << std::endl
+              << "RegTile Shape: " << Reg{} << std::endl;
+#endif
+
+    using G2S1 = GlobalToSharedLoader<Shared1, WarpLayout>;
+    using G2S2 = GlobalToSharedLoader<Shared2, WarpLayout>;
+    using S2R = SharedToRegLoader<Reg, WarpLayout, WarpReuse::kColReuseCont>;
+
+    dim3 dim_grid(1, 1, 1);
+    dim3 dim_block(kThreads, 1, 1);
+    int shm_size = (Shared1::kNumel + Shared2::kNumel) * sizeof(Element);
+
+    const int numel = kRows * kCols;
+    __half* dA;
+    CudaCheck(cudaMalloc(&dA, numel * sizeof(__half)));
+    const int threads = 128;
+    const int blocks = CeilDiv<numel, threads>;
+    init_halfs<<<blocks, threads>>>(dA, numel);
+
+    G2S1 g2s;
+    G2S2 g2s_swizzled;
+    S2R s2r;
+
+    auto test_func =
+        &swizzled_copy<Element, Global, GIterator, Shared1, SIterator1, Shared2,
+                       SIterator2, Reg, G2S1, G2S2, S2R>;
+
+    // maximal statically allocated smem per block
+    const int kMaxSmemPerBlock = 48 * 1024;
+    if (shm_size > kMaxSmemPerBlock) {
+        cudaFuncSetAttribute(
+            test_func, cudaFuncAttributeMaxDynamicSharedMemorySize, shm_size);
+    }
+
+    test_func<<<dim_grid, dim_block, shm_size>>>(dA, g2s, g2s_swizzled, s2r);
+    cudaDeviceSynchronize();
+
+    CudaCheck(cudaFree(dA));
+
+    std::ostringstream ss;
+    ss << "[" << kRows << ", " << kCols << ", " << kShmRows << ", " << kShmCols
+       << ", " << kChunkShm << "]";
+    LOG(INFO) << std::endl << ss.str() << " passed!" << std::endl;
+}
 }  // namespace
 
 TEST(TestSwizzledLayout, test1) {
-    run_test<tl::RowMajor<1, 2>, 16, 64, 16, 32, 32>();
-    run_test<tl::RowMajor<1, 2>, 16, 128, 16, 64, 32>();
-    run_test<tl::RowMajor<1, 2>, 32, 32, 32, 32, 16>();
+    run_test_rowmajor<tl::RowMajor<1, 2>, 16, 64, 16, 32, 32>();
+    run_test_rowmajor<tl::RowMajor<1, 2>, 16, 128, 16, 64, 32>();
+    run_test_rowmajor<tl::RowMajor<1, 2>, 32, 32, 32, 32, 16>();
 
-    run_test<tl::RowMajor<2, 2>, 32, 32, 32, 32, 16>();
-    run_test<tl::RowMajor<2, 2>, 32, 32, 32, 32, 32>();
-    run_test<tl::RowMajor<2, 2>, 128, 256, 128, 128, 64>();
+    run_test_rowmajor<tl::RowMajor<2, 2>, 32, 32, 32, 32, 16>();
+    run_test_rowmajor<tl::RowMajor<2, 2>, 32, 32, 32, 32, 32>();
+    run_test_rowmajor<tl::RowMajor<2, 2>, 128, 256, 128, 128, 64>();
 
-    run_test<tl::RowMajor<2, 1>, 32, 64, 32, 32, 32>();
-    run_test<tl::RowMajor<2, 1>, 32, 128, 32, 64, 32>();
-    run_test<tl::RowMajor<2, 1>, 64, 256, 64, 128, 64>();
-    run_test<tl::RowMajor<4, 1>, 64, 64, 64, 64, 32>();
-    run_test<tl::RowMajor<4, 1>, 64, 128, 64, 64, 64>();
-    run_test<tl::RowMajor<4, 1>, 128, 64, 128, 64, 64>();
-    run_test<tl::RowMajor<4, 1>, 64, 64, 64, 64, 64>();
-    run_test<tl::RowMajor<4, 1>, 64, 128, 64, 128, 128>();
-    run_test<tl::RowMajor<4, 1>, 64, 256, 64, 128, 128>();
-    run_test<tl::RowMajor<8, 1>, 128, 512, 128, 256, 128>();
+    run_test_rowmajor<tl::RowMajor<2, 1>, 32, 64, 32, 32, 32>();
+    run_test_rowmajor<tl::RowMajor<2, 1>, 32, 128, 32, 64, 32>();
+    run_test_rowmajor<tl::RowMajor<2, 1>, 64, 256, 64, 128, 64>();
+    run_test_rowmajor<tl::RowMajor<4, 1>, 64, 64, 64, 64, 32>();
+    run_test_rowmajor<tl::RowMajor<4, 1>, 64, 128, 64, 64, 64>();
+    run_test_rowmajor<tl::RowMajor<4, 1>, 128, 64, 128, 64, 64>();
+    run_test_rowmajor<tl::RowMajor<4, 1>, 64, 64, 64, 64, 64>();
+    run_test_rowmajor<tl::RowMajor<4, 1>, 64, 128, 64, 128, 128>();
+    run_test_rowmajor<tl::RowMajor<4, 1>, 64, 256, 64, 128, 128>();
+    run_test_rowmajor<tl::RowMajor<8, 1>, 128, 512, 128, 256, 128>();
+}
+
+TEST(TestSwizzledLayout, test2) {
+    run_test_colmajor<tl::RowMajor<1, 1>, 16 /*K*/, 16 /*N*/, 16, 16, 16>();
+    run_test_colmajor<tl::RowMajor<1, 1>, 64 /*K*/, 64 /*N*/, 32, 64, 16>();
+    run_test_colmajor<tl::RowMajor<1, 2>, 128 /*K*/, 32 /*N*/, 64, 32, 32>();
+    run_test_colmajor<tl::RowMajor<2, 1>, 256 /*K*/, 64 /*N*/, 128, 64, 32>();
+    run_test_colmajor<tl::RowMajor<2, 2>, 256 /*K*/, 128 /*N*/, 64, 128, 32>();
+    run_test_colmajor<tl::RowMajor<4, 1>, 128 /*K*/, 64 /*N*/, 64, 64, 64>();
 }
 
 }  // namespace tiledcuda::testing

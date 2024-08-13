@@ -188,14 +188,90 @@ struct GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kRowMajor> {
     }
 
     DEVICE int lane_row_id() {
-        int lane_id = threadIdx.x % warpSize;
+        int lane_id = threadIdx.x % kWarpSize;
         return lane_id % tl::num_rows<ThreadLayout>;
     }
 
     /// @brief returns the lane col of the current thread within a warp.
     DEVICE int lane_col_id() {
-        int lane_id = threadIdx.x % warpSize;
+        int lane_id = threadIdx.x % kWarpSize;
         return lane_id / tl::num_rows<ThreadLayout>;
+    }
+
+  private:
+    DataLayoutPerThread data_layout_;
+    TiledCopy tiled_copy_;
+};
+
+/// @brief  Implement loading a `16x16` BaseTile from global memory to shared
+///         memory.
+template <class Global, class Shared>
+struct GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kColMajor> {
+    using DType = Shared::DType;
+
+    // The macro kernel breaks down the entire copy operation into iterations
+    // over 16x16 BaseTiles. To transfer a single BaseTile, threads in a warp
+    // are arranged in a 16x2 row-major layout. Each thread uses 128-bit data in
+    // a single access.
+    using ThreadLayout = tile_layout::RowMajor<2, 16>;
+    static constexpr int kThreadsPerRow = tl::num_rows<ThreadLayout>;
+    static constexpr int kThreadsPerCol = tl::num_cols<ThreadLayout>;
+
+    static constexpr int kWarpSize = 32;
+
+    static constexpr int kNumPerAccess =
+        traits::TraitsBase<DType>::kNumPerAccess;
+
+    using BaseShape = traits::BaseTileShape<DType>;
+
+    static constexpr int kExecCount =
+        BaseShape::kRows / (kNumPerAccess * kThreadsPerRow);
+
+    static_assert(
+        kExecCount == 1,
+        "The current implementation requires that number of elements per "
+        "access should be equal to the number of columns in the BaseTile.");
+
+    // create CuTe's compatible column-major layout for the global memory.
+    using BaseTileGlobalLayout =
+        cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
+                     Stride<_1, Int<Global::kColStride>>>;
+
+    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
+
+#ifdef CP_ASYNC_SM80_ENABLED
+    using CopyInst =
+        Copy_Atom<SM80_CP_ASYNC_CACHEGLOBAL<cute::uint128_t>, DType>;
+#else
+    using CopyInst = Copy_Atom<DefaultCopy, DType>;
+#endif
+    using TiledCopy = decltype(make_tiled_copy(
+        CopyInst{},
+        cute::Layout<Shape<Int<kThreadsPerRow>, Int<kThreadsPerCol>>,
+                     Stride<Int<kThreadsPerCol>, _1>>{},
+        cute::Layout<Shape<Int<kNumPerAccess>, _1>>{}));
+
+    using DataLayoutPerThread = cute::Layout<Shape<Int<kNumPerAccess>, _1>,
+                                             Stride<_1, Int<kNumPerAccess>>>;
+
+    DEVICE GlobalToSharedBaseTileLoader() : tiled_copy_(TiledCopy{}) {}
+
+    DEVICE void copy(const DType* src, DType* dst) {
+        auto src_tensor = make_tensor(make_gmem_ptr(src), data_layout_);
+        auto dst_tensor = make_tensor(make_smem_ptr(dst), data_layout_);
+
+        cute::copy(tiled_copy_, src_tensor, dst_tensor);
+    }
+
+    DEVICE int lane_col_id() {
+        int lane_id = threadIdx.x % kWarpSize;
+        return lane_id % tl::num_cols<ThreadLayout>;
+    }
+
+    /// @brief returns the lane col of the current thread within a warp.
+    DEVICE int lane_row_id() {
+        int lane_id = threadIdx.x % kWarpSize;
+        return lane_id / tl::num_cols<ThreadLayout>;
     }
 
   private:
