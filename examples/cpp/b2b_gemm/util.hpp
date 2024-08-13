@@ -130,6 +130,5 @@ struct B2BGemmTraits {
         RegTile<BaseTileRowMajor<InType>, tl::RowMajor<kAccMs, kAccNs>>;
 
     // Convert the accumulator to half
-    // using ConvertHalf = compute::RegTileConvertHalf<RegAcc>;
     using ConvertHalf = compute::RegTileConvertHalf<RegAcc, RegAccCast>;
 };
