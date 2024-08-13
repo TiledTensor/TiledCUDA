@@ -65,6 +65,13 @@ using RegTileLog =
     detail::ElementWise<RegTile, BaseTileLog<typename RegTile::DType>>;
 
 template <typename RegTile>
+using BaseTileConvertHalf =
+    detail::ElementWise<RegTile, ConvertToHalf<typename RegTile::DType>>;
+template <typename RegTile>
+using RegTileConvertHalf =
+    detail::ElementWise<RegTile, BaseTileConvertHalf<typename RegTile::DType>>;
+
+template <typename RegTile>
 using BaseTileAdd = detail::Binary<RegTile, Add<typename RegTile::DType>>;
 template <typename RegTile>
 using RegTileAdd =

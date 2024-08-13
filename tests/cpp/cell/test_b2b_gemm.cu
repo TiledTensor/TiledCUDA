@@ -94,7 +94,8 @@ bool check_correctness(const half* hc1, const float* hc2, int row, int col) {
 
 //     cublasHandle_t handle;
 //     CublasCheck(cublasCreate(&handle));
-//     CublasCheck(cublasHgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, k, &alf, A,
+//     CublasCheck(cublasHgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, k, &alf,
+//     A,
 //                             lda, B, ldb, &bet, C, ldc));
 //     CublasCheck(cublasDestroy(handle));
 // }
@@ -102,7 +103,8 @@ bool check_correctness(const half* hc1, const float* hc2, int row, int col) {
 // @param strided_k: chunk size to partition the k dimension of the shared
 //                   memory tile.
 template <typename Element, typename ElementAcc, const int kM, const int kN,
-          const int kK, typename WarpLayout_, const int kChunkK>
+          const int kK, const int kP, typename WarpLayout_, const int kChunkK,
+          const int kChunkN>
 struct TestTraits {
     using BaseShape = traits::BaseTileShape<Element>;
 
@@ -114,13 +116,18 @@ struct TestTraits {
 
     /// == 2. configurate tile transfer between global and shared using CuTe ==
     using GlobalA = GlobalTile<Element, tl::RowMajor<kM, kK>>;
-    static const bool kSwizzled = true;
-    using SharedA = SharedTile<Element, tl::RowMajor<kM, kK>, kSwizzled>;
+    // static const bool kSwizzled = true;
+    // using SharedA = SharedTile<Element, tl::RowMajor<kM, kK>, kSwizzled>;
+    using SharedA = SharedTile<Element, tl::RowMajor<kM, kK>>;
     using LoadSharedA = GlobalToSharedLoader<SharedA, WarpLayout>;
 
     using GlobalB = GlobalTile<Element, tl::RowMajor<kN, kK>>;
     using SharedB = SharedTile<Element, tl::RowMajor<kN, kK>>;
     using LoadSharedB = GlobalToSharedLoader<SharedB, WarpLayout>;
+
+    using GlobalC = GlobalTile<Element, tl::RowMajor<kP, kN>>;
+    using SharedC = SharedTile<Element, tl::RowMajor<kP, kN>>;
+    using LoadSharedC = GlobalToSharedLoader<SharedC, WarpLayout>;
 
     /// === 3. configurate tile transfer between shared and register loader ===
     // shared tile for operand A
@@ -128,9 +135,15 @@ struct TestTraits {
     // shared tile for operand B
     using SharedB2 = SharedTile<Element, tl::ColMajor<kK, kN>>;
     using TileIteratorB = TileIterator<SharedB2, TileShape<kChunkK, kN>>;
+    // shared tile for operand C
+    using SharedC2 = SharedTile<Element, tl::ColMajor<kN, kP>>;
+    using TileIteratorC = TileIterator<SharedC2, TileShape<kChunkN, kP>>;
 
     static_assert(TileIteratorA::sc1 == TileIteratorB::sc0,
                   "mismatched K dimension!");
+
+    static_assert(TileIteratorC::sc0 == TileIteratorB::sc1,
+                  "mismatched N dimension!");
 
     // register tile for operand A, calculate register usage for operand A
     // warp tile shape for the operand A
@@ -149,15 +162,23 @@ struct TestTraits {
     using LoadRegB =
         SharedToRegLoader<RegB, WarpLayout, WarpReuse::kColReuseCont>;
 
-    // register tile for output C
-    // calculate register usage for output C
-    static constexpr int kCMs = kM / kWarpPerRow / BaseShape::kTileSize;
-    static constexpr int kCNs = kN / kWarpPerCol / BaseShape::kTileSize;
+    // register tile for operand C, calculate register usage for operand C
+    static constexpr int kCNs = kChunkN / BaseShape::kTileSize;
+    static constexpr int kCPs = kP / kWarpPerCol / BaseShape::kTileSize;
+    using RegC = RegTile<BaseTileColMajor<Element>, tl::ColMajor<kCNs, kCPs>>;
+    // load RegTileC from shared
+    using LoadRegC =
+        SharedToRegLoader<RegC, WarpLayout, WarpReuse::kColReuseCont>;
 
-    using RegC =
-        RegTile<BaseTileRowMajor<ElementAcc>, tl::RowMajor<kCMs, kCNs>>;
-    using GlobalC = GlobalTile<ElementAcc, tl::RowMajor<kM, kN>>;
-    using CStorer = copy::RegToGlobalStorer<GlobalC, RegC, WarpLayout>;
+    // register tile for output D
+    // calculate register usage for output D
+    static constexpr int kDMs = kM / kWarpPerRow / BaseShape::kTileSize;
+    static constexpr int kDPs = kP / kWarpPerCol / BaseShape::kTileSize;
+
+    using RegD =
+        RegTile<BaseTileRowMajor<ElementAcc>, tl::RowMajor<kDMs, kDPs>>;
+    using GlobalD = GlobalTile<ElementAcc, tl::RowMajor<kM, kP>>;
+    using DStorer = copy::RegToGlobalStorer<GlobalD, RegD, WarpLayout>;
 };
 
 template <typename Element, typename ElementAcc,                     //
@@ -213,7 +234,7 @@ __global__ void test_back2back_gemm(const Element* ga, const Element* gb,
     RegAcc acc;
     RegD rD;
 
-    for (int n = 0; n < TileIteratorC::sc1; ++n) {      // Iterate over N
+    for (int n = 0; n < TileIteratorC::sc0; ++n) {      // Iterate over N
         for (int k = 0; k < TileIteratorA::sc1; ++k) {  // Iterate over K
             // Compute Acc = A @ B
             load_rA(sAs(k), rA);
@@ -236,75 +257,87 @@ __global__ void test_back2back_gemm(const Element* ga, const Element* gb,
 }
 }  // namespace
 
-template <const int kM, const int kN, const int kK, typename WarpLayout,
-          const int kChunkK>
+template <const int kM, const int kN, const int kK, const int kP,
+          typename WarpLayout, const int kChunkK, const int kChunkN>
 void run_test() {
-    //     /// unittest for register-level gemm by calling into wmma PTX
-    //     using Element = cutlass::half_t;
-    //     using ElementAcc = float;
+    /// unittest for register-level gemm by calling into wmma PTX
+    using Element = cutlass::half_t;
+    using ElementAcc = float;
 
-    //     // initialize data
-    //     thrust::host_vector<Element> h_a(kM * kK);
-    //     for (int i = 0; i < h_a.size(); ++i) {
-    //         h_a[i] = static_cast<Element>(rand_float());
-    //     }
+    // initialize data
+    thrust::host_vector<Element> h_a(kM * kK);
+    for (int i = 0; i < h_a.size(); ++i) {
+        h_a[i] = static_cast<Element>(rand_float());
+    }
 
-    //     thrust::host_vector<Element> h_b(kK * kN);
-    //     for (int i = 0; i < h_b.size(); ++i) {
-    //         h_b[i] = static_cast<Element>(rand_float());
-    //     }
+    thrust::host_vector<Element> h_b(kK * kN);
+    for (int i = 0; i < h_b.size(); ++i) {
+        h_b[i] = static_cast<Element>(rand_float());
+    }
 
-    //     thrust::host_vector<ElementAcc> h_c(kM * kN);
-    //     thrust::fill(h_c.begin(), h_c.end(), 0.);
+    thrust::host_vector<Element> h_c(kN * kP);
+    for (int i = 0; i < h_c.size(); ++i) {
+        h_c[i] = static_cast<Element>(rand_float());
+    }
 
-    //     thrust::device_vector<Element> d_a = h_a;
-    //     thrust::device_vector<Element> d_b = h_b;
-    //     thrust::device_vector<ElementAcc> d_c = h_c;
+    thrust::host_vector<ElementAcc> h_d(kM * kP);
+    thrust::fill(h_d.begin(), h_d.end(), 0.);
 
-    //     /// define the configuration of the test
-    //     using config =
-    //         TestTraits<Element, ElementAcc, kM, kN, kK, WarpLayout, kChunkK>;
+    thrust::device_vector<Element> d_a = h_a;
+    thrust::device_vector<Element> d_b = h_b;
+    thrust::device_vector<Element> d_c = h_c;
+    thrust::device_vector<ElementAcc> d_d = h_d;
+
+    /// define the configuration of the test
+    using config = TestTraits<Element, ElementAcc, kM, kN, kK, kP, WarpLayout,
+                              kChunkK, kChunkN>;
 
     //     LOG(INFO) << "[" << kM << ", " << kN << ", " << kK << "], warps: ["
     //               << config::kWarpPerRow << ", " << config::kWarpPerCol
     //               << "], k_chunk_size: " << kChunkK
     //               << ", kThreads: " << config::kThreads << std::endl;
 
-    //     using RegA = typename config::RegA;
-    //     using RegB = typename config::RegB;
-    //     using RegC = typename config::RegC;
+    using RegA = typename config::RegA;
+    using RegB = typename config::RegB;
+    using RegC = typename config::RegC;
+    using RegD = typename config::RegD;
+    using RegAcc = typename config::RegAcc;
 
-    //     using IteratorA = typename config::TileIteratorA;
-    //     using IteratorB = typename config::TileIteratorB;
+    using IteratorA = typename config::TileIteratorA;
+    using IteratorB = typename config::TileIteratorB;
+    using IteratorC = typename config::TileIteratorC;
 
-    // #if defined(DEBUG)
-    //     LOG(INFO) << "TileIteratorA: " << IteratorA{} << std::endl
-    //               << "TileIteratorB: " << IteratorB{} << std::endl
-    //               << "RegA: " << RegA{} << std::endl
-    //               << "RegB: " << RegB{} << std::endl
-    //               << "RegC: " << RegC{} << std::endl;
-    // #endif
+#if defined(DEBUG)
+    LOG(INFO) << "TileIteratorA: " << IteratorA{} << std::endl
+              << "TileIteratorB: " << IteratorB{} << std::endl
+              << "TileIteratorC: " << IteratorC{} << std::endl
+              << "RegA: " << RegA{} << std::endl
+              << "RegB: " << RegB{} << std::endl
+              << "RegC: " << RegC{} << std::endl;
+    << "RegD: " << RegD{} << std::endl;
+#endif
 
-    //     dim3 dim_grid(1, 1, 1);
-    //     dim3 dim_block(config::kThreads, 1, 1);
-    //     int shm_size = (kM + kN) * kK * sizeof(Element);
+    dim3 dim_grid(1, 1, 1);
+    dim3 dim_block(config::kThreads, 1, 1);
+    int shm_size = (kM + kN) * kK * sizeof(Element);
 
-    //     // TODO: Refine this code; there are too many template parameters,
-    //     making it
-    //     // messy.
-    //     test_wmma<
-    //         Element, ElementAcc, typename config::GlobalA, typename
-    //         config::SharedA, typename config::LoadSharedA, typename
-    //         config::GlobalB, typename config::SharedB, typename
-    //         config::LoadSharedB, IteratorA, RegA, typename config::LoadRegA,
-    //         IteratorB, RegB, typename config::LoadRegB, typename
-    //         config::GlobalC, RegC, typename config::CStorer>
-    //         <<<dim_grid, dim_block, shm_size>>>(
-    //             thrust::raw_pointer_cast(d_a.data()),
-    //             thrust::raw_pointer_cast(d_b.data()),
-    //             thrust::raw_pointer_cast(d_c.data()));
-    //     cudaDeviceSynchronize();
-    //     h_c = d_c;
+    // TODO: Refine this code; there are too many template parameters,
+    // making it messy.
+    test_back2back_gemm<
+        Element, ElementAcc, typename config::GlobalA, typename config::SharedA,
+        typename config::LoadSharedA, typename config::GlobalB,
+        typename config::SharedB, typename config::LoadSharedB,
+        typename config::GlobalC, typename config::SharedC,
+        typename config::LoadSharedC, IteratorA, RegA,
+        typename config::LoadRegA, IteratorB, RegB, typename config::LoadRegB,
+        IteratorC, RegC, typename config::LoadRegC, RegAcc,
+        typename config::GlobalD, RegD, typename config::DStorer>
+        <<<dim_grid, dim_block, shm_size>>>(
+            thrust::raw_pointer_cast(d_a.data()),
+            thrust::raw_pointer_cast(d_b.data()),
+            thrust::raw_pointer_cast(d_c.data()),
+            thrust::raw_pointer_cast(d_d.data()));
+    cudaDeviceSynchronize();
 
     //     /// unittest for correctness, take cublas as the ground-truth
     //     thrust::device_vector<__half> d_cublas(kM * kN);

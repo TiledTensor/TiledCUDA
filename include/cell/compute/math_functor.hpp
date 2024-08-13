@@ -143,4 +143,23 @@ struct Relu<__half> {
 };
 #endif
 
+template <typename Element>
+struct ConvertToHalf {
+    DEVICE Element operator()(__half a) const {}
+
+    DEVICE void operator()(const __half& src, Element& dst) {}
+};
+
+#if defined(__CUDA_ARCH__)
+template <>
+struct ConvertToHalf<float> {
+    DEVICE float operator()(__half a) const { return __half2float(a); }
+
+    DEVICE void operator()(const __half& src, float& dst) {
+        dst = __half2float(src);
+    }
+};
+
+#endif
+
 }  // namespace tiledcuda::cell::compute
