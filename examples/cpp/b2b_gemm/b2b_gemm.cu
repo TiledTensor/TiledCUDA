@@ -36,6 +36,7 @@ __global__ void simple_back2back_gemm(const InType* dA, const InType* dB,
             // Compute GEMM using A, B tiles
             compute::gemm_(rA, rB, acc);
         }
+        __syncthreads();
         // Load C tile from global to register
         loader_c(iter_g2r_c(n), rC);
         __syncthreads();
