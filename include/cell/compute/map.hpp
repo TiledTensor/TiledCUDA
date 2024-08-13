@@ -11,6 +11,9 @@ namespace tl = tile_layout;
 
 namespace detail {
 
+// TODO(KuangjuX): Distinguish whether the `Layout` is Row Major or Column
+// Major. Different Layouts have different directions of memory continuity,
+// which will affect the memory access performance.
 template <typename RegTile, typename Functor>
 struct ElementWise {
     using DType = typename RegTile::DType;
@@ -30,6 +33,32 @@ struct ElementWise {
     }
 };
 
+// TODO(KuangjuX): Distinguish whether the `Layout` is Row Major or Column
+// Major. Different Layouts have different directions of memory continuity,
+// which will affect the memory access performance.
+template <typename SrcRegTile, typename DstRegTile, typename Functor>
+struct ElementWise2 {
+    static constexpr int kRows = SrcRegTile::kRows;
+    static constexpr int kCols = SrcRegTile::kCols;
+
+    static_assert(kRows == DstRegTile::kRows, "kRows must be equal");
+    static_assert(kCols == DstRegTile::kCols, "kCols must be equal");
+
+    DEVICE void operator()(const SrcRegTile& src, DstRegTile& dst) {
+        Functor f;
+#pragma unroll
+        for (int i = 0; i < kRows; ++i) {
+#pragma unroll
+            for (int j = 0; j < kCols; ++j) {
+                f(src(i, j), dst(i, j));
+            }
+        }
+    }
+};
+
+// TODO(KuangjuX): Distinguish whether the `Layout` is Row Major or Column
+// Major. Different Layouts have different directions of memory continuity,
+// which will affect the memory access performance.
 template <typename RegTile, typename Functor>
 struct Binary {
     using DType = typename RegTile::DType;
@@ -63,6 +92,16 @@ using BaseTileLog = detail::ElementWise<RegTile, Log<typename RegTile::DType>>;
 template <typename RegTile>
 using RegTileLog =
     detail::ElementWise<RegTile, BaseTileLog<typename RegTile::DType>>;
+
+template <typename SrcRegTile, typename DstRegTile>
+using BaseTileConvertHalf =
+    detail::ElementWise2<SrcRegTile, DstRegTile,
+                         ConvertToHalf<typename SrcRegTile::DType>>;
+template <typename SrcRegTile, typename DstRegTile>
+using RegTileConvertHalf =
+    detail::ElementWise2<SrcRegTile, DstRegTile,
+                         BaseTileConvertHalf<typename SrcRegTile::DType,
+                                             typename DstRegTile::DType>>;
 
 template <typename RegTile>
 using BaseTileAdd = detail::Binary<RegTile, Add<typename RegTile::DType>>;
