@@ -4,7 +4,7 @@ UNIT_TEST 	?= test_lstm_cell
 CPP_UT		?= test_copy
 CPP_UTS 	:= scripts/unittests/run_all_cpp_tests.sh
 
-EXAMPLE 	?= $(EXAMPLE_DIR)/python/scatter_nd.py
+PY_EXAMPLE 	?= $(EXAMPLE_DIR)/python/scatter_nd.py
 CPP_EXAMPLE ?= $(EXAMPLE_DIR)/cpp/b2b_gemm/b2b_gemm
 UNIT   		?= $(TEST_DIR)/$(UNIT_TEST).py
 
@@ -22,7 +22,7 @@ build:
 $(DYNAMIC_LIB): build
 
 py_example: $(DYNAMIC_LIB)
-	@python3 $(EXAMPLE)
+	@python3 $(PY_EXAMPLE)
 
 cpp_example: $(DYNAMIC_LIB)
 	@./$(BUILD_DIR)/$(CPP_EXAMPLE)
