@@ -94,14 +94,13 @@ using RegTileLog =
     detail::ElementWise<RegTile, BaseTileLog<typename RegTile::DType>>;
 
 template <typename SrcRegTile, typename DstRegTile>
-using BaseTileConvertHalf =
-    detail::ElementWise2<SrcRegTile, DstRegTile,
-                         ConvertToHalf<typename SrcRegTile::DType>>;
+using BaseTileConvert = detail::ElementWise2<
+    SrcRegTile, DstRegTile,
+    Convert<typename SrcRegTile::DType, typename DstRegTile::DType>>;
 template <typename SrcRegTile, typename DstRegTile>
-using RegTileConvertHalf =
-    detail::ElementWise2<SrcRegTile, DstRegTile,
-                         BaseTileConvertHalf<typename SrcRegTile::DType,
-                                             typename DstRegTile::DType>>;
+using RegTileConvertHalf = detail::ElementWise2<
+    SrcRegTile, DstRegTile,
+    BaseTileConvert<typename SrcRegTile::DType, typename DstRegTile::DType>>;
 
 template <typename RegTile>
 using BaseTileAdd = detail::Binary<RegTile, Add<typename RegTile::DType>>;
