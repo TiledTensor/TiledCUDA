@@ -73,7 +73,7 @@ struct FlashAttnTraits {
     static constexpr int kN = dim_size<0, FlashAttnShape>;
     static constexpr int kD = dim_size<1, FlashAttnShape>;
 
-    using WarpLayout = tl::WarpTileLayout<2, 2>;
+    using WarpLayout = tl::RowMajor<2, 2>;
     static constexpr int kThreads = tl::get_numel<WarpLayout> * 32;
     static constexpr int kWarpPerRow = tl::num_rows<WarpLayout>;
     static constexpr int kWarpPerCol = tl::num_cols<WarpLayout>;
@@ -85,7 +85,8 @@ struct FlashAttnTraits {
     static constexpr int kQRows = Br / BaseShape::kTileSize;
     static constexpr int kQCols = kD / BaseShape::kTileSize;
 
-    using RegQ = RegisterTile<InType, tl::RowMajor<kQRows, kQCols>>;
+    using RegQ =
+        RegTile<BaseTileRowMajor<InType>, tl::RowMajor<kQRows, kQCols>>;
     using QLoader =
         copy::GlobalToRegLoader<RegQ, WarpLayout, copy::WarpReuse::kCont>;
 
@@ -95,7 +96,8 @@ struct FlashAttnTraits {
     static constexpr int kKRows = kD / BaseShape::kTileSize;
     static constexpr int kKCols = kN / kWarpPerCol / BaseShape::kTileSize;
 
-    using RegK = RegisterTile<InType, tl::ColMajor<kKRows, kKCols>>;
+    using RegK =
+        RegTile<BaseTileColMajor<InType>, tl::ColMajor<kKRows, kKCols>>;
     using KLoader = copy::GlobalToRegLoader<RegK, WarpLayout,
                                             copy::WarpReuse::kRowReuseCont>;
     // operand V
@@ -104,7 +106,18 @@ struct FlashAttnTraits {
     static constexpr int kVRows = Bc / BaseShape::kTileSize;
     static constexpr int kVCols = kD / kWarpPerCol / BaseShape::kTileSize;
 
-    using RegV = RegisterTile<InType, tl::ColMajor<kVRows, kVCols>>;
+    using RegV =
+        RegTile<BaseTileColMajor<InType>, tl::ColMajor<kVRows, kVCols>>;
     using VLoader = copy::GlobalToRegLoader<RegV, WarpLayout,
                                             copy::WarpReuse::kRowReuseCont>;
+
+    // output O
+    using GlobalO = GlobalTile<OutType, tl::RowMajor<Br, kD>>;
+
+    static constexpr int kORows = Br / kWarpPerRow / BaseShape::kTileSize;
+    static constexpr int kOCols = kD / kWarpPerCol / BaseShape::kTileSize;
+
+    using RegO =
+        RegTile<BaseTileRowMajor<OutType>, tl::RowMajor<kORows, kOCols>>;
+    using OStorer = copy::RegToGlobalStorer<GlobalO, RegO, WarpLayout>;
 };

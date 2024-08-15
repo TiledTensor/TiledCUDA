@@ -3,11 +3,11 @@
 template <typename InType, typename OutType, typename GlobalQ, typename RegQ,
           typename LoaderQ, typename IteratorK, typename RegK, typename LoaderK,
           typename IteratorV, typename RegV, typename LoaderV, typename RegAcc,
-          typename RegAccHalf, typename RegO, typename RegVec, typename Cast,
-          typename CopyVec, typename ReduceMax, typename BroadcastSub,
-          typename BroadcastMul, typename BroadcastDiv, typename BlockAdd,
-          typename BlockExp, typename VecMax, typename VecAdd, typename VecSub,
-          typename VecExp, typename VecMul>
+          typename RegAccHalf, typename RegVec, typename Cast, typename CopyVec,
+          typename ReduceMax, typename BroadcastSub, typename BroadcastMul,
+          typename BroadcastDiv, typename BlockAdd, typename BlockExp,
+          typename VecMax, typename VecAdd, typename VecSub, typename VecExp,
+          typename VecMul, typename GlobalO, typename RegO, typename StorerO>
 __global__ void flash_attn(const InType* dQ, const InType* dK, const InType* dV,
                            OutType* dO) {
     GlobalQ gQ(dQ);
@@ -26,7 +26,10 @@ __global__ void flash_attn(const InType* dQ, const InType* dK, const InType* dV,
     RegAccHalf attn_block;
 
     RegO unnormized_attn_block;
+
     RegO rO;
+    GlobalO gO(dO);
+    StorerO storer_o;
 
     RegVec prev_reg_norm;
     RegVec cur_reg_norm;
@@ -74,9 +77,9 @@ __global__ void flash_attn(const InType* dQ, const InType* dK, const InType* dV,
         // Iterate over tc.
         // load K, V tiles from global to register.
         // rK: [d, B_c]
-        loader_k(iter_g2r_k(k), rK);
+        loader_k(iter_g2r_k(tc), rK);
         // rV: [B_c, d]
-        loader_v(iter_g2r_v(k), rV);
+        loader_v(iter_g2r_v(tc), rV);
         __syncthreads();
 
         // Q @ K.T
@@ -92,7 +95,7 @@ __global__ void flash_attn(const InType* dQ, const InType* dK, const InType* dV,
         copy_vec(cur_reg_norm, prev_reg_norm);
 
         // Compute row max.
-        row_max(attn_block, reg_max);
+        row_max(attn_block, cur_reg_max);
         // Broadcast subtract from `attn_block`.
         // (lhs, rhs, dst)
         broadcast_sub(attn_block, cur_reg_max, attn_block);
@@ -120,6 +123,9 @@ __global__ void flash_attn(const InType* dQ, const InType* dK, const InType* dV,
         // Compute O.
         // Compute Unnormized Attention Block.
         compute::gemm_(attn_block, rV, unnormized_attn_block);
+
+        __syncthreads();
+
         vec_mul(prev_sum_reg, prev_reg_norm, prev_o_reg);
         broadcast_mul(rO, prev_o_reg, rO);
         broadcast_mul(unnormized_attn_block, cur_reg_norm,
@@ -127,6 +133,9 @@ __global__ void flash_attn(const InType* dQ, const InType* dK, const InType* dV,
         block_add(rO, unnormized_attn_block, rO);
         broadcast_mul(rO, new_sum_reg, rO);
     }
+
+    __syncthreads();
+    store_o(rO, gO);
 }
 
 int main() {}
