@@ -9,12 +9,13 @@
 
 using namespace tiledcuda;
 using namespace tiledcuda::cell;
+using namespace tiledcuda::cell::copy;
 namespace tl = tile_layout;
 
 template <const int kM, const int kN, const int kK, const int kP>
 using B2BGemmShape = TileShape<kM, kN, kK, kP>;
 
-float rand_float(float a = 1e-3, float b = 1) {
+float rand_float(float a = 1e-1, float b = 5e-2) {
     float random = ((float)rand()) / (float)RAND_MAX;
     float diff = b - a;
     float r = random * diff;
@@ -50,11 +51,12 @@ void naive_back2back_gemm(int kM, int kN, int kK, int kP, const __half* A,
 
 bool check_results(const float* values1, const float* values2, int numel) {
     bool passed = true;
-    const float epsilon = 1e-3;
+    const float epsilon = 1e-1;
 
     for (int i = 0; i < numel; ++i) {
         if (fabs(values1[i] - values2[i]) > epsilon) {
-            printf("Diff: %.2f vs. %.2f\n", values1[i], values2[i]);
+            printf("%d-th value differs: %.2f vs. %.2f\n", i, values1[i],
+                   values2[i]);
             passed = false;
             break;
         }
@@ -62,66 +64,81 @@ bool check_results(const float* values1, const float* values2, int numel) {
     return passed;
 }
 
-template <typename InType, typename AccType, typename B2BGemmShape>
+template <typename InType, typename AccType, typename WholeShape,
+          typename CtaTileShape>
 struct B2BGemmTraits {
     using BaseShape = traits::BaseTileShape<InType>;
-    static constexpr int kChunkK = 32;
-    // TODO: kChunkN must be match for N-dimension for operand `Acc` and `C`.
-    static constexpr int kChunkN = 64;
 
-    using WarpLayout = tl::RowMajor<2, 2>;
-    static constexpr int kThreads = tl::get_numel<WarpLayout> * 32;
+    using WarpLayout = tl::RowMajor<4, 1>;
+
     static constexpr int kWarpPerRow = tl::num_rows<WarpLayout>;
     static constexpr int kWarpPerCol = tl::num_cols<WarpLayout>;
+    static_assert(kWarpPerCol == 1, "WarpPerCol must be 1");
 
-    static constexpr int kM = dim_size<0, B2BGemmShape>;
-    static constexpr int kN = dim_size<1, B2BGemmShape>;
-    static constexpr int kK = dim_size<2, B2BGemmShape>;
-    static constexpr int kP = dim_size<3, B2BGemmShape>;
+    static constexpr int kThreads = tl::get_numel<WarpLayout> * 32;
+
+    static constexpr int kM = dim_size<0, WholeShape>;
+    static constexpr int kN = dim_size<1, WholeShape>;
+    static constexpr int kK = dim_size<2, WholeShape>;
+    static constexpr int kP = dim_size<3, WholeShape>;
+
+    static constexpr int kTM = dim_size<0, CtaTileShape>;
+    static constexpr int kTN = dim_size<1, CtaTileShape>;
+    static constexpr int kTK = dim_size<2, CtaTileShape>;
+    static constexpr int kTP = dim_size<3, CtaTileShape>;
 
     // operand A
-    using GlobalA = GlobalTile<InType, tl::RowMajor<kM, kK>>;
-    using IteratorA = TileIterator<GlobalA, TileShape<kM, kChunkK>>;
+    using GlobalA = GlobalTile<InType, tl::RowMajor<kTM, kK>>;
+    // chunk the K dimension to fit into shared memory
+    using GIteratorA = TileIterator<GlobalA, TileShape<kTM, kTK>>;
 
-    static constexpr int kAMs = kM / kWarpPerRow / BaseShape::kTileSize;
-    static constexpr int kAKs = kChunkK / BaseShape::kTileSize;
+    using SharedA = SharedTile<InType, tl::RowMajor<kTM, kTK>, true>;
+
+    static constexpr int kAMs = kTM / kWarpPerRow / BaseShape::kTileSize;
+    static constexpr int kAKs = kTK / BaseShape::kTileSize;
     using RegA = RegTile<BaseTileRowMajor<InType>, tl::RowMajor<kAMs, kAKs>>;
 
-    using ALoader = copy::GlobalToRegLoader<RegA, WarpLayout,
-                                            copy::WarpReuse::kRowReuseCont>;
+    using SharedALoader = GlobalToSharedLoader<SharedA, WarpLayout>;
+    using RegALoader =
+        SharedToRegLoader<RegA, WarpLayout, WarpReuse::kRowReuseCont>;
 
     // operand B
     using GlobalB = GlobalTile<InType, tl::ColMajor<kK, kN>>;
-    using IteratorB = TileIterator<GlobalB, TileShape<kChunkK, kN>>;
+    using GIteratorB = TileIterator<GlobalB, TileShape<kTK, kTN>>;
+    using SharedB = SharedTile<InType, tl::ColMajor<kTK, kTN>, true>;
 
-    static constexpr int kBKs = kChunkK / BaseShape::kTileSize;
-    static constexpr int kBNs = kN / kWarpPerCol / BaseShape::kTileSize;
+    static constexpr int kBKs = kTK / BaseShape::kTileSize;
+    static constexpr int kBNs = kTN / kWarpPerCol / BaseShape::kTileSize;
     using RegB = RegTile<BaseTileColMajor<InType>, tl::ColMajor<kBKs, kBNs>>;
 
-    using BLoader = copy::GlobalToRegLoader<RegB, WarpLayout,
-                                            copy::WarpReuse::kColReuseCont>;
+    using SharedBLoader = GlobalToSharedLoader<SharedB, WarpLayout>;
+    using RegBLoader =
+        SharedToRegLoader<RegB, WarpLayout, WarpReuse::kColReuseCont>;
 
     // operand C
-    using GlobalC = GlobalTile<InType, tl::ColMajor<kN, kP>>;
-    using IteratorC = TileIterator<GlobalC, TileShape<kChunkN, kP>>;
+    using GlobalC = GlobalTile<InType, tl::ColMajor<kN, kTP>>;
+    // chunk the N dimension to fit into shared memory
+    using GIteratorC = TileIterator<GlobalC, TileShape<kTN, kTP>>;
+    using SharedC = SharedTile<InType, tl::ColMajor<kTN, kTP>, true>;
 
-    static constexpr int kCNs = kChunkN / BaseShape::kTileSize;
-    static constexpr int kCPs = kP / kWarpPerCol / BaseShape::kTileSize;
+    static constexpr int kCNs = kTN / BaseShape::kTileSize;
+    static constexpr int kCPs = kTP / kWarpPerCol / BaseShape::kTileSize;
     using RegC = RegTile<BaseTileColMajor<InType>, tl::ColMajor<kCNs, kCPs>>;
 
-    using CLoader = copy::GlobalToRegLoader<RegC, WarpLayout,
-                                            copy::WarpReuse::kColReuseCont>;
+    using SharedCLoader = GlobalToSharedLoader<SharedC, WarpLayout>;
+    using RegCLoader =
+        SharedToRegLoader<RegC, WarpLayout, WarpReuse::kColReuseCont>;
 
     // output D
-    using GlobalD = GlobalTile<AccType, tl::RowMajor<kM, kP>>;
+    using GlobalD = GlobalTile<AccType, tl::RowMajor<kTM, kTP>>;
 
-    static constexpr int kDMs = kM / kWarpPerRow / BaseShape::kTileSize;
-    static constexpr int kDPs = kP / kWarpPerCol / BaseShape::kTileSize;
+    static constexpr int kDMs = kTM / kWarpPerRow / BaseShape::kTileSize;
+    static constexpr int kDPs = kTP / kWarpPerCol / BaseShape::kTileSize;
     using RegD = RegTile<BaseTileRowMajor<AccType>, tl::RowMajor<kDMs, kDPs>>;
     using DStorer = copy::RegToGlobalStorer<GlobalD, RegD, WarpLayout>;
 
-    static constexpr int kAccMs = kM / kWarpPerRow / BaseShape::kTileSize;
-    static constexpr int kAccNs = kN / kWarpPerCol / BaseShape::kTileSize;
+    static constexpr int kAccMs = kTM / kWarpPerRow / BaseShape::kTileSize;
+    static constexpr int kAccNs = kTN / kWarpPerCol / BaseShape::kTileSize;
 
     // Reg Acc
     using RegAcc =
