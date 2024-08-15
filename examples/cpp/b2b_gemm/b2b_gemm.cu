@@ -1,4 +1,5 @@
 #include "util.hpp"
+#include "util/cuda_timer.hpp"
 
 template <typename InType, typename AccType,                     //
           typename GIteratorA, typename SharedA, typename RegA,  //
@@ -76,6 +77,7 @@ __global__ void KeBack2BackGemm(const InType* dA, const InType* dB,
         cast_acc(acc, acc_half);
 
         compute::gemm_(acc_half, rC, rD);
+        acc.clear();
     }
     __syncthreads();
 
@@ -85,7 +87,7 @@ __global__ void KeBack2BackGemm(const InType* dA, const InType* dB,
 }
 
 template <typename WholeShape, typename CtaTileShape, const int kBatch>
-void run() {
+void run(bool check = true) {
     using InType = __half;
     using AccType = float;
 
@@ -186,50 +188,58 @@ void run() {
             kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, shm_size);
     }
 
-    kernel<<<grid, block, shm_size, 0>>>(A, B, C, D, kM, kN, kK, kP, kTM, kTN,
-                                         kTK, kTP);
-    h_d = d_d;
+    for (int i = 0; i < 5; ++i)
+        kernel<<<grid, block, shm_size, 0>>>(A, B, C, D, kM, kN, kK, kP, kTM,
+                                             kTN, kTK, kTP);
     cudaDeviceSynchronize();
 
-    thrust::host_vector<InType> h_acc(kM * kN * kBatch);
-    thrust::fill(h_acc.begin(), h_acc.end(), 0.);
+    CudaTimer timer;
 
-    thrust::host_vector<AccType> h_d2(kM * kP * kBatch);
-    thrust::fill(h_d2.begin(), h_d2.end(), 0.);
-    naive_back2back_gemm(kM, kN, kK, kP, kBatch,
-                         thrust::raw_pointer_cast(h_a.data()),
-                         thrust::raw_pointer_cast(h_b.data()),
-                         thrust::raw_pointer_cast(h_c.data()), h_d2.data(),
-                         thrust::raw_pointer_cast(h_acc.data()));
+    int iter = 100;
+    timer.start();
+    for (int i = 0; i < iter; ++i)
+        kernel<<<grid, block, shm_size, 0>>>(A, B, C, D, kM, kN, kK, kP, kTM,
+                                             kTN, kTK, kTP);
     cudaDeviceSynchronize();
 
-    float* data = thrust::raw_pointer_cast(h_d.data());
-    float* ground_truth = thrust::raw_pointer_cast(h_d2.data());
+    float elapsed = timer.stop() / iter;
+    std::cout << "Time: " << elapsed << " ms" << std::endl;
 
-#ifdef DEBUG_
-    std::cout << "GIteratorA: " << GIteratorA{} << std::endl
-              << "GIteratorB: " << GIteratorB{} << std::endl
-              << "GIteratorC: " << GIteratorC{} << std::endl;
+    if (check) {
+        h_d = d_d;
+        thrust::host_vector<InType> h_acc(kM * kN * kBatch);
+        thrust::fill(h_acc.begin(), h_acc.end(), 0.);
 
-    std::cout << "block_x: " << block_x << std::endl
-              << "block_y: " << block_y << std::endl;
+        thrust::host_vector<AccType> h_d2(kM * kP * kBatch);
+        thrust::fill(h_d2.begin(), h_d2.end(), 0.);
+        naive_back2back_gemm(kM, kN, kK, kP, kBatch,
+                             thrust::raw_pointer_cast(h_a.data()),
+                             thrust::raw_pointer_cast(h_b.data()),
+                             thrust::raw_pointer_cast(h_c.data()), h_d2.data(),
+                             thrust::raw_pointer_cast(h_acc.data()));
+        cudaDeviceSynchronize();
 
-    printf("ours:\n");
-    for (int i = 0; i < h_d.size(); ++i) {
-        printf("%.2f, ", data[i]);
-        if (i && (i + 1) % 16 == 0) printf("\n");
-    }
-    printf("\nground_truth:\n");
-    for (int i = 0; i < h_d.size(); ++i) {
-        printf("%.2f, ", ground_truth[i]);
-        if (i && (i + 1) % 16 == 0) printf("\n");
-    }
+        float* data = thrust::raw_pointer_cast(h_d.data());
+        float* ground_truth = thrust::raw_pointer_cast(h_d2.data());
+
+#ifdef DEBUG
+        printf("ours:\n");
+        for (int i = 0; i < h_d.size(); ++i) {
+            printf("%.2f, ", data[i]);
+            if (i && (i + 1) % 16 == 0) printf("\n");
+        }
+        printf("\nground_truth:\n");
+        for (int i = 0; i < h_d.size(); ++i) {
+            printf("%.2f, ", ground_truth[i]);
+            if (i && (i + 1) % 16 == 0) printf("\n");
+        }
 #endif
 
-    if (check_results(data, ground_truth, kM * kP)) {
-        std::cout << "Test passed." << std::endl;
-    } else {
-        std::cerr << "Test failed." << std::endl;
+        if (check_results(data, ground_truth, kM * kP)) {
+            std::cout << "Test passed." << std::endl;
+        } else {
+            std::cerr << "Test failed." << std::endl;
+        }
     }
 }
 

@@ -72,7 +72,6 @@ bool check_results(const float* values1, const float* values2, int numel) {
             printf("%d-th value differs: %.2f vs. %.2f\n", i, values1[i],
                    values2[i]);
             passed = false;
-            break;
         }
     }
     return passed;

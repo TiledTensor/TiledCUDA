@@ -63,5 +63,4 @@ DEVICE void print_tile(const DType* data, const Layout& layout) {
         }
     }
 }
-
 }  // namespace tiledcuda::cell
