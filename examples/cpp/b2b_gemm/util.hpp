@@ -24,27 +24,41 @@ float rand_float(float a = 1e-1, float b = 5e-2) {
 
 // In this implementation, A and D are interpreted as being laid out in
 // row-major, and B, C is interpreted as being laid out in column-major.
-void naive_back2back_gemm(int kM, int kN, int kK, int kP, const __half* A,
-                          const __half* B, const __half* C, float* D,
-                          __half* acc) {
-    for (int i = 0; i < kM; ++i) {
-        for (int j = 0; j < kN; ++j) {
-            __half s = 0.;
-            for (int k = 0; k < kK; ++k) {
-                s += A[i * kK + k] * B[k + kK * j];
-            }
-            acc[i * kN + j] = s;
-        }
-    }
+void naive_back2back_gemm(int kM, int kN, int kK, int kP, int kBatch,
+                          const __half* As, const __half* Bs, const __half* Cs,
+                          float* Ds, __half* accs) {
+    const __half* A = As;
+    const __half* B = Bs;
+    const __half* C = Cs;
+    __half* acc = accs;
+    float* D = Ds;
 
-    for (int i = 0; i < kM; ++i) {
-        for (int j = 0; j < kP; ++j) {
-            float s = 0.;
-            for (int k = 0; k < kN; ++k) {
-                s +=
-                    __half2float(acc[i * kN + k]) * __half2float(C[k + kN * j]);
+    for (int b = 0; b < kBatch; ++b) {
+        A += b * kM * kK;
+        B += b * kK * kN;
+        C += b * kM * kN;
+        D += b * kM * kP;
+        acc += b * kM * kN;
+
+        for (int i = 0; i < kM; ++i) {
+            for (int j = 0; j < kN; ++j) {
+                __half s = 0.;
+                for (int k = 0; k < kK; ++k) {
+                    s += A[i * kK + k] * B[k + kK * j];
+                }
+                acc[i * kN + j] = s;
             }
-            D[i * kP + j] = s;
+        }
+
+        for (int i = 0; i < kM; ++i) {
+            for (int j = 0; j < kP; ++j) {
+                float s = 0.;
+                for (int k = 0; k < kN; ++k) {
+                    s += __half2float(acc[i * kN + k]) *
+                         __half2float(C[k + kN * j]);
+                }
+                D[i * kP + j] = s;
+            }
         }
     }
 }

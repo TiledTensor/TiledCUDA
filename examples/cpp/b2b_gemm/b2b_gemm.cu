@@ -14,10 +14,13 @@ __global__ void KeBack2BackGemm(const InType* dA, const InType* dB,
                                 int kK, int kP, int kTM, int kTN, int kTK,
                                 int kTP) {
     // Advance to the global data tile to the current CTA.
-    const InType* A = dA + blockIdx.x * (kTM * kK);
-    const InType* B = dB;
-    const InType* gC_ptr = dC + blockIdx.y * (kTP * kN);
-    AccType* gD_ptr = dD + blockIdx.x * (kTM * kP) + (blockIdx.y * kTP);
+    const InType* A = dA + blockIdx.z * (kM * kK) + blockIdx.x * (kTM * kK);
+    const InType* B = dB + blockIdx.z * (kK * kN);
+    const InType* gC_ptr =
+        dC + blockIdx.z * (kN * kP) + blockIdx.y * (kTP * kN);
+
+    AccType* gD_ptr = dD + blockIdx.z * (kM * kP) + blockIdx.x * (kTM * kP) +
+                      (blockIdx.y * kTP);
 
     extern __shared__ __align__(sizeof(double)) unsigned char shared_buf[];
     auto* shm = reinterpret_cast<InType*>(shared_buf);
@@ -81,7 +84,7 @@ __global__ void KeBack2BackGemm(const InType* dA, const InType* dB,
     storer_d(rD, gD);
 }
 
-template <typename WholeShape, typename CtaTileShape>
+template <typename WholeShape, typename CtaTileShape, const int kBatch>
 void run() {
     using InType = __half;
     using AccType = float;
@@ -102,20 +105,20 @@ void run() {
                   "The current implementation requires kTP == P for now.");
 
     // initialize data
-    thrust::host_vector<InType> h_a(kM * kK);
+    thrust::host_vector<InType> h_a(kM * kK * kBatch);
 
     for (int i = 0; i < h_a.size(); ++i)
         h_a[i] = static_cast<InType>(rand_float());
 
-    thrust::host_vector<InType> h_b(kK * kN);
+    thrust::host_vector<InType> h_b(kK * kN * kBatch);
     for (int i = 0; i < h_b.size(); ++i)
         h_b[i] = static_cast<InType>(rand_float());
 
-    thrust::host_vector<InType> h_c(kN * kP);
+    thrust::host_vector<InType> h_c(kN * kP * kBatch);
     for (int i = 0; i < h_c.size(); ++i)
         h_c[i] = static_cast<InType>(rand_float());
 
-    thrust::host_vector<AccType> h_d(kM * kP);
+    thrust::host_vector<AccType> h_d(kM * kP * kBatch);
     thrust::fill(h_d.begin(), h_d.end(), 0.);
 
     thrust::device_vector<InType> d_a = h_a;
@@ -158,8 +161,9 @@ void run() {
 
     int block_x = CeilDiv<kM, kTM>;
     int block_y = CeilDiv<kP, kTP>;
+    int block_z = kBatch;
 
-    dim3 grid(block_x, block_y, 1);
+    dim3 grid(block_x, block_y, block_z);
     dim3 block(Config::kThreads, 1, 1);
 
     int shm_input = (kTM * kTK + kTK * kTN + kTN * kTP);
@@ -187,12 +191,13 @@ void run() {
     h_d = d_d;
     cudaDeviceSynchronize();
 
-    thrust::host_vector<InType> h_acc(kM * kN);
+    thrust::host_vector<InType> h_acc(kM * kN * kBatch);
     thrust::fill(h_acc.begin(), h_acc.end(), 0.);
 
-    thrust::host_vector<AccType> h_d2(kM * kP);
+    thrust::host_vector<AccType> h_d2(kM * kP * kBatch);
     thrust::fill(h_d2.begin(), h_d2.end(), 0.);
-    naive_back2back_gemm(kM, kN, kK, kP, thrust::raw_pointer_cast(h_a.data()),
+    naive_back2back_gemm(kM, kN, kK, kP, kBatch,
+                         thrust::raw_pointer_cast(h_a.data()),
                          thrust::raw_pointer_cast(h_b.data()),
                          thrust::raw_pointer_cast(h_c.data()), h_d2.data(),
                          thrust::raw_pointer_cast(h_acc.data()));
@@ -201,7 +206,7 @@ void run() {
     float* data = thrust::raw_pointer_cast(h_d.data());
     float* ground_truth = thrust::raw_pointer_cast(h_d2.data());
 
-#ifdef DEBUG
+#ifdef DEBUG_
     std::cout << "GIteratorA: " << GIteratorA{} << std::endl
               << "GIteratorB: " << GIteratorB{} << std::endl
               << "GIteratorC: " << GIteratorC{} << std::endl;
@@ -219,7 +224,6 @@ void run() {
         printf("%.2f, ", ground_truth[i]);
         if (i && (i + 1) % 16 == 0) printf("\n");
     }
-    std::cout << "Done" << std::endl;
 #endif
 
     if (check_results(data, ground_truth, kM * kP)) {
@@ -230,11 +234,11 @@ void run() {
 }
 
 int main() {
-    run<B2BGemmShape<64 /*M*/, 64 /*N*/, 64 /*K*/, 128 /*P*/>,
-        B2BGemmShape<64 /*kTM*/, 64 /*kTN*/, 64 /*kTK*/, 128 /*kTP*/>>();
+    run<B2BGemmShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
+        B2BGemmShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>, 2>();
 
     run<B2BGemmShape<1024 /*M*/, 128 /*N*/, 128 /*K*/, 128 /*P*/>,
-        B2BGemmShape<64 /*kTM*/, 128 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>>();
+        B2BGemmShape<64 /*kTM*/, 128 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>, 2>();
 
     return 0;
 }
