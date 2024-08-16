@@ -229,6 +229,9 @@ struct GlobalToSharedLoader : public Base {
     static constexpr int kColExec =
         Base::template col_exec_count<BaseShape, Shared::kCols>();
 
+    static_assert(kRowExec && kColExec,
+                  "Execution count should be greater than 0.");
+
     template <typename Global>
     DEVICE void operator()(const Global& src, Shared& dst) {
         static_assert(Shared::kNumel == Global::kNumel,
@@ -264,6 +267,9 @@ struct SharedToGlobalStorer : public Base {
         Base::template row_exec_count<BaseShape, Shared::kRows>();
     static constexpr int kColExec =
         Base::template col_exec_count<BaseShape, Shared::kCols>();
+
+    static_assert(kRowExec && kColExec,
+                  "Execution count should be greater than 0.");
 
     template <typename Global>
     DEVICE void operator()(const Shared& src, Global& dst) {
