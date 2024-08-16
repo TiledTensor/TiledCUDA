@@ -45,6 +45,21 @@ struct RegTilePrettyPrinter {
             << Tile::kCols * get_cols<typename Tile::DType> << "]";
     }
 };
+
+DEVICE void clear(float* data, int numel) {
+    memset((void*)data, 0, sizeof(float) * numel);
+}
+
+DEVICE void clear(__half* data, int numel) {
+    memset((void*)data, 0, sizeof(__half) * numel);
+}
+
+template <typename DType>
+DEVICE void clear(DType* data, int numel) {
+    for (int i = 0; i < numel; ++i) {
+        clear(data[i].mutable_data(), 8);
+    }
+}
 }  // namespace detail
 
 template <typename Element_, typename Layout_>
@@ -80,6 +95,8 @@ class RegTile {
     DEVICE void dump_value() const {
         print_tile(const_cast<DType*>(data_), layout_);
     }
+
+    DEVICE void clear() { detail::clear<DType>(data_, kNumel); }
 
   private:
     DType data_[kNumel];
