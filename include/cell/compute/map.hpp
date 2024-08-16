@@ -98,7 +98,7 @@ using BaseTileConvert = detail::ElementWise2<
     SrcRegTile, DstRegTile,
     Convert<typename SrcRegTile::DType, typename DstRegTile::DType>>;
 template <typename SrcRegTile, typename DstRegTile>
-using RegTileConvertHalf = detail::ElementWise2<
+using RegTileConvert = detail::ElementWise2<
     SrcRegTile, DstRegTile,
     BaseTileConvert<typename SrcRegTile::DType, typename DstRegTile::DType>>;
 

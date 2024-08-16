@@ -120,4 +120,25 @@ struct FlashAttnTraits {
     using RegO =
         RegTile<BaseTileRowMajor<OutType>, tl::RowMajor<kORows, kOCols>>;
     using OStorer = copy::RegToGlobalStorer<GlobalO, RegO, WarpLayout>;
+
+    // Accumulator
+    static constexpr int kAccRows = Br / kWarpPerRow / BaseShape::kTileSize;
+    static constexpr int kAccCols = Bc / kWarpPerCol / BaseShape::kTileSize;
+
+    using RegAcc =
+        RegTile<BaseTileRowMajor<OutType>, tl::RowMajor<kAccRows, kAccCols>>;
+    using RegAccCast =
+        RegTile<BaseTileRowMajor<InType>, tl::RowMajor<kAccRows, kAccCols>>;
+
+    using Convert = compute::RegTileConvert<RegAcc, RegAccCast>;
+
+    static constexpr int kReduceHeight =
+        Br / kWarpPerRow / BaseShape::kTileSize;
+    static constexpr int kReduceWidth = 2;
+
+    using RegVec = RegTile<InType, tl::RowMajor<kReduceHeight, kReduceWidth>>;
+
+    using CopyVec = copy::BaseTileCopy<RegVec>;
+
+    using ReduceMax = compute::ReduceMax<RegAccCast, tl::Layout::kRowMajor>;
 };
