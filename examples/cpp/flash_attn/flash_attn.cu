@@ -150,7 +150,10 @@ template <typename InType, typename AccType,                     //
           typename SharedCLoader, typename RegCLoader,           //
           typename RegAcc, typename RegAccCast, typename GlobalD, typename RegD,
           typename DStorer, typename ConvertAcc, typename RegVec,
-          typename RowMax>
+          typename CopyVec, typename RowMax, typename BroadcastSub,
+          typename BroadcastMul, typename BroadcastDiv, typename BlockExp,
+          typename BlockAdd, typename VecMax, typename VecAdd, typename VecSub,
+          typename VecMul, typename VecExp>
 __global__ void KeFlashAttention(const InType* dA, const InType* dB,
                                  const InType* dC, AccType* dD, int kM, int kN,
                                  int kK, int kP, int kTM, int kTN, int kTK,
@@ -193,14 +196,32 @@ __global__ void KeFlashAttention(const InType* dA, const InType* dB,
     RegC rC;
 
     RegD rD;
-    RegAcc acc;
-    RegAccCast acc_half;
+    RegAcc attn_block_f32;
+    RegAccCast attn_block;
+
+    RegVec prev_norm_vec;
+    RegVec cur_norm_vec;
 
     RegVec prev_max_vec;
     RegVec cur_max_vec;
     RegVec new_max_vec;
 
+    RegVec prev_sum_vec;
+    RegVec cur_sum_vec;
+    RegVec new_sum_vec;
+
     RowMax row_max;
+    CopyVec copy_vec;
+
+    BroadcastSub broadcast_sub;
+
+    BlockExp block_exp;
+
+    VecMax vec_max;
+    VecAdd vec_add;
+    VecSub vec_sub;
+    VecMul vec_mul;
+    VecExp vec_exp;
 
     for (int n = 0; n < GIteratorC::sc0; ++n) {
         load_sc(gCs(n), sC);
@@ -215,22 +236,55 @@ __global__ void KeFlashAttention(const InType* dA, const InType* dB,
             load_rb(sB, rB);
             __syncthreads();
 
-            compute::gemm_(rA, rB, acc);
+            compute::gemm_(rA, rB, attn_block_f32);
         }
         load_rc(sC, rC);
         __syncthreads();
 
         ConvertAcc cast_acc;  // Convert acc to half precision
-        cast_acc(acc, acc_half);
+        cast_acc(attn_block_f32, attn_block);
 
-        row_max(acc_half, cur_max_vec);
+        // Copy `cur_max_vec`, `cur_norm_vec` into `prev_max_vec`,
+        // `prev_norm_vec`.
+        copy_vec(cur_max_vec, prev_max_vec);
+        copy_vec(cur_norm_vec, prev_norm_vec);
+
+        // Compute row max.
+        row_max(attn_block, cur_max_vec);
+
+        // Broadcast subtract from `attn_block`.
+        broadcast_sub(cur_max_vec, attn_block);
+
+        // Compute exp in `attn_block`.
+        block_exp(attn_block, attn_block);
 
         if (tiledcuda::thread0()) {
-            cur_max_vec.dump_value();
+            attn_block.dump_value();
         }
 
-        compute::gemm_(acc_half, rC, rD);
-        acc.clear();
+        // Compute new max vector.
+        vec_max(cur_max_vec, prev_max_vec, new_max_vec);
+
+        // Renormalization for the previous block.
+        vec_sub(prev_max_vec, new_max_vec, prev_norm_vec);
+        vec_exp(prev_norm_vec, prev_norm_vec);
+
+        // Renormalization for the current block.
+        vec_sub(cur_max_vec, new_max_vec, cur_norm_vec);
+        vec_exp(cur_norm_vec, cur_norm_vec);
+
+        if (tiledcuda::thread0()) {
+            // prev_norm_vec.dump_value();
+            // cur_norm_vec.dump_value();
+        }
+
+        // Update normalization factor l(x)
+        vec_mul(prev_norm_vec, prev_sum_vec, prev_sum_vec);
+        vec_mul(cur_norm_vec, cur_sum_vec, cur_sum_vec);
+        vec_add(prev_sum_vec, cur_sum_vec, new_sum_vec);
+
+        compute::gemm_(attn_block, rC, rD);
+        attn_block_f32.clear();
     }
     __syncthreads();
 
@@ -316,7 +370,21 @@ void run(bool check = true) {
 
     using RegVec = typename Config::RegVec;
 
+    using CopyVec = typename Config::CopyVec;
     using RowMax = typename Config::RowMax;
+
+    using BroadcastSub = typename Config::BroadcastSub;
+    using BroadcastMul = typename Config::BroadcastMul;
+    using BroadcastDiv = typename Config::BroadcastDiv;
+
+    using BlockExp = typename Config::BlockExp;
+    using BlockAdd = typename Config::BlockAdd;
+
+    using VecMax = typename Config::VecMax;
+    using VecAdd = typename Config::VecAdd;
+    using VecSub = typename Config::VecSub;
+    using VecMul = typename Config::VecMul;
+    using VecExp = typename Config::VecExp;
 
     int block_x = CeilDiv<kM, kTM>;
     int block_y = CeilDiv<kP, kTP>;
@@ -339,7 +407,9 @@ void run(bool check = true) {
                           GIteratorC, SharedC, RegC,  //
                           SharedCLoader, RegCLoader,  //
                           RegAcc, RegAccCast, typename Config::GlobalD, RegD,
-                          DStorer, ConvertAcc, RegVec, RowMax>;
+                          DStorer, ConvertAcc, RegVec, CopyVec, RowMax,
+                          BroadcastSub, BroadcastMul, BroadcastDiv, BlockExp,
+                          BlockAdd, VecMax, VecAdd, VecSub, VecMul, VecExp>;
 
     if (shm_size > 48 * 1024) {
         cudaFuncSetAttribute(

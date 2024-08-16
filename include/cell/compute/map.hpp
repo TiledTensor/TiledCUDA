@@ -126,4 +126,10 @@ template <typename RegTile>
 using RegTileDiv =
     detail::Binary<RegTile, BaseTileDiv<typename RegTile::DType>>;
 
+template <typename RegTile>
+using BaseTileMax = detail::Binary<RegTile, Max<typename RegTile::DType>>;
+template <typename RegTile>
+using RegTileMax =
+    detail::Binary<RegTile, BaseTileMax<typename RegTile::DType>>;
+
 }  // namespace tiledcuda::cell::compute

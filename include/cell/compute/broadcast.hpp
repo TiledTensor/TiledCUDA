@@ -100,15 +100,15 @@ struct BroadcastFuse<SrcTile, DstTile, Functor, tl::Layout::kRowMajor> {
             DType bottom_row = src(i, 1);
 #pragma unroll
             for (int j = 0; j < kCols; ++j) {
-                f(top_row, dst(i, j)(0, 0));
-                f(top_row, dst(i, j)(0, 1));
-                f(top_row, dst(i, j)(1, 0));
-                f(top_row, dst(i, j)(1, 1));
+                f(dst(i, j)(0, 0), top_row, dst(i, j)(0, 0));
+                f(dst(i, j)(0, 1), top_row, dst(i, j)(0, 1));
+                f(dst(i, j)(1, 0), top_row, dst(i, j)(1, 0));
+                f(dst(i, j)(1, 1), top_row, dst(i, j)(1, 1));
 
-                f(bottom_row, dst(i, j)(0, 2));
-                f(bottom_row, dst(i, j)(0, 3));
-                f(bottom_row, dst(i, j)(1, 2));
-                f(bottom_row, dst(i, j)(1, 3));
+                f(dst(i, j)(0, 2), bottom_row, dst(i, j)(0, 2));
+                f(dst(i, j)(0, 3), bottom_row, dst(i, j)(0, 3));
+                f(dst(i, j)(1, 2), bottom_row, dst(i, j)(1, 2));
+                f(dst(i, j)(1, 3), bottom_row, dst(i, j)(1, 3));
             }
         }
     }
@@ -129,15 +129,15 @@ struct BroadcastFuse<SrcTile, DstTile, Functor, tl::Layout::kColMajor> {
             DType bottom_col = src(1, j);
 #pragma unroll
             for (int i = 0; i < kRows; ++i) {
-                f(top_col, dst(i, j)(0, 0));
-                f(top_col, dst(i, j)(1, 0));
-                f(top_col, dst(i, j)(0, 1));
-                f(top_col, dst(i, j)(1, 1));
+                f(dst(i, j)(0, 0), top_col, dst(i, j)(0, 0));
+                f(dst(i, j)(1, 0), top_col, dst(i, j)(1, 0));
+                f(dst(i, j)(0, 1), top_col, dst(i, j)(0, 1));
+                f(dst(i, j)(1, 1), top_col, dst(i, j)(1, 1));
 
-                f(bottom_col, dst(i, j)(2, 0));
-                f(bottom_col, dst(i, j)(3, 0));
-                f(bottom_col, dst(i, j)(2, 1));
-                f(bottom_col, dst(i, j)(3, 1));
+                f(dst(i, j)(2, 0), bottom_col, dst(i, j)(2, 0));
+                f(dst(i, j)(3, 0), bottom_col, dst(i, j)(3, 0));
+                f(dst(i, j)(2, 1), bottom_col, dst(i, j)(2, 1));
+                f(dst(i, j)(3, 1), bottom_col, dst(i, j)(3, 1));
             }
         }
     }

@@ -165,5 +165,22 @@ struct B2BGemmTraits {
 
     using RegVec = RegTile<InType, tl::RowMajor<kAccMs, 2>>;
 
+    using CopyVec = copy::BaseTileCopy<RegVec>;
     using RowMax = compute::MaxReduce<RegAccCast, tl::Layout::kRowMajor>;
+
+    using BroadcastSub =
+        compute::BroadcastSub<RegVec, RegAccCast, tl::Layout::kRowMajor>;
+    using BroadcastMul =
+        compute::BroadcastMul<RegVec, RegAccCast, tl::Layout::kRowMajor>;
+    using BroadcastDiv =
+        compute::BroadcastDiv<RegVec, RegAccCast, tl::Layout::kRowMajor>;
+
+    using BlockExp = compute::RegTileExp<RegAccCast>;
+    using BlockAdd = compute::RegTileAdd<RegAccCast>;
+
+    using VecMax = compute::BaseTileMax<RegVec>;
+    using VecAdd = compute::BaseTileAdd<RegVec>;
+    using VecSub = compute::BaseTileSub<RegVec>;
+    using VecMul = compute::BaseTileMul<RegVec>;
+    using VecExp = compute::BaseTileExp<RegVec>;
 };
