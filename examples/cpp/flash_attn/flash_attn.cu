@@ -146,44 +146,7 @@ template <typename InType, typename OutType, typename GlobalQ, typename RegQ,
           typename RegAccCast, typename Cast, typename GlobalO, typename RegO,
           typename StorerO>
 __global__ void flash_attn(const InType* dQ, const InType* dK, const InType* dV,
-                           OutType* dO) {
-    GlobalQ gQ(dQ);
-    RegQ rQ;
-    LoaderQ loader_q;
-
-    IteratorK iter_g2r_k(dK);
-    RegK rK;
-    LoaderK loader_k;
-
-    IteratorV iter_g2r_v(dV);
-    RegV rV;
-    LoaderV loader_v;
-
-    RegO rO;
-    GlobalO gO(dO);
-    StorerO storer_o;
-
-    RegAcc attn_block_f32;
-    RegAccCast attn_block;
-
-    Cast cast;
-
-    // Load Q from global to register.
-    loader_q(gQ, rQ);
-
-    for (int tc = 0; tc < Iterator::sc1; ++tc) {
-        // Load K, V from global to register.
-        loader_k(iter_g2r_k(tc), rK);
-        loader_v(iter_g2r_v(tc), rV);
-
-        // Q @ K.T
-        compute::gemm_(rQ, rK, attn_block_f32);
-
-        __syncthreads();
-
-        cast(attn_block_f32, attn_block);
-    }
-}
+                           OutType* dO) {}
 
 int main() {
     using InType = __half;

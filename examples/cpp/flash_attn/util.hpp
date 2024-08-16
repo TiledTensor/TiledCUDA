@@ -140,5 +140,5 @@ struct FlashAttnTraits {
 
     using CopyVec = copy::BaseTileCopy<RegVec>;
 
-    using ReduceMax = compute::ReduceMax<RegAccCast, tl::Layout::kRowMajor>;
+    // using ReduceMax = compute::ReduceMax<RegAccCast, tl::Layout::kRowMajor>;
 };
