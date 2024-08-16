@@ -227,7 +227,8 @@ void run(bool check = true) {
     const InType* C = thrust::raw_pointer_cast(d_c.data());
     InType* D = thrust::raw_pointer_cast(d_d.data());
 
-    using Config = B2BGemmTraits<InType, AccType, WholeShape, CtaTileShape>;
+    using Config =
+        FlashAttentionTraits<InType, AccType, WholeShape, CtaTileShape>;
 
     using RegA = typename Config::RegA;
     using RegB = typename Config::RegB;
@@ -322,49 +323,12 @@ void run(bool check = true) {
 
     float elapsed = timer.stop() / iter;
     std::cout << "Time: " << elapsed << " ms" << std::endl;
-
-    //     if (check) {
-    //         h_d = d_d;
-    //         thrust::host_vector<InType> h_acc(kM * kN * kBatch);
-    //         thrust::fill(h_acc.begin(), h_acc.end(), 0.);
-
-    //         thrust::host_vector<AccType> h_d2(kM * kP * kBatch);
-    //         thrust::fill(h_d2.begin(), h_d2.end(), 0.);
-    //         naive_back2back_gemm(kM, kN, kK, kP, kBatch,
-    //                              thrust::raw_pointer_cast(h_a.data()),
-    //                              thrust::raw_pointer_cast(h_b.data()),
-    //                              thrust::raw_pointer_cast(h_c.data()),
-    //                              h_d2.data(),
-    //                              thrust::raw_pointer_cast(h_acc.data()));
-    //         cudaDeviceSynchronize();
-
-    //         float* data = thrust::raw_pointer_cast(h_d.data());
-    //         float* ground_truth = thrust::raw_pointer_cast(h_d2.data());
-
-    // #ifdef DEBUG
-    //         printf("ours:\n");
-    //         for (int i = 0; i < h_d.size(); ++i) {
-    //             printf("%.2f, ", data[i]);
-    //             if (i && (i + 1) % 16 == 0) printf("\n");
-    //         }
-    //         printf("\nground_truth:\n");
-    //         for (int i = 0; i < h_d.size(); ++i) {
-    //             printf("%.2f, ", ground_truth[i]);
-    //             if (i && (i + 1) % 16 == 0) printf("\n");
-    //         }
-    // #endif
-
-    //         if (check_results(data, ground_truth, kM * kP)) {
-    //             std::cout << "Test passed." << std::endl;
-    //         } else {
-    //             std::cerr << "Test failed." << std::endl;
-    //         }
-    //     }
 }
 
 int main() {
-    run<B2BGemmShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
-        B2BGemmShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>, 2>();
+    run<FlashAttentionShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
+        FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
+        2>();
 
     // run<B2BGemmShape<1024 /*M*/, 128 /*N*/, 128 /*K*/, 128 /*P*/>,
     //     B2BGemmShape<64 /*kTM*/, 128 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
