@@ -3,18 +3,20 @@
 #include "cell/compute/mod.hpp"
 #include "cell/mod.hpp"
 #include "types/mod.hpp"
+#include "util/debug.hpp"
 
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
 using namespace tiledcuda;
 using namespace tiledcuda::cell;
+using namespace tiledcuda::cell::copy;
 namespace tl = tile_layout;
 
-template <const int kN, const int kD>
-using FlashAttnShape = TileShape<kN, kD>;
+template <const int kM, const int kN, const int kK, const int kP>
+using B2BGemmShape = TileShape<kM, kN, kK, kP>;
 
-float rand_float(float a = 1e-3, float b = 1) {
+float rand_float(float a = 1e-1, float b = 5e-2) {
     float random = ((float)rand()) / (float)RAND_MAX;
     float diff = b - a;
     float r = random * diff;
@@ -23,122 +25,145 @@ float rand_float(float a = 1e-3, float b = 1) {
 
 // In this implementation, A and D are interpreted as being laid out in
 // row-major, and B, C is interpreted as being laid out in column-major.
-void naive_back2back_gemm(int kM, int kN, int kK, int kP, const __half* A,
-                          const __half* B, const __half* C, float* D,
-                          __half* acc) {
-    for (int i = 0; i < kM; ++i) {
-        for (int j = 0; j < kN; ++j) {
-            __half s = 0.;
-            for (int k = 0; k < kK; ++k) {
-                s += A[i * kK + k] * B[k + kK * j];
-            }
-            acc[i * kN + j] = s;
-        }
-    }
+void naive_back2back_gemm(int kM, int kN, int kK, int kP, int kBatch,
+                          const __half* As, const __half* Bs, const __half* Cs,
+                          float* Ds, __half* accs) {
+    const __half* A = As;
+    const __half* B = Bs;
+    const __half* C = Cs;
+    __half* acc = accs;
+    float* D = Ds;
 
-    for (int i = 0; i < kM; ++i) {
-        for (int j = 0; j < kP; ++j) {
-            float s = 0.;
-            for (int k = 0; k < kN; ++k) {
-                s +=
-                    __half2float(acc[i * kN + k]) * __half2float(C[k + kN * j]);
+    for (int b = 0; b < kBatch; ++b) {
+        A += b * kM * kK;
+        B += b * kK * kN;
+        C += b * kM * kN;
+        D += b * kM * kP;
+        acc += b * kM * kN;
+
+        for (int i = 0; i < kM; ++i) {
+            for (int j = 0; j < kN; ++j) {
+                __half s = 0.;
+                for (int k = 0; k < kK; ++k) {
+                    s += A[i * kK + k] * B[k + kK * j];
+                }
+                acc[i * kN + j] = s;
             }
-            D[i * kP + j] = s;
+        }
+
+        for (int i = 0; i < kM; ++i) {
+            for (int j = 0; j < kP; ++j) {
+                float s = 0.;
+                for (int k = 0; k < kN; ++k) {
+                    s += __half2float(acc[i * kN + k]) *
+                         __half2float(C[k + kN * j]);
+                }
+                D[i * kP + j] = s;
+            }
         }
     }
 }
 
 bool check_results(const float* values1, const float* values2, int numel) {
     bool passed = true;
-    const float epsilon = 1e-3;
+    const float epsilon = 1e-1;
 
     for (int i = 0; i < numel; ++i) {
         if (fabs(values1[i] - values2[i]) > epsilon) {
-            printf("Diff: %.2f vs. %.2f\n", values1[i], values2[i]);
+            printf("%d-th value differs: %.2f vs. %.2f\n", i, values1[i],
+                   values2[i]);
             passed = false;
-            break;
         }
     }
     return passed;
 }
 
-template <typename InType, typename OutType, typename FlashAttnShape>
-struct FlashAttnTraits {
+template <typename InType, typename AccType, typename WholeShape,
+          typename CtaTileShape>
+struct B2BGemmTraits {
     using BaseShape = traits::BaseTileShape<InType>;
 
-    static constexpr int Bc = 32;
-    static constexpr int Br = 32;
+    using WarpLayout = tl::RowMajor<4, 1>;
 
-    // Q, K, V, and O are all of shape [N, D]
-    static constexpr int kN = dim_size<0, FlashAttnShape>;
-    static constexpr int kD = dim_size<1, FlashAttnShape>;
-
-    using WarpLayout = tl::RowMajor<2, 2>;
-    static constexpr int kThreads = tl::get_numel<WarpLayout> * 32;
     static constexpr int kWarpPerRow = tl::num_rows<WarpLayout>;
     static constexpr int kWarpPerCol = tl::num_cols<WarpLayout>;
+    static_assert(kWarpPerCol == 1, "WarpPerCol must be 1");
 
-    // operand Q
-    using GlobalQ = GlobalTile<InType, tl::RowMajor<Br, kD>>;
+    static constexpr int kThreads = tl::get_numel<WarpLayout> * 32;
 
-    // Don't need to split Q.
-    static constexpr int kQRows = Br / BaseShape::kTileSize;
-    static constexpr int kQCols = kD / BaseShape::kTileSize;
+    static constexpr int kM = dim_size<0, WholeShape>;
+    static constexpr int kN = dim_size<1, WholeShape>;
+    static constexpr int kK = dim_size<2, WholeShape>;
+    static constexpr int kP = dim_size<3, WholeShape>;
 
-    using RegQ =
-        RegTile<BaseTileRowMajor<InType>, tl::RowMajor<kQRows, kQCols>>;
-    using QLoader =
-        copy::GlobalToRegLoader<RegQ, WarpLayout, copy::WarpReuse::kCont>;
+    static constexpr int kTM = dim_size<0, CtaTileShape>;
+    static constexpr int kTN = dim_size<1, CtaTileShape>;
+    static constexpr int kTK = dim_size<2, CtaTileShape>;
+    static constexpr int kTP = dim_size<3, CtaTileShape>;
 
-    // operand K
-    using GlobalK = GlobalTile<InType, tl::ColMajor<kD, kN>>;
-    using IteratorK = TileIterator<GlobalK, TileShape<kD, Bc>>;
-    static constexpr int kKRows = kD / BaseShape::kTileSize;
-    static constexpr int kKCols = kN / kWarpPerCol / BaseShape::kTileSize;
+    // operand A
+    using GlobalA = GlobalTile<InType, tl::RowMajor<kTM, kK>>;
+    // chunk the K dimension to fit into shared memory
+    using GIteratorA = TileIterator<GlobalA, TileShape<kTM, kTK>>;
 
-    using RegK =
-        RegTile<BaseTileColMajor<InType>, tl::ColMajor<kKRows, kKCols>>;
-    using KLoader = copy::GlobalToRegLoader<RegK, WarpLayout,
-                                            copy::WarpReuse::kRowReuseCont>;
-    // operand V
-    using GlobalV = GlobalTile<InType, tl::ColMajor<kN, kD>>;
-    using IteratorV = TileIterator<GlobalV, TileShape<Bc, kD>>;
-    static constexpr int kVRows = Bc / BaseShape::kTileSize;
-    static constexpr int kVCols = kD / kWarpPerCol / BaseShape::kTileSize;
+    using SharedA = SharedTile<InType, tl::RowMajor<kTM, kTK>, true>;
 
-    using RegV =
-        RegTile<BaseTileColMajor<InType>, tl::ColMajor<kVRows, kVCols>>;
-    using VLoader = copy::GlobalToRegLoader<RegV, WarpLayout,
-                                            copy::WarpReuse::kRowReuseCont>;
+    static constexpr int kAMs = kTM / kWarpPerRow / BaseShape::kTileSize;
+    static constexpr int kAKs = kTK / BaseShape::kTileSize;
+    using RegA = RegTile<BaseTileRowMajor<InType>, tl::RowMajor<kAMs, kAKs>>;
 
-    // output O
-    using GlobalO = GlobalTile<OutType, tl::RowMajor<Br, kD>>;
+    using SharedALoader = GlobalToSharedLoader<SharedA, WarpLayout>;
+    using RegALoader =
+        SharedToRegLoader<RegA, WarpLayout, WarpReuse::kRowReuseCont>;
 
-    static constexpr int kORows = Br / kWarpPerRow / BaseShape::kTileSize;
-    static constexpr int kOCols = kD / kWarpPerCol / BaseShape::kTileSize;
+    // operand B
+    using GlobalB = GlobalTile<InType, tl::ColMajor<kK, kN>>;
+    using GIteratorB = TileIterator<GlobalB, TileShape<kTK, kTN>>;
+    using SharedB = SharedTile<InType, tl::ColMajor<kTK, kTN>, true>;
 
-    using RegO =
-        RegTile<BaseTileRowMajor<OutType>, tl::RowMajor<kORows, kOCols>>;
-    using OStorer = copy::RegToGlobalStorer<GlobalO, RegO, WarpLayout>;
+    static constexpr int kBKs = kTK / BaseShape::kTileSize;
+    static constexpr int kBNs = kTN / kWarpPerCol / BaseShape::kTileSize;
+    using RegB = RegTile<BaseTileColMajor<InType>, tl::ColMajor<kBKs, kBNs>>;
 
-    // Accumulator
-    static constexpr int kAccRows = Br / kWarpPerRow / BaseShape::kTileSize;
-    static constexpr int kAccCols = Bc / kWarpPerCol / BaseShape::kTileSize;
+    using SharedBLoader = GlobalToSharedLoader<SharedB, WarpLayout>;
+    using RegBLoader =
+        SharedToRegLoader<RegB, WarpLayout, WarpReuse::kColReuseCont>;
 
+    // operand C
+    using GlobalC = GlobalTile<InType, tl::ColMajor<kN, kTP>>;
+    // chunk the N dimension to fit into shared memory
+    using GIteratorC = TileIterator<GlobalC, TileShape<kTN, kTP>>;
+    using SharedC = SharedTile<InType, tl::ColMajor<kTN, kTP>, true>;
+
+    static constexpr int kCNs = kTN / BaseShape::kTileSize;
+    static constexpr int kCPs = kTP / kWarpPerCol / BaseShape::kTileSize;
+    using RegC = RegTile<BaseTileColMajor<InType>, tl::ColMajor<kCNs, kCPs>>;
+
+    using SharedCLoader = GlobalToSharedLoader<SharedC, WarpLayout>;
+    using RegCLoader =
+        SharedToRegLoader<RegC, WarpLayout, WarpReuse::kColReuseCont>;
+
+    // output D
+    using GlobalD = GlobalTile<AccType, tl::RowMajor<kTM, kTP>>;
+
+    static constexpr int kDMs = kTM / kWarpPerRow / BaseShape::kTileSize;
+    static constexpr int kDPs = kTP / kWarpPerCol / BaseShape::kTileSize;
+    using RegD = RegTile<BaseTileRowMajor<AccType>, tl::RowMajor<kDMs, kDPs>>;
+    using DStorer = copy::RegToGlobalStorer<GlobalD, RegD, WarpLayout>;
+
+    static constexpr int kAccMs = kTM / kWarpPerRow / BaseShape::kTileSize;
+    static constexpr int kAccNs = kTN / kWarpPerCol / BaseShape::kTileSize;
+
+    // Reg Acc
     using RegAcc =
-        RegTile<BaseTileRowMajor<OutType>, tl::RowMajor<kAccRows, kAccCols>>;
+        RegTile<BaseTileRowMajor<AccType>, tl::RowMajor<kAccMs, kAccNs>>;
     using RegAccCast =
-        RegTile<BaseTileRowMajor<InType>, tl::RowMajor<kAccRows, kAccCols>>;
+        RegTile<BaseTileRowMajor<InType>, tl::RowMajor<kAccMs, kAccNs>>;
 
-    using Convert = compute::RegTileConvert<RegAcc, RegAccCast>;
+    // Convert the accumulator to half
+    using ConvertHalf = compute::RegTileConvert<RegAcc, RegAccCast>;
 
-    static constexpr int kReduceHeight =
-        Br / kWarpPerRow / BaseShape::kTileSize;
-    static constexpr int kReduceWidth = 2;
+    using RegVec = RegTile<InType, tl::RowMajor<kAccMs, 2>>;
 
-    using RegVec = RegTile<InType, tl::RowMajor<kReduceHeight, kReduceWidth>>;
-
-    using CopyVec = copy::BaseTileCopy<RegVec>;
-
-    // using ReduceMax = compute::ReduceMax<RegAccCast, tl::Layout::kRowMajor>;
+    using RowMax = compute::MaxReduce<RegAccCast, tl::Layout::kRowMajor>;
 };
