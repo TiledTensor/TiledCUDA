@@ -144,12 +144,15 @@ struct B2BGemmTraits {
         SharedToRegLoader<RegC, WarpLayout, WarpReuse::kColReuseCont>;
 
     // output D
-    using GlobalD = GlobalTile<AccType, tl::RowMajor<kTM, kTP>>;
+    // using GlobalD = GlobalTile<AccType, tl::RowMajor<kTM, kTP>>;
+    using GlobalD = GlobalTile<InType, tl::RowMajor<kTM, kTP>>;
 
     static constexpr int kDMs = kTM / kWarpPerRow / BaseShape::kTileSize;
     static constexpr int kDPs = kTP / kWarpPerCol / BaseShape::kTileSize;
     using RegD = RegTile<BaseTileRowMajor<AccType>, tl::RowMajor<kDMs, kDPs>>;
-    using DStorer = copy::RegToGlobalStorer<GlobalD, RegD, WarpLayout>;
+    using RegDCast =
+        RegTile<BaseTileRowMajor<InType>, tl::RowMajor<kDMs, kDPs>>;
+    using DStorer = copy::RegToGlobalStorer<GlobalD, RegDCast, WarpLayout>;
 
     static constexpr int kAccMs = kTM / kWarpPerRow / BaseShape::kTileSize;
     static constexpr int kAccNs = kTN / kWarpPerCol / BaseShape::kTileSize;
@@ -162,6 +165,7 @@ struct B2BGemmTraits {
 
     // Convert the accumulator to half
     using ConvertHalf = compute::RegTileConvert<RegAcc, RegAccCast>;
+    using ConvertO = compute::RegTileConvert<RegD, RegDCast>;
 
     using RegVec = RegTile<InType, tl::RowMajor<kAccMs, 2>>;
 
@@ -170,13 +174,18 @@ struct B2BGemmTraits {
 
     using BroadcastSub =
         compute::BroadcastSub<RegVec, RegAccCast, tl::Layout::kRowMajor>;
+    // using BroadcastMul =
+    //     compute::BroadcastMul<RegVec, RegAccCast, tl::Layout::kRowMajor>;
+    // using BroadcastDiv =
+    //     compute::BroadcastDiv<RegVec, RegAccCast, tl::Layout::kRowMajor>;
     using BroadcastMul =
-        compute::BroadcastMul<RegVec, RegAccCast, tl::Layout::kRowMajor>;
+        compute::BroadcastMul<RegVec, RegDCast, tl::Layout::kRowMajor>;
     using BroadcastDiv =
-        compute::BroadcastDiv<RegVec, RegAccCast, tl::Layout::kRowMajor>;
+        compute::BroadcastDiv<RegVec, RegDCast, tl::Layout::kRowMajor>;
 
     using BlockExp = compute::RegTileExp<RegAccCast>;
-    using BlockAdd = compute::RegTileAdd<RegAccCast>;
+    // using BlockAdd = compute::RegTileAdd<RegAccCast>;
+    using BlockAdd = compute::RegTileAdd<RegDCast>;
 
     using VecMax = compute::BaseTileMax<RegVec>;
     using VecAdd = compute::BaseTileAdd<RegVec>;

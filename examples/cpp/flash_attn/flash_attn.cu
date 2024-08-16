@@ -141,7 +141,8 @@
 //     store_o(rO, gO);
 // }
 
-template <typename InType, typename AccType,                     //
+template <typename InType,
+          typename AccType,                                      //
           typename GIteratorA, typename SharedA, typename RegA,  //
           typename SharedALoader, typename RegALoader,           //
           typename GIteratorB, typename SharedB, typename RegB,  //
@@ -149,13 +150,13 @@ template <typename InType, typename AccType,                     //
           typename GIteratorC, typename SharedC, typename RegC,  //
           typename SharedCLoader, typename RegCLoader,           //
           typename RegAcc, typename RegAccCast, typename GlobalD, typename RegD,
-          typename DStorer, typename ConvertAcc, typename RegVec,
-          typename CopyVec, typename RowMax, typename BroadcastSub,
-          typename BroadcastMul, typename BroadcastDiv, typename BlockExp,
-          typename BlockAdd, typename VecMax, typename VecAdd, typename VecSub,
-          typename VecMul, typename VecExp>
+          typename RegDCast, typename DStorer, typename ConvertAcc,
+          typename ConvertO, typename RegVec, typename CopyVec, typename RowMax,
+          typename BroadcastSub, typename BroadcastMul, typename BroadcastDiv,
+          typename BlockExp, typename BlockAdd, typename VecMax,
+          typename VecAdd, typename VecSub, typename VecMul, typename VecExp>
 __global__ void KeFlashAttention(const InType* dA, const InType* dB,
-                                 const InType* dC, AccType* dD, int kM, int kN,
+                                 const InType* dC, InType* dD, int kM, int kN,
                                  int kK, int kP, int kTM, int kTN, int kTK,
                                  int kTP) {
     // Advance to the global data tile to the current CTA.
@@ -164,8 +165,8 @@ __global__ void KeFlashAttention(const InType* dA, const InType* dB,
     const InType* gC_ptr =
         dC + blockIdx.z * (kN * kP) + blockIdx.y * (kTP * kN);
 
-    AccType* gD_ptr = dD + blockIdx.z * (kM * kP) + blockIdx.x * (kTM * kP) +
-                      (blockIdx.y * kTP);
+    InType* gD_ptr = dD + blockIdx.z * (kM * kP) + blockIdx.x * (kTM * kP) +
+                     (blockIdx.y * kTP);
 
     extern __shared__ __align__(sizeof(double)) unsigned char shared_buf[];
     auto* shm = reinterpret_cast<InType*>(shared_buf);
@@ -195,7 +196,12 @@ __global__ void KeFlashAttention(const InType* dA, const InType* dB,
     RegCLoader load_rc;
     RegC rC;
 
-    RegD rD;
+    // RegD rD_f32;
+    RegD unnormized_attn_block_f32;
+
+    RegDCast rD;
+    RegDCast unnormized_attn_block;
+
     RegAcc attn_block_f32;
     RegAccCast attn_block;
 
@@ -214,8 +220,10 @@ __global__ void KeFlashAttention(const InType* dA, const InType* dB,
     CopyVec copy_vec;
 
     BroadcastSub broadcast_sub;
+    BroadcastMul broadcast_mul;
 
     BlockExp block_exp;
+    BlockAdd block_add;
 
     VecMax vec_max;
     VecAdd vec_add;
@@ -283,8 +291,27 @@ __global__ void KeFlashAttention(const InType* dA, const InType* dB,
         vec_mul(cur_norm_vec, cur_sum_vec, cur_sum_vec);
         vec_add(prev_sum_vec, cur_sum_vec, new_sum_vec);
 
-        compute::gemm_(attn_block, rC, rD);
+        // Compute unnormized attention block.
+        compute::gemm_(attn_block, rC, unnormized_attn_block_f32);
+
+        __syncthreads();
+
+        ConvertO cast_o;  // Convert half precision to float.
+        cast_o(unnormized_attn_block_f32, unnormized_attn_block);
+
+        vec_mul(prev_sum_vec, prev_norm_vec, prev_norm_vec);
+        broadcast_mul(prev_norm_vec, rD);
+
+        broadcast_mul(cur_norm_vec, unnormized_attn_block);
+
+        block_add(rD, unnormized_attn_block, rD);
+
+        // Cear the accumulator.
         attn_block_f32.clear();
+
+        // Update max vector and sum vector.
+        copy_vec(new_max_vec, prev_max_vec);
+        copy_vec(new_sum_vec, prev_sum_vec);
     }
     __syncthreads();
 
@@ -327,18 +354,18 @@ void run(bool check = true) {
     for (int i = 0; i < h_c.size(); ++i)
         h_c[i] = static_cast<InType>(rand_float());
 
-    thrust::host_vector<AccType> h_d(kM * kP * kBatch);
+    thrust::host_vector<InType> h_d(kM * kP * kBatch);
     thrust::fill(h_d.begin(), h_d.end(), 0.);
 
     thrust::device_vector<InType> d_a = h_a;
     thrust::device_vector<InType> d_b = h_b;
     thrust::device_vector<InType> d_c = h_c;
-    thrust::device_vector<AccType> d_d = h_d;
+    thrust::device_vector<InType> d_d = h_d;
 
     const InType* A = thrust::raw_pointer_cast(d_a.data());
     const InType* B = thrust::raw_pointer_cast(d_b.data());
     const InType* C = thrust::raw_pointer_cast(d_c.data());
-    AccType* D = thrust::raw_pointer_cast(d_d.data());
+    InType* D = thrust::raw_pointer_cast(d_d.data());
 
     using Config = B2BGemmTraits<InType, AccType, WholeShape, CtaTileShape>;
 
@@ -346,6 +373,7 @@ void run(bool check = true) {
     using RegB = typename Config::RegB;
     using RegC = typename Config::RegC;
     using RegD = typename Config::RegD;
+    using RegDCast = typename Config::RegDCast;
     using RegAcc = typename Config::RegAcc;
     using RegAccCast = typename Config::RegAccCast;
 
@@ -367,6 +395,7 @@ void run(bool check = true) {
     using DStorer = typename Config::DStorer;
 
     using ConvertAcc = typename Config::ConvertHalf;
+    using ConvertO = typename Config::ConvertO;
 
     using RegVec = typename Config::RegVec;
 
@@ -407,9 +436,10 @@ void run(bool check = true) {
                           GIteratorC, SharedC, RegC,  //
                           SharedCLoader, RegCLoader,  //
                           RegAcc, RegAccCast, typename Config::GlobalD, RegD,
-                          DStorer, ConvertAcc, RegVec, CopyVec, RowMax,
-                          BroadcastSub, BroadcastMul, BroadcastDiv, BlockExp,
-                          BlockAdd, VecMax, VecAdd, VecSub, VecMul, VecExp>;
+                          RegDCast, DStorer, ConvertAcc, ConvertO, RegVec,
+                          CopyVec, RowMax, BroadcastSub, BroadcastMul,
+                          BroadcastDiv, BlockExp, BlockAdd, VecMax, VecAdd,
+                          VecSub, VecMul, VecExp>;
 
     if (shm_size > 48 * 1024) {
         cudaFuncSetAttribute(
