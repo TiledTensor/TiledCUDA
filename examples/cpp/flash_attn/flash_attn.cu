@@ -3,64 +3,63 @@
 
 template <typename InType,
           typename AccType,                                      //
-          typename GIteratorA, typename SharedA, typename RegA,  //
-          typename SharedALoader, typename RegALoader,           //
-          typename GIteratorB, typename SharedB, typename RegB,  //
-          typename SharedBLoader, typename RegBLoader,           //
-          typename GIteratorC, typename SharedC, typename RegC,  //
-          typename SharedCLoader, typename RegCLoader,           //
-          typename RegAcc, typename RegAccCast, typename GlobalD, typename RegD,
-          typename RegDCast, typename DStorer, typename ConvertAcc,
+          typename GIteratorQ, typename SharedQ, typename RegQ,  //
+          typename SharedQLoader, typename RegQLoader,           //
+          typename GIteratorK, typename SharedK, typename RegK,  //
+          typename SharedKLoader, typename RegKLoader,           //
+          typename GIteratorV, typename SharedV, typename RegV,  //
+          typename SharedVLoader, typename RegVLoader,           //
+          typename RegAcc, typename RegAccCast, typename GlobalO, typename RegO,
+          typename RegOCast, typename OStorer, typename ConvertAcc,
           typename ConvertO, typename RegVec, typename CopyVec, typename RowMax,
           typename BroadcastSub, typename BroadcastMul, typename BroadcastDiv,
           typename BlockExp, typename BlockAdd, typename VecMax,
           typename VecAdd, typename VecSub, typename VecMul, typename VecExp>
-__global__ void KeFlashAttention(const InType* dA, const InType* dB,
-                                 const InType* dC, InType* dD, int kM, int kN,
+__global__ void KeFlashAttention(const InType* dQ, const InType* dK,
+                                 const InType* dV, InType* dO, int kM, int kN,
                                  int kK, int kP, int kTM, int kTN, int kTK,
                                  int kTP) {
     // Advance to the global data tile to the current CTA.
-    const InType* A = dA + blockIdx.z * (kM * kK) + blockIdx.x * (kTM * kK);
-    const InType* B = dB + blockIdx.z * (kK * kN);
-    const InType* gC_ptr =
-        dC + blockIdx.z * (kN * kP) + blockIdx.y * (kTP * kN);
+    const InType* Q = dQ + blockIdx.z * (kM * kK) + blockIdx.x * (kTM * kK);
+    const InType* K = dK + blockIdx.z * (kK * kN);
+    const InType* gV_ptr =
+        dV + blockIdx.z * (kN * kP) + blockIdx.y * (kTP * kN);
 
-    InType* gD_ptr = dD + blockIdx.z * (kM * kP) + blockIdx.x * (kTM * kP) +
+    InType* gO_ptr = dO + blockIdx.z * (kM * kP) + blockIdx.x * (kTM * kP) +
                      (blockIdx.y * kTP);
 
     extern __shared__ __align__(sizeof(double)) unsigned char shared_buf[];
     auto* shm = reinterpret_cast<InType*>(shared_buf);
 
-    InType* sA_ptr = shm;
-    InType* sB_ptr = shm + SharedA::kNumel;
-    InType* sC_ptr = shm + SharedA::kNumel + SharedB::kNumel;
+    InType* sQ_ptr = shm;
+    InType* sK_ptr = shm + SharedQ::kNumel;
+    InType* sV_ptr = shm + SharedQ::kNumel + SharedK::kNumel;
 
-    GIteratorA gAs(A);
-    SharedA sA(sA_ptr);
-    RegA rA;
+    GIteratorQ gQs(Q);
+    SharedQ sQ(sQ_ptr);
+    RegQ rQ;
 
-    SharedALoader load_sa;
-    RegALoader load_ra;
+    SharedQLoader load_sq;
+    RegQLoader load_rq;
 
-    GIteratorB gBs(B);
-    SharedB sB(sB_ptr);
-    RegB rB;
+    GIteratorK gKs(K);
+    SharedK sK(sK_ptr);
+    RegK rK;
 
-    SharedBLoader load_sb;
-    RegBLoader load_rb;
+    SharedKLoader load_sk;
+    RegKLoader load_rk;
 
-    GIteratorC gCs(gC_ptr);
-    SharedC sC(sC_ptr);
+    GIteratorV gVs(gV_ptr);
+    SharedV sV(sV_ptr);
 
-    SharedCLoader load_sc;
-    RegCLoader load_rc;
-    RegC rC;
+    SharedVLoader load_sv;
+    RegVLoader load_rv;
+    RegV rV;
 
-    // RegD rD_f32;
-    RegD unnormized_attn_block_f32;
+    RegO unnormized_attn_block_f32;
 
-    RegDCast rD;
-    RegDCast unnormized_attn_block;
+    RegOCast rO;
+    RegOCast unnormized_attn_block;
 
     RegAcc attn_block_f32;
     RegAccCast attn_block;
@@ -91,22 +90,22 @@ __global__ void KeFlashAttention(const InType* dA, const InType* dB,
     VecMul vec_mul;
     VecExp vec_exp;
 
-    for (int n = 0; n < GIteratorC::sc0; ++n) {
-        load_sc(gCs(n), sC);
+    for (int n = 0; n < GIteratorV::sc0; ++n) {
+        load_sv(gVs(n), sV);
 
-        for (int k = 0; k < GIteratorA::sc1; ++k) {
-            load_sa(gAs(k), sA);
-            load_sb(gBs(k, n), sB);
+        for (int k = 0; k < GIteratorQ::sc1; ++k) {
+            load_sq(gQs(k), sQ);
+            load_sk(gKs(k, n), sK);
             __copy_async();
             __syncthreads();
 
-            load_ra(sA, rA);
-            load_rb(sB, rB);
+            load_rq(sQ, rQ);
+            load_rk(sK, rK);
             __syncthreads();
 
-            compute::gemm_(rA, rB, attn_block_f32);
+            compute::gemm_(rQ, rK, attn_block_f32);
         }
-        load_rc(sC, rC);
+        load_rv(sV, rV);
         __syncthreads();
 
         ConvertAcc cast_acc;  // Convert acc to half precision
@@ -152,7 +151,7 @@ __global__ void KeFlashAttention(const InType* dA, const InType* dB,
         vec_add(prev_sum_vec, cur_sum_vec, new_sum_vec);
 
         // Compute unnormized attention block.
-        compute::gemm_(attn_block, rC, unnormized_attn_block_f32);
+        compute::gemm_(attn_block, rV, unnormized_attn_block_f32);
 
         __syncthreads();
 
@@ -160,11 +159,16 @@ __global__ void KeFlashAttention(const InType* dA, const InType* dB,
         cast_o(unnormized_attn_block_f32, unnormized_attn_block);
 
         vec_mul(prev_sum_vec, prev_norm_vec, prev_norm_vec);
-        broadcast_mul(prev_norm_vec, rD);
+        broadcast_mul(prev_norm_vec, rO);
 
         broadcast_mul(cur_norm_vec, unnormized_attn_block);
 
-        block_add(rD, unnormized_attn_block, rD);
+        block_add(rO, unnormized_attn_block, rO);
+
+        if (tiledcuda::thread0()) {
+            unnormized_attn_block.dump_value();
+            rO.dump_value();
+        }
 
         // Cear the accumulator.
         attn_block_f32.clear();
@@ -175,9 +179,9 @@ __global__ void KeFlashAttention(const InType* dA, const InType* dB,
     }
     __syncthreads();
 
-    GlobalD gD(gD_ptr);
-    DStorer storer_d;  // Store D tile from register to global.
-    storer_d(rD, gD);
+    GlobalO gO(gO_ptr);
+    OStorer storer_o;  // Store O tile from register to global.
+    storer_o(rO, gO);
 }
 
 template <typename WholeShape, typename CtaTileShape, const int kBatch>
