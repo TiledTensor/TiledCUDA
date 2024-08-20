@@ -91,11 +91,6 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
     VecMul vec_mul;
     VecExp vec_exp;
 
-    if (tiledcuda::thread0()) {
-        printf("GIteratorV::sc0: %d, GIteratorQ::sc1: %d\n", GIteratorV::sc0,
-               GIteratorQ::sc1);
-    }
-
     for (int n = 0; n < GIteratorV::sc0; ++n) {
         load_sv(gVs(n), sV);
 
@@ -117,6 +112,7 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
         ConvertAcc cast_acc;  // Convert acc to half precision
         cast_acc(attn_block_f32, attn_block);
 
+#ifdef DEBUG
         if (tiledcuda::thread(0)) {
             printf("kRows: %d, kCols: %d\n", RegAccCast::kRows,
                    RegAccCast::kCols);
@@ -128,6 +124,7 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
                 }
             }
         }
+#endif
 
         // Copy `cur_max_vec`, `cur_norm_vec` into `prev_max_vec`,
         // `prev_norm_vec`.
@@ -137,15 +134,18 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
         // Compute row max.
         row_max(attn_block, cur_max_vec);
 
+#ifdef DEBUG
         if (tiledcuda::thread(0)) {
             // WarpLayout: (4, 1)
             printf("Thread 0 cur_max_vec: \n");
             cur_max_vec.dump_value();
         }
+#endif
 
         // Broadcast subtract from `attn_block`.
         broadcast_sub(cur_max_vec, attn_block);
 
+#ifdef DEBUG
         if (tiledcuda::thread(0)) {
             printf("Thread 0 attn block after broadcast sub: \n");
             for (int h = 0; h < RegAccCast::kRows; ++h) {
@@ -155,6 +155,7 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
                 }
             }
         }
+#endif
 
         // Compute exp in `attn_block`.
         block_exp(attn_block, attn_block);
@@ -189,11 +190,6 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
         broadcast_mul(cur_norm_vec, unnormized_attn_block);
 
         block_add(rO, unnormized_attn_block, rO);
-
-        // if (tiledcuda::thread0()) {
-        //     unnormized_attn_block.dump_value();
-        //     rO.dump_value();
-        // }
 
         // Cear the accumulator.
         attn_block_f32.clear();
@@ -340,37 +336,12 @@ void run(bool check = true) {
 
     kernel<<<grid, block, shm_size, 0>>>(A, B, C, D, kM, kN, kK, kP, kTM, kTN,
                                          kTK, kTP);
-
-    // for (int i = 0; i < 5; ++i)
-    //     kernel<<<grid, block, shm_size, 0>>>(A, B, C, D, kM, kN, kK, kP, kTM,
-    //                                          kTN, kTK, kTP);
-    // cudaDeviceSynchronize();
-
-    // CudaTimer timer;
-
-    // int iter = 100;
-    // timer.start();
-    // for (int i = 0; i < iter; ++i)
-    //     kernel<<<grid, block, shm_size, 0>>>(A, B, C, D, kM, kN, kK, kP, kTM,
-    //                                          kTN, kTK, kTP);
-    // cudaDeviceSynchronize();
-
-    // float elapsed = timer.stop() / iter;
-    // std::cout << "Time: " << elapsed << " ms" << std::endl;
 }
 
 int main() {
     run<FlashAttentionShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
         FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
         1>();
-
-    // run<FlashAttentionShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
-    //     FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128
-    //     /*kTP*/>, 2>();
-
-    // run<B2BGemmShape<1024 /*M*/, 128 /*N*/, 128 /*K*/, 128 /*P*/>,
-    //     B2BGemmShape<64 /*kTM*/, 128 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
-    //     2>();
 
     return 0;
 }

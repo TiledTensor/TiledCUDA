@@ -14,8 +14,11 @@ if(WITH_TESTING)
   enable_testing()
 endif()
 
+option(ENABLE_DEBUG "Enable debug mode" ON)
+
 include(generic)
 include(dependencies)
+
 
 include_directories(include)
 add_subdirectory(src)
