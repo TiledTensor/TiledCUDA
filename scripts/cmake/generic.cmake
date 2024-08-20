@@ -50,12 +50,6 @@ if(ENABLE_DEBUG)
 endif()
 
 
-# function(enable_debug)
-#   set(CMAKE_BUILD_TYPE Debug)
-#   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG")
-#   set(CMAKE_CUDA_FLAGS_DEBUG "${CMAKE_CUDA_FLAGS_DEBUG} -DDEBUG")
-# endfunction(enable_debug)
-
 function(cuda_test TARGET_NAME)
   set(oneValueArgs "")
   set(multiValueArgs SRCS DEPS)
