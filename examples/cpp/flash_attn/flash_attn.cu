@@ -170,11 +170,6 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
         vec_sub(cur_max_vec, new_max_vec, cur_norm_vec);
         vec_exp(cur_norm_vec, cur_norm_vec);
 
-        if (tiledcuda::thread0()) {
-            // prev_norm_vec.dump_value();
-            // cur_norm_vec.dump_value();
-        }
-
         // Update normalization factor l(x)
         vec_mul(prev_norm_vec, prev_sum_vec, prev_sum_vec);
         vec_mul(cur_norm_vec, cur_sum_vec, cur_sum_vec);
