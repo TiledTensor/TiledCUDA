@@ -94,14 +94,13 @@ using RegTileLog =
     detail::ElementWise<RegTile, BaseTileLog<typename RegTile::DType>>;
 
 template <typename SrcRegTile, typename DstRegTile>
-using BaseTileConvertHalf =
-    detail::ElementWise2<SrcRegTile, DstRegTile,
-                         ConvertToHalf<typename SrcRegTile::DType>>;
+using BaseTileConvert = detail::ElementWise2<
+    SrcRegTile, DstRegTile,
+    Convert<typename SrcRegTile::DType, typename DstRegTile::DType>>;
 template <typename SrcRegTile, typename DstRegTile>
-using RegTileConvertHalf =
-    detail::ElementWise2<SrcRegTile, DstRegTile,
-                         BaseTileConvertHalf<typename SrcRegTile::DType,
-                                             typename DstRegTile::DType>>;
+using RegTileConvert = detail::ElementWise2<
+    SrcRegTile, DstRegTile,
+    BaseTileConvert<typename SrcRegTile::DType, typename DstRegTile::DType>>;
 
 template <typename RegTile>
 using BaseTileAdd = detail::Binary<RegTile, Add<typename RegTile::DType>>;
@@ -126,5 +125,11 @@ using BaseTileDiv = detail::Binary<RegTile, Div<typename RegTile::DType>>;
 template <typename RegTile>
 using RegTileDiv =
     detail::Binary<RegTile, BaseTileDiv<typename RegTile::DType>>;
+
+template <typename RegTile>
+using BaseTileMax = detail::Binary<RegTile, Max<typename RegTile::DType>>;
+template <typename RegTile>
+using RegTileMax =
+    detail::Binary<RegTile, BaseTileMax<typename RegTile::DType>>;
 
 }  // namespace tiledcuda::cell::compute

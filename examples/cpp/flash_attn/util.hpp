@@ -3,6 +3,7 @@
 #include "cell/compute/mod.hpp"
 #include "cell/mod.hpp"
 #include "types/mod.hpp"
+#include "util/debug.hpp"
 
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
@@ -13,54 +14,13 @@ using namespace tiledcuda::cell::copy;
 namespace tl = tile_layout;
 
 template <const int kM, const int kN, const int kK, const int kP>
-using B2BGemmShape = TileShape<kM, kN, kK, kP>;
+using FlashAttentionShape = TileShape<kM, kN, kK, kP>;
 
 float rand_float(float a = 1e-1, float b = 5e-2) {
     float random = ((float)rand()) / (float)RAND_MAX;
     float diff = b - a;
     float r = random * diff;
     return a + r;
-}
-
-// In this implementation, A and D are interpreted as being laid out in
-// row-major, and B, C is interpreted as being laid out in column-major.
-void naive_back2back_gemm(int kM, int kN, int kK, int kP, int kBatch,
-                          const __half* As, const __half* Bs, const __half* Cs,
-                          float* Ds, __half* accs) {
-    const __half* A = As;
-    const __half* B = Bs;
-    const __half* C = Cs;
-    __half* acc = accs;
-    float* D = Ds;
-
-    for (int b = 0; b < kBatch; ++b) {
-        A += b * kM * kK;
-        B += b * kK * kN;
-        C += b * kM * kN;
-        D += b * kM * kP;
-        acc += b * kM * kN;
-
-        for (int i = 0; i < kM; ++i) {
-            for (int j = 0; j < kN; ++j) {
-                __half s = 0.;
-                for (int k = 0; k < kK; ++k) {
-                    s += A[i * kK + k] * B[k + kK * j];
-                }
-                acc[i * kN + j] = s;
-            }
-        }
-
-        for (int i = 0; i < kM; ++i) {
-            for (int j = 0; j < kP; ++j) {
-                float s = 0.;
-                for (int k = 0; k < kN; ++k) {
-                    s += __half2float(acc[i * kN + k]) *
-                         __half2float(C[k + kN * j]);
-                }
-                D[i * kP + j] = s;
-            }
-        }
-    }
 }
 
 bool check_results(const float* values1, const float* values2, int numel) {
@@ -79,7 +39,7 @@ bool check_results(const float* values1, const float* values2, int numel) {
 
 template <typename InType, typename AccType, typename WholeShape,
           typename CtaTileShape>
-struct B2BGemmTraits {
+struct FlashAttentionTraits {
     using BaseShape = traits::BaseTileShape<InType>;
 
     using WarpLayout = tl::RowMajor<4, 1>;
@@ -143,12 +103,15 @@ struct B2BGemmTraits {
         SharedToRegLoader<RegC, WarpLayout, WarpReuse::kColReuseCont>;
 
     // output D
-    using GlobalD = GlobalTile<AccType, tl::RowMajor<kTM, kTP>>;
+    // using GlobalD = GlobalTile<AccType, tl::RowMajor<kTM, kTP>>;
+    using GlobalD = GlobalTile<InType, tl::RowMajor<kTM, kTP>>;
 
     static constexpr int kDMs = kTM / kWarpPerRow / BaseShape::kTileSize;
     static constexpr int kDPs = kTP / kWarpPerCol / BaseShape::kTileSize;
     using RegD = RegTile<BaseTileRowMajor<AccType>, tl::RowMajor<kDMs, kDPs>>;
-    using DStorer = copy::RegToGlobalStorer<GlobalD, RegD, WarpLayout>;
+    using RegDCast =
+        RegTile<BaseTileRowMajor<InType>, tl::RowMajor<kDMs, kDPs>>;
+    using DStorer = copy::RegToGlobalStorer<GlobalD, RegDCast, WarpLayout>;
 
     static constexpr int kAccMs = kTM / kWarpPerRow / BaseShape::kTileSize;
     static constexpr int kAccNs = kTN / kWarpPerCol / BaseShape::kTileSize;
@@ -161,4 +124,31 @@ struct B2BGemmTraits {
 
     // Convert the accumulator to half
     using ConvertHalf = compute::RegTileConvert<RegAcc, RegAccCast>;
+    using ConvertO = compute::RegTileConvert<RegD, RegDCast>;
+
+    using RegVec = RegTile<InType, tl::RowMajor<kAccMs, 2>>;
+
+    using CopyVec = copy::BaseTileCopy<RegVec>;
+    using RowMax = compute::MaxReduce<RegAccCast, tl::Layout::kRowMajor>;
+
+    using BroadcastSub =
+        compute::BroadcastSub<RegVec, RegAccCast, tl::Layout::kRowMajor>;
+    // using BroadcastMul =
+    //     compute::BroadcastMul<RegVec, RegAccCast, tl::Layout::kRowMajor>;
+    // using BroadcastDiv =
+    //     compute::BroadcastDiv<RegVec, RegAccCast, tl::Layout::kRowMajor>;
+    using BroadcastMul =
+        compute::BroadcastMul<RegVec, RegDCast, tl::Layout::kRowMajor>;
+    using BroadcastDiv =
+        compute::BroadcastDiv<RegVec, RegDCast, tl::Layout::kRowMajor>;
+
+    using BlockExp = compute::RegTileExp<RegAccCast>;
+    // using BlockAdd = compute::RegTileAdd<RegAccCast>;
+    using BlockAdd = compute::RegTileAdd<RegDCast>;
+
+    using VecMax = compute::BaseTileMax<RegVec>;
+    using VecAdd = compute::BaseTileAdd<RegVec>;
+    using VecSub = compute::BaseTileSub<RegVec>;
+    using VecMul = compute::BaseTileMul<RegVec>;
+    using VecExp = compute::BaseTileExp<RegVec>;
 };

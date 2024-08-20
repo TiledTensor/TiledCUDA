@@ -143,23 +143,36 @@ struct Relu<__half> {
 };
 #endif
 
-template <typename Element>
-struct ConvertToHalf {
-    DEVICE Element operator()(Element a) const {}
+template <typename SrcType, typename DstType>
+struct Convert {
+    DEVICE DstType operator()(SrcType a) const {
+        return static_cast<DstType>(a);
+    }
 
-    DEVICE void operator()(const Element& src, __half& dst) {}
+    DEVICE void operator()(const SrcType& src, DstType& dst) {
+        dst = static_cast<DstType>(src);
+    }
 };
 
 #if defined(__CUDA_ARCH__)
+
 template <>
-struct ConvertToHalf<float> {
-    DEVICE float operator()(float a) const { return __float2half(a); }
+struct Convert<float, __half> {
+    DEVICE __half operator()(float a) const { return __float2half(a); }
 
     DEVICE void operator()(const float& src, __half& dst) {
         dst = __float2half(src);
     }
 };
 
+template <>
+struct Convert<__half, float> {
+    DEVICE float operator()(__half a) const { return __half2float(a); }
+
+    DEVICE void operator()(const __half& src, float& dst) {
+        dst = __half2float(src);
+    }
+};
 #endif
 
 }  // namespace tiledcuda::cell::compute
