@@ -2,6 +2,7 @@
 
 #include "cell/compute/mod.hpp"
 #include "cell/mod.hpp"
+#include "flash_attn_cpu.hpp"
 #include "types/mod.hpp"
 #include "util/debug.hpp"
 

@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
+# CMake 3.25 is required for CUDA 20.
+cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
 project(tiledcuda LANGUAGES C CXX CUDA)
 
 # Prohibit in-source builds
