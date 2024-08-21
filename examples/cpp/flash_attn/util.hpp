@@ -137,10 +137,6 @@ struct FlashAttentionTraits {
 
     using BroadcastSub =
         compute::BroadcastSub<RegVec, RegAccCast, tl::Layout::kRowMajor>;
-    // using BroadcastMul =
-    //     compute::BroadcastMul<RegVec, RegAccCast, tl::Layout::kRowMajor>;
-    // using BroadcastDiv =
-    //     compute::BroadcastDiv<RegVec, RegAccCast, tl::Layout::kRowMajor>;
     using BroadcastMul =
         compute::BroadcastMul<RegVec, RegDCast, tl::Layout::kRowMajor>;
     using BroadcastDiv =
