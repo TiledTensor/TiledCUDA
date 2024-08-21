@@ -13,9 +13,10 @@ template <typename InType,
           typename RegAcc, typename RegAccCast, typename GlobalO, typename RegO,
           typename RegOCast, typename OStorer, typename ConvertAcc,
           typename ConvertO, typename RegVec, typename CopyVec, typename RowMax,
-          typename BroadcastSub, typename BroadcastMul, typename BroadcastDiv,
-          typename BlockExp, typename BlockAdd, typename VecMax,
-          typename VecAdd, typename VecSub, typename VecMul, typename VecExp>
+          typename RowSum, typename BroadcastSub, typename BroadcastMul,
+          typename BroadcastDiv, typename BlockExp, typename BlockAdd,
+          typename VecMax, typename VecAdd, typename VecSub, typename VecMul,
+          typename VecExp>
 __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
                                  const InType* dV, InType* dO, int kM, int kN,
                                  int kK, int kP, int kTM, int kTN, int kTK,
@@ -77,10 +78,12 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
     RegVec new_sum_vec;
 
     RowMax row_max;
+    RowSum row_sum;
     CopyVec copy_vec;
 
     BroadcastSub broadcast_sub;
     BroadcastMul broadcast_mul;
+    BroadcastDiv broadcast_div;
 
     BlockExp block_exp;
     BlockAdd block_add;
@@ -114,8 +117,6 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
 
 #ifdef DEBUG
         if (tiledcuda::thread(0)) {
-            printf("kRows: %d, kCols: %d\n", RegAccCast::kRows,
-                   RegAccCast::kCols);
             printf("Thread 0 attn block: \n");
             for (int h = 0; h < RegAccCast::kRows; ++h) {
                 for (int w = 0; w < RegAccCast::kCols; ++w) {
@@ -160,8 +161,23 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
         // Compute exp in `attn_block`.
         block_exp(attn_block, attn_block);
 
+        // Compute `cur_sum_vec` by reduce sum of `attn_block`.
+        row_sum(attn_block, cur_sum_vec);
+
         // Compute new max vector.
         vec_max(cur_max_vec, prev_max_vec, new_max_vec);
+
+#ifdef DEBUG
+        if (tiledcuda::thread(0)) {
+            printf("Thread 0 new_max_vec: \n");
+            new_max_vec.dump_value();
+        }
+
+        if (tiledcuda::thread(4)) {
+            printf("Thread 4 new_max_vec: \n");
+            new_max_vec.dump_value();
+        }
+#endif
 
         // Renormalization for the previous block.
         vec_sub(prev_max_vec, new_max_vec, prev_norm_vec);
@@ -171,10 +187,34 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
         vec_sub(cur_max_vec, new_max_vec, cur_norm_vec);
         vec_exp(cur_norm_vec, cur_norm_vec);
 
+#ifdef DEBUG
+        if (tiledcuda::thread(0)) {
+            printf("Thread 0 prev_max_vec: \n");
+            prev_max_vec.dump_value();
+            printf("Thread 0 cur_max_vec: \n");
+            cur_max_vec.dump_value();
+            printf("Thread 0 prev_norm_vec: \n");
+            prev_norm_vec.dump_value();
+            printf("Thread 0 cur_norm_vec: \n");
+            cur_norm_vec.dump_value();
+        }
+#endif
+
         // Update normalization factor l(x)
         vec_mul(prev_norm_vec, prev_sum_vec, prev_sum_vec);
         vec_mul(cur_norm_vec, cur_sum_vec, cur_sum_vec);
         vec_add(prev_sum_vec, cur_sum_vec, new_sum_vec);
+
+#ifdef DEBUG
+        if (tiledcuda::thread(0)) {
+            printf("Thread 0 prev_sum_vec: \n");
+            prev_sum_vec.dump_value();
+            printf("Thread 0 cur_sum_vec: \n");
+            cur_sum_vec.dump_value();
+            printf("Thread 0 new_sum_vec: \n");
+            new_sum_vec.dump_value();
+        }
+#endif
 
         // Compute unnormized attention block.
         compute::gemm_(attn_block, rV, unnormized_attn_block_f32);
@@ -184,12 +224,27 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
         ConvertO cast_o;  // Convert half precision to float.
         cast_o(unnormized_attn_block_f32, unnormized_attn_block);
 
+#ifdef DEBUG
+        if (tiledcuda::thread(0)) {
+            printf("Thread 0 unnormized_attn_block: \n");
+            for (int h = 0; h < RegOCast::kRows; ++h) {
+                for (int w = 0; w < RegOCast::kCols; ++w) {
+                    printf("(%d, %d):\n", h, w);
+                    unnormized_attn_block(h, w).dump_value();
+                }
+            }
+        }
+#endif
+
         vec_mul(prev_sum_vec, prev_norm_vec, prev_norm_vec);
         broadcast_mul(prev_norm_vec, rO);
 
         broadcast_mul(cur_norm_vec, unnormized_attn_block);
 
         block_add(rO, unnormized_attn_block, rO);
+
+        // Normalize the attention block.
+        broadcast_div(new_sum_vec, rO);
 
         // Cear the accumulator.
         attn_block_f32.clear();
@@ -243,6 +298,40 @@ void run(bool check = true) {
     thrust::host_vector<InType> h_d(kM * kP * kBatch);
     thrust::fill(h_d.begin(), h_d.end(), 0.);
 
+    // Host side memory initialization.
+    thrust::host_vector<InType> acc(kM * kN * kBatch);
+    thrust::fill(acc.begin(), acc.end(), 0.);
+
+    thrust::host_vector<InType> exp_values(kM * kP * kBatch);
+    thrust::fill(exp_values.begin(), exp_values.end(), 0.);
+
+    thrust::host_vector<InType> h_o(kM * kP * kBatch);
+    thrust::fill(h_o.begin(), h_o.end(), 0.);
+
+    thrust::host_vector<InType> cur_row_max(kM * kBatch);
+    thrust::fill(cur_row_max.begin(), cur_row_max.end(), 0.);
+
+    thrust::host_vector<InType> prev_row_max(kM * kBatch);
+    thrust::fill(prev_row_max.begin(), prev_row_max.end(), 0.);
+
+    thrust::host_vector<InType> new_row_max(kM * kBatch);
+    thrust::fill(new_row_max.begin(), new_row_max.end(), 0.);
+
+    thrust::host_vector<InType> prev_norm_vec(kM * kBatch);
+    thrust::fill(prev_norm_vec.begin(), prev_norm_vec.end(), 0.);
+
+    thrust::host_vector<InType> new_norm_vec(kM * kBatch);
+    thrust::fill(new_norm_vec.begin(), new_norm_vec.end(), 0.);
+
+    thrust::host_vector<InType> prev_sum_vec(kM * kBatch);
+    thrust::fill(prev_sum_vec.begin(), prev_sum_vec.end(), 0.);
+
+    thrust::host_vector<InType> cur_sum_vec(kM * kBatch);
+    thrust::fill(cur_sum_vec.begin(), cur_sum_vec.end(), 0.);
+
+    thrust::host_vector<InType> new_sum_vec(kM * kBatch);
+    thrust::fill(new_sum_vec.begin(), new_sum_vec.end(), 0.);
+
     thrust::device_vector<InType> d_a = h_a;
     thrust::device_vector<InType> d_b = h_b;
     thrust::device_vector<InType> d_c = h_c;
@@ -288,6 +377,7 @@ void run(bool check = true) {
 
     using CopyVec = typename Config::CopyVec;
     using RowMax = typename Config::RowMax;
+    using RowSum = typename Config::RowSum;
 
     using BroadcastSub = typename Config::BroadcastSub;
     using BroadcastMul = typename Config::BroadcastMul;
@@ -325,7 +415,7 @@ void run(bool check = true) {
                           SharedCLoader, RegCLoader,  //
                           RegAcc, RegAccCast, typename Config::GlobalD, RegD,
                           RegDCast, DStorer, ConvertAcc, ConvertO, RegVec,
-                          CopyVec, RowMax, BroadcastSub, BroadcastMul,
+                          CopyVec, RowMax, RowSum, BroadcastSub, BroadcastMul,
                           BroadcastDiv, BlockExp, BlockAdd, VecMax, VecAdd,
                           VecSub, VecMul, VecExp>;
 
@@ -336,6 +426,33 @@ void run(bool check = true) {
 
     kernel<<<grid, block, shm_size, 0>>>(A, B, C, D, kM, kN, kK, kP, kTM, kTN,
                                          kTK, kTP);
+
+    cudaDeviceSynchronize();
+
+    // Call host-side reference implementation.
+    host_flash_attn(kM, kN, kK, kP, thrust::raw_pointer_cast(h_a.data()),
+                    thrust::raw_pointer_cast(h_b.data()),
+                    thrust::raw_pointer_cast(h_c.data()),
+                    thrust::raw_pointer_cast(h_o.data()),
+                    thrust::raw_pointer_cast(acc.data()),
+                    thrust::raw_pointer_cast(exp_values.data()),
+                    thrust::raw_pointer_cast(cur_row_max.data()),
+                    thrust::raw_pointer_cast(prev_row_max.data()),
+                    thrust::raw_pointer_cast(new_row_max.data()),
+                    thrust::raw_pointer_cast(prev_norm_vec.data()),
+                    thrust::raw_pointer_cast(new_norm_vec.data()),
+                    thrust::raw_pointer_cast(prev_sum_vec.data()),
+                    thrust::raw_pointer_cast(cur_sum_vec.data()),
+                    thrust::raw_pointer_cast(new_sum_vec.data()));
+
+    h_d = d_d;
+
+    if (check_results(thrust::raw_pointer_cast(h_o.data()),
+                      thrust::raw_pointer_cast(h_d.data()), kM * kP * kBatch)) {
+        std::cout << "Test passed." << std::endl;
+    } else {
+        std::cout << "Test failed." << std::endl;
+    }
 }
 
 int main() {

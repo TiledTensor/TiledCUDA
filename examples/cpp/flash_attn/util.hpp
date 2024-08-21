@@ -2,6 +2,7 @@
 
 #include "cell/compute/mod.hpp"
 #include "cell/mod.hpp"
+#include "flash_attn_cpu.hpp"
 #include "types/mod.hpp"
 #include "util/debug.hpp"
 
@@ -23,14 +24,15 @@ float rand_float(float a = 1e-1, float b = 5e-2) {
     return a + r;
 }
 
-bool check_results(const float* values1, const float* values2, int numel) {
+bool check_results(const __half* values1, const __half* values2, int numel) {
     bool passed = true;
     const float epsilon = 1e-1;
 
     for (int i = 0; i < numel; ++i) {
-        if (fabs(values1[i] - values2[i]) > epsilon) {
-            printf("%d-th value differs: %.2f vs. %.2f\n", i, values1[i],
-                   values2[i]);
+        if (fabs(__half2float(values1[i]) - __half2float(values2[i])) >
+            epsilon) {
+            printf("%d-th value differs: %.3f vs. %.3f\n", i,
+                   __half2float(values1[i]), __half2float(values2[i]));
             passed = false;
         }
     }
@@ -103,7 +105,6 @@ struct FlashAttentionTraits {
         SharedToRegLoader<RegC, WarpLayout, WarpReuse::kColReuseCont>;
 
     // output D
-    // using GlobalD = GlobalTile<AccType, tl::RowMajor<kTM, kTP>>;
     using GlobalD = GlobalTile<InType, tl::RowMajor<kTM, kTP>>;
 
     static constexpr int kDMs = kTM / kWarpPerRow / BaseShape::kTileSize;
@@ -131,19 +132,16 @@ struct FlashAttentionTraits {
     using CopyVec = copy::BaseTileCopy<RegVec>;
     using RowMax = compute::MaxReduce<RegAccCast, tl::Layout::kRowMajor>;
 
+    using RowSum = compute::SumReduce<RegAccCast, tl::Layout::kRowMajor>;
+
     using BroadcastSub =
         compute::BroadcastSub<RegVec, RegAccCast, tl::Layout::kRowMajor>;
-    // using BroadcastMul =
-    //     compute::BroadcastMul<RegVec, RegAccCast, tl::Layout::kRowMajor>;
-    // using BroadcastDiv =
-    //     compute::BroadcastDiv<RegVec, RegAccCast, tl::Layout::kRowMajor>;
     using BroadcastMul =
         compute::BroadcastMul<RegVec, RegDCast, tl::Layout::kRowMajor>;
     using BroadcastDiv =
         compute::BroadcastDiv<RegVec, RegDCast, tl::Layout::kRowMajor>;
 
     using BlockExp = compute::RegTileExp<RegAccCast>;
-    // using BlockAdd = compute::RegTileAdd<RegAccCast>;
     using BlockAdd = compute::RegTileAdd<RegDCast>;
 
     using VecMax = compute::BaseTileMax<RegVec>;
