@@ -6,12 +6,12 @@ __half max(__half a, __half b) { return a > b ? a : b; }
 
 __half exp(__half x) { return __float2half(exp(__half2float(x))); }
 
-void flash_attn_cpu(int kM, int kN, int kK, int kP, const __half* Q,
-                    const __half* K, const __half* V, __half* O, __half* acc,
-                    __half* exp_values, __half* cur_row_max,
-                    __half* prev_row_max, __half* new_row_max,
-                    __half* prev_norm_vec, __half* new_norm_vec,
-                    __half* prev_sums, __half* cur_sums, __half* new_sums) {
+void host_flash_attn(int kM, int kN, int kK, int kP, const __half* Q,
+                     const __half* K, const __half* V, __half* O, __half* acc,
+                     __half* exp_values, __half* cur_row_max,
+                     __half* prev_row_max, __half* new_row_max,
+                     __half* prev_norm_vec, __half* new_norm_vec,
+                     __half* prev_sums, __half* cur_sums, __half* new_sums) {
     // Compute attention scores: Q * K^T
     for (int i = 0; i < kM; ++i) {
         for (int j = 0; j < kN; ++j) {
@@ -74,7 +74,7 @@ void flash_attn_cpu(int kM, int kN, int kK, int kP, const __half* Q,
             for (int k = 0; k < kN; ++k) {
                 s += acc[i * kN + k] * V[k + kN * j];
             }
-            O[i * kP + j] = s;
+            exp_values[i * kP + j] = s;
         }
     }
 

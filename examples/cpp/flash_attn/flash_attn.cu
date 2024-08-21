@@ -243,6 +243,40 @@ void run(bool check = true) {
     thrust::host_vector<InType> h_d(kM * kP * kBatch);
     thrust::fill(h_d.begin(), h_d.end(), 0.);
 
+    // Host side memory initialization.
+    thrust::host_vector<InType> acc(kM * kN * kBatch);
+    thrust::fill(acc.begin(), acc.end(), 0.);
+
+    thrust::host_vector<InType> exp_values(kM * kP * kBatch);
+    thrust::fill(exp_values.begin(), exp_values.end(), 0.);
+
+    thrust::host_vector<InType> h_o(kM * kP * kBatch);
+    thrust::fill(h_o.begin(), h_o.end(), 0.);
+
+    thrust::host_vector<InType> cur_row_max(kM * kBatch);
+    thrust::fill(cur_row_max.begin(), cur_row_max.end(), 0.);
+
+    thrust::host_vector<InType> prev_row_max(kM * kBatch);
+    thrust::fill(prev_row_max.begin(), prev_row_max.end(), 0.);
+
+    thrust::host_vector<InType> new_row_max(kM * kBatch);
+    thrust::fill(new_row_max.begin(), new_row_max.end(), 0.);
+
+    thrust::host_vector<InType> prev_norm_vec(kM * kBatch);
+    thrust::fill(prev_norm_vec.begin(), prev_norm_vec.end(), 0.);
+
+    thrust::host_vector<InType> new_norm_vec(kM * kBatch);
+    thrust::fill(new_norm_vec.begin(), new_norm_vec.end(), 0.);
+
+    thrust::host_vector<InType> prev_sum_vec(kM * kBatch);
+    thrust::fill(prev_sum_vec.begin(), prev_sum_vec.end(), 0.);
+
+    thrust::host_vector<InType> cur_sum_vec(kM * kBatch);
+    thrust::fill(cur_sum_vec.begin(), cur_sum_vec.end(), 0.);
+
+    thrust::host_vector<InType> new_sum_vec(kM * kBatch);
+    thrust::fill(new_sum_vec.begin(), new_sum_vec.end(), 0.);
+
     thrust::device_vector<InType> d_a = h_a;
     thrust::device_vector<InType> d_b = h_b;
     thrust::device_vector<InType> d_c = h_c;
@@ -336,6 +370,22 @@ void run(bool check = true) {
 
     kernel<<<grid, block, shm_size, 0>>>(A, B, C, D, kM, kN, kK, kP, kTM, kTN,
                                          kTK, kTP);
+
+    // Call host-side reference implementation.
+    host_flash_attn(kM, kN, kK, kP, thrust::raw_pointer_cast(h_a.data()),
+                    thrust::raw_pointer_cast(h_b.data()),
+                    thrust::raw_pointer_cast(h_c.data()),
+                    thrust::raw_pointer_cast(h_o.data()),
+                    thrust::raw_pointer_cast(acc.data()),
+                    thrust::raw_pointer_cast(exp_values.data()),
+                    thrust::raw_pointer_cast(cur_row_max.data()),
+                    thrust::raw_pointer_cast(prev_row_max.data()),
+                    thrust::raw_pointer_cast(new_row_max.data()),
+                    thrust::raw_pointer_cast(prev_norm_vec.data()),
+                    thrust::raw_pointer_cast(new_norm_vec.data()),
+                    thrust::raw_pointer_cast(prev_sum_vec.data()),
+                    thrust::raw_pointer_cast(cur_sum_vec.data()),
+                    thrust::raw_pointer_cast(new_sum_vec.data()));
 }
 
 int main() {
