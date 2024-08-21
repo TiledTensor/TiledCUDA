@@ -187,6 +187,7 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
         vec_sub(cur_max_vec, new_max_vec, cur_norm_vec);
         vec_exp(cur_norm_vec, cur_norm_vec);
 
+#ifdef DEBUG
         if (tiledcuda::thread(0)) {
             printf("Thread 0 prev_max_vec: \n");
             prev_max_vec.dump_value();
@@ -197,12 +198,14 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
             printf("Thread 0 cur_norm_vec: \n");
             cur_norm_vec.dump_value();
         }
+#endif
 
         // Update normalization factor l(x)
         vec_mul(prev_norm_vec, prev_sum_vec, prev_sum_vec);
         vec_mul(cur_norm_vec, cur_sum_vec, cur_sum_vec);
         vec_add(prev_sum_vec, cur_sum_vec, new_sum_vec);
 
+#ifdef DEBUG
         if (tiledcuda::thread(0)) {
             printf("Thread 0 prev_sum_vec: \n");
             prev_sum_vec.dump_value();
@@ -211,6 +214,7 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
             printf("Thread 0 new_sum_vec: \n");
             new_sum_vec.dump_value();
         }
+#endif
 
         // Compute unnormized attention block.
         compute::gemm_(attn_block, rV, unnormized_attn_block_f32);
@@ -441,15 +445,13 @@ void run(bool check = true) {
                     thrust::raw_pointer_cast(new_sum_vec.data()));
 
     h_d = d_d;
-#ifdef DEBUG
-    printf("(ref_O, O): \n");
-    for (int i = 0; i < kM; ++i) {
-        for (int j = 0; j < kP; ++j) {
-            printf("%.3f %.3f\n", __half2float(h_o.data()[i * kP + j]),
-                   __half2float(h_d.data()[i * kP + j]));
-        }
+
+    if (check_results(thrust::raw_pointer_cast(h_o.data()),
+                      thrust::raw_pointer_cast(h_d.data()), kM * kP * kBatch)) {
+        std::cout << "Test passed." << std::endl;
+    } else {
+        std::cout << "Test failed." << std::endl;
     }
-#endif
 }
 
 int main() {

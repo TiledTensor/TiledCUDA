@@ -24,14 +24,15 @@ float rand_float(float a = 1e-1, float b = 5e-2) {
     return a + r;
 }
 
-bool check_results(const float* values1, const float* values2, int numel) {
+bool check_results(const __half* values1, const __half* values2, int numel) {
     bool passed = true;
     const float epsilon = 1e-1;
 
     for (int i = 0; i < numel; ++i) {
-        if (fabs(values1[i] - values2[i]) > epsilon) {
-            printf("%d-th value differs: %.2f vs. %.2f\n", i, values1[i],
-                   values2[i]);
+        if (fabs(__half2float(values1[i]) - __half2float(values2[i])) >
+            epsilon) {
+            printf("%d-th value differs: %.3f vs. %.3f\n", i,
+                   __half2float(values1[i]), __half2float(values2[i]));
             passed = false;
         }
     }
