@@ -88,11 +88,20 @@ void host_flash_attn(int kM, int kN, int kK, int kP, const __half* Q,
     }
 #endif
 
+#ifdef DEBUG
     printf("Print new_sums: \n");
     for (int i = 0; i < kM; ++i) {
         printf("%.3f ", __half2float(new_sums[i]));
     }
     printf("\n");
+#endif
+
+#ifdef DEBUG
+    printf("Print new norm vec: \n");
+    for (int i = 0; i < kM; ++i) {
+        printf("%.3f ", __half2float(new_norm_vec[i]));
+    }
+#endif
 
     // Compute O = (O * prev_sums * prev_norm_vec + new_norm_vec * exp_values) /
     // new_sums.

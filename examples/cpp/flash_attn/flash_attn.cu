@@ -83,6 +83,7 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
 
     BroadcastSub broadcast_sub;
     BroadcastMul broadcast_mul;
+    BroadcastDiv broadcast_div;
 
     BlockExp block_exp;
     BlockAdd block_add;
@@ -237,6 +238,8 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
         broadcast_mul(cur_norm_vec, unnormized_attn_block);
 
         block_add(rO, unnormized_attn_block, rO);
+
+        broadcast_div(new_sum_vec, rO);
 
         // Cear the accumulator.
         attn_block_f32.clear();
