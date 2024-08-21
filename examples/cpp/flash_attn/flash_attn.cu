@@ -243,6 +243,7 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
 
         block_add(rO, unnormized_attn_block, rO);
 
+        // Normalize the attention block.
         broadcast_div(new_sum_vec, rO);
 
         // Cear the accumulator.

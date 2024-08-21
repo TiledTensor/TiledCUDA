@@ -105,7 +105,6 @@ struct FlashAttentionTraits {
         SharedToRegLoader<RegC, WarpLayout, WarpReuse::kColReuseCont>;
 
     // output D
-    // using GlobalD = GlobalTile<AccType, tl::RowMajor<kTM, kTP>>;
     using GlobalD = GlobalTile<InType, tl::RowMajor<kTM, kTP>>;
 
     static constexpr int kDMs = kTM / kWarpPerRow / BaseShape::kTileSize;
@@ -143,7 +142,6 @@ struct FlashAttentionTraits {
         compute::BroadcastDiv<RegVec, RegDCast, tl::Layout::kRowMajor>;
 
     using BlockExp = compute::RegTileExp<RegAccCast>;
-    // using BlockAdd = compute::RegTileAdd<RegAccCast>;
     using BlockAdd = compute::RegTileAdd<RegDCast>;
 
     using VecMax = compute::BaseTileMax<RegVec>;
