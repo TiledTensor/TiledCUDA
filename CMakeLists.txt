@@ -15,7 +15,7 @@ if(WITH_TESTING)
   enable_testing()
 endif()
 
-option(ENABLE_DEBUG "Enable debug mode" ON)
+option(ENABLE_DEBUG "Enable debug mode" OFF)
 
 include(generic)
 include(dependencies)

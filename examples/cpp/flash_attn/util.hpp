@@ -132,6 +132,8 @@ struct FlashAttentionTraits {
     using CopyVec = copy::BaseTileCopy<RegVec>;
     using RowMax = compute::MaxReduce<RegAccCast, tl::Layout::kRowMajor>;
 
+    using RowSum = compute::SumReduce<RegAccCast, tl::Layout::kRowMajor>;
+
     using BroadcastSub =
         compute::BroadcastSub<RegVec, RegAccCast, tl::Layout::kRowMajor>;
     // using BroadcastMul =

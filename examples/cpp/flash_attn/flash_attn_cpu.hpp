@@ -78,6 +78,22 @@ void host_flash_attn(int kM, int kN, int kK, int kP, const __half* Q,
         }
     }
 
+#ifdef DEBUG
+    printf("Print exp_values: \n");
+    for (int i = 0; i < kM; ++i) {
+        for (int j = 0; j < kP; ++j) {
+            printf("%.3f ", __half2float(exp_values[i * kP + j]));
+        }
+        printf("\n");
+    }
+#endif
+
+    printf("Print new_sums: \n");
+    for (int i = 0; i < kM; ++i) {
+        printf("%.3f ", __half2float(new_sums[i]));
+    }
+    printf("\n");
+
     // Compute O = (O * prev_sums * prev_norm_vec + new_norm_vec * exp_values) /
     // new_sums.
     for (int i = 0; i < kM; ++i) {
