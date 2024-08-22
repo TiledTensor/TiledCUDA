@@ -430,7 +430,8 @@ void run(bool check = true) {
     cudaDeviceSynchronize();
 
     // Call host-side reference implementation.
-    host_flash_attn(kM, kN, kK, kP, thrust::raw_pointer_cast(h_a.data()),
+    host_flash_attn(kM, kN, kK, kP, kBatch,
+                    thrust::raw_pointer_cast(h_a.data()),
                     thrust::raw_pointer_cast(h_b.data()),
                     thrust::raw_pointer_cast(h_c.data()),
                     thrust::raw_pointer_cast(h_o.data()),
@@ -459,6 +460,10 @@ int main() {
     run<FlashAttentionShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
         FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
         1>();
+
+    run<FlashAttentionShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
+        FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
+        2>();
 
     return 0;
 }
