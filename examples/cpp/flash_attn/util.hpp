@@ -34,6 +34,7 @@ bool check_results(const __half* values1, const __half* values2, int numel) {
             printf("%d-th value differs: %.3f vs. %.3f\n", i,
                    __half2float(values1[i]), __half2float(values2[i]));
             passed = false;
+            break;
         }
     }
     return passed;
