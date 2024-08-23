@@ -127,11 +127,6 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
         }
 #endif
 
-        // Copy `cur_max_vec`, `cur_norm_vec` into `prev_max_vec`,
-        // `prev_norm_vec`.
-        copy_vec(cur_max_vec, prev_max_vec);
-        copy_vec(cur_norm_vec, prev_norm_vec);
-
         // Compute row max.
         row_max(attn_block, cur_max_vec);
 
@@ -464,6 +459,10 @@ int main() {
     run<FlashAttentionShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
         FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
         2>();
+
+    run<FlashAttentionShape<128 /*M*/, 128 /*N*/, 128 /*K*/, 128 /*P*/>,
+        FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
+        1>();
 
     return 0;
 }

@@ -13,6 +13,7 @@ void host_flash_attn(int kM, int kN, int kK, int kP, int kBatch,
                      __half* new_row_max, __half* prev_norm_vec,
                      __half* new_norm_vec, __half* prev_sums, __half* cur_sums,
                      __half* new_sums) {
+#pragma omp parallel for
     for (int b = 0; b < kBatch; ++b) {
         const __half* q_ = Q + b * kM * kK;
         const __half* k_ = K + b * kK * kN;
