@@ -1,5 +1,6 @@
 #include "util.hpp"
-#include "util/cuda_timer.hpp"
+
+// #define DEBUG
 
 template <typename InType, typename AccType,                     //
           typename GIteratorA, typename SharedA, typename RegA,  //
@@ -55,29 +56,39 @@ __global__ void KeBack2BackGemm(const InType* dA, const InType* dB,
     RegAcc acc;
     RegAccCast acc_half;
 
-    for (int n = 0; n < GIteratorC::sc0; ++n) {
+    // for (int n = 0; n < GIteratorC::sc0; ++n) {
+    for (int n = 0; n < 1; ++n) {
         load_sc(gCs(n), sC);
 
-        for (int k = 0; k < GIteratorA::sc1; ++k) {
-            load_sa(gAs(k), sA);
-            load_sb(gBs(k, n), sB);
-            __copy_async();
-            __syncthreads();
+        if (tiledcuda::thread0()) {
+            printf("\niter %d\ngC:\n", n);
 
-            load_ra(sA, rA);
-            load_rb(sB, rB);
-            __syncthreads();
+            gCs(n).dump_value();
 
-            compute::gemm_(rA, rB, acc);
+            printf("sC:\n");
+            sC.dump_value();
         }
-        load_rc(sC, rC);
-        __syncthreads();
 
-        ConvertAcc cast_acc;  // Convert acc to half precision
-        cast_acc(acc, acc_half);
+        // for (int k = 0; k < GIteratorA::sc1; ++k) {
+        //     load_sa(gAs(k), sA);
+        //     load_sb(gBs(k, n), sB);
+        //     __copy_async();
+        //     __syncthreads();
 
-        compute::gemm_(acc_half, rC, rD);
-        acc.clear();
+        //     load_ra(sA, rA);
+        //     load_rb(sB, rB);
+        //     __syncthreads();
+
+        //     compute::gemm_(rA, rB, acc);
+        // }
+        // load_rc(sC, rC);
+        // __syncthreads();
+
+        // ConvertAcc cast_acc;  // Convert acc to half precision
+        // cast_acc(acc, acc_half);
+
+        // compute::gemm_(acc_half, rC, rD);
+        // acc.clear();
     }
     __syncthreads();
 
@@ -86,8 +97,9 @@ __global__ void KeBack2BackGemm(const InType* dA, const InType* dB,
     storer_d(rD, gD);
 }
 
-template <typename WholeShape, typename CtaTileShape, const int kBatch>
-void run(bool check = true) {
+template <typename WholeShape, typename CtaTileShape, typename WarpLayout,
+          const int kBatch>
+void run() {
     using InType = __half;
     using AccType = float;
 
@@ -101,24 +113,28 @@ void run(bool check = true) {
     static constexpr int kTK = dim_size<2, CtaTileShape>;
     static constexpr int kTP = dim_size<3, CtaTileShape>;
 
-    static_assert(kK == kTK,
-                  "The current implementation requires kTK == K for now.");
-    static_assert(kP == kTP,
-                  "The current implementation requires kTP == P for now.");
+    static_assert(kK == kTK, "The current implementation requires kTK == K.");
+    static_assert(kP == kTP, "The current implementation requires kTP == P.");
 
     // initialize data
     thrust::host_vector<InType> h_a(kM * kK * kBatch);
 
-    for (int i = 0; i < h_a.size(); ++i)
-        h_a[i] = static_cast<InType>(rand_float());
+    for (int i = 0; i < h_a.size(); ++i) {
+        // h_a[i] = static_cast<InType>(rand_float());
+        h_a[i] = static_cast<InType>(i);
+    }
 
     thrust::host_vector<InType> h_b(kK * kN * kBatch);
-    for (int i = 0; i < h_b.size(); ++i)
-        h_b[i] = static_cast<InType>(rand_float());
+    for (int i = 0; i < h_b.size(); ++i) {
+        // h_b[i] = static_cast<InType>(rand_float());
+        h_b[i] = static_cast<InType>(i);
+    }
 
     thrust::host_vector<InType> h_c(kN * kP * kBatch);
-    for (int i = 0; i < h_c.size(); ++i)
-        h_c[i] = static_cast<InType>(rand_float());
+    for (int i = 0; i < h_c.size(); ++i) {
+        // h_c[i] = static_cast<InType>(rand_float());
+        h_c[i] = static_cast<InType>(i);
+    }
 
     thrust::host_vector<AccType> h_d(kM * kP * kBatch);
     thrust::fill(h_d.begin(), h_d.end(), 0.);
@@ -133,7 +149,8 @@ void run(bool check = true) {
     const InType* C = thrust::raw_pointer_cast(d_c.data());
     AccType* D = thrust::raw_pointer_cast(d_d.data());
 
-    using Config = B2BGemmTraits<InType, AccType, WholeShape, CtaTileShape>;
+    using Config =
+        B2BGemmTraits<InType, AccType, WholeShape, CtaTileShape, WarpLayout>;
 
     using RegA = typename Config::RegA;
     using RegB = typename Config::RegB;
@@ -141,6 +158,13 @@ void run(bool check = true) {
     using RegD = typename Config::RegD;
     using RegAcc = typename Config::RegAcc;
     using RegAccCast = typename Config::RegAccCast;
+
+    std::cout << "RegA: " << RegA{} << std::endl
+              << "RegB: " << RegB{} << std::endl
+              << "RegC: " << RegC{} << std::endl
+              << "RegD: " << RegD{} << std::endl
+              << "RegAcc: " << RegAcc{} << std::endl
+              << "RegAccCast: " << RegAccCast{} << std::endl;
 
     using GIteratorA = typename Config::GIteratorA;
     using SharedA = typename Config::SharedA;
@@ -188,67 +212,102 @@ void run(bool check = true) {
             kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, shm_size);
     }
 
-    for (int i = 0; i < 5; ++i)
-        kernel<<<grid, block, shm_size, 0>>>(A, B, C, D, kM, kN, kK, kP, kTM,
-                                             kTN, kTK, kTP);
+    kernel<<<grid, block, shm_size, 0>>>(A, B, C, D, kM, kN, kK, kP, kTM, kTN,
+                                         kTK, kTP);
     cudaDeviceSynchronize();
 
-    CudaTimer timer;
+    h_d = d_d;
 
-    int iter = 100;
-    timer.start();
-    for (int i = 0; i < iter; ++i)
-        kernel<<<grid, block, shm_size, 0>>>(A, B, C, D, kM, kN, kK, kP, kTM,
-                                             kTN, kTK, kTP);
+    thrust::host_vector<InType> h_acc(kM * kN * kBatch);
+    thrust::fill(h_acc.begin(), h_acc.end(), 0.);
+    thrust::device_vector<InType> d_acc = h_acc;
+
+    thrust::host_vector<InType> h_d2(kM * kP * kBatch);
+    thrust::fill(h_d2.begin(), h_d2.end(), 0.);
+    thrust::device_vector<InType> d_d2 = h_d2;
+
+    cublas_two_gemms(kM, kN, kK, kP, kBatch, A, B, C,
+                     thrust::raw_pointer_cast(d_d2.data()),
+                     thrust::raw_pointer_cast(d_acc.data()));
     cudaDeviceSynchronize();
+    h_acc = d_acc;
+    h_d2 = d_d2;
 
-    float elapsed = timer.stop() / iter;
-    std::cout << "Time: " << elapsed << " ms" << std::endl;
-
-    if (check) {
-        h_d = d_d;
-        thrust::host_vector<InType> h_acc(kM * kN * kBatch);
-        thrust::fill(h_acc.begin(), h_acc.end(), 0.);
-
-        thrust::host_vector<AccType> h_d2(kM * kP * kBatch);
-        thrust::fill(h_d2.begin(), h_d2.end(), 0.);
-        naive_back2back_gemm(kM, kN, kK, kP, kBatch,
-                             thrust::raw_pointer_cast(h_a.data()),
-                             thrust::raw_pointer_cast(h_b.data()),
-                             thrust::raw_pointer_cast(h_c.data()), h_d2.data(),
-                             thrust::raw_pointer_cast(h_acc.data()));
-        cudaDeviceSynchronize();
-
-        float* data = thrust::raw_pointer_cast(h_d.data());
-        float* ground_truth = thrust::raw_pointer_cast(h_d2.data());
+    float* data = thrust::raw_pointer_cast(h_d.data());
+    __half* ground_truth = thrust::raw_pointer_cast(h_d2.data());
 
 #ifdef DEBUG
-        printf("ours:\n");
-        for (int i = 0; i < h_d.size(); ++i) {
-            printf("%.2f, ", data[i]);
-            if (i && (i + 1) % 16 == 0) printf("\n");
-        }
-        printf("\nground_truth:\n");
-        for (int i = 0; i < h_d.size(); ++i) {
-            printf("%.2f, ", ground_truth[i]);
-            if (i && (i + 1) % 16 == 0) printf("\n");
-        }
+    printf("ours:\n");
+    for (int i = 0; i < h_d.size(); ++i) {
+        printf("%.3f, ", data[i]);
+        if (i && (i + 1) % 16 == 0) printf("\n");
+    }
+    printf("\nground_truth:\n");
+    for (int i = 0; i < h_d.size(); ++i) {
+        printf("%.3f, ", __half2float(ground_truth[i]));
+        if (i && (i + 1) % 16 == 0) printf("\n");
+    }
 #endif
 
-        if (check_results(data, ground_truth, kM * kP)) {
-            std::cout << "Test passed." << std::endl;
-        } else {
-            std::cerr << "Test failed." << std::endl;
-        }
+    if (check_results(data, ground_truth, kM * kP)) {
+        std::cout << "Test passed." << std::endl;
+    } else {
+        std::cerr << "Test failed." << std::endl;
     }
 }
 
 int main() {
-    run<B2BGemmShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
-        B2BGemmShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>, 2>();
+    using WarpLayout0 = tl::RowMajor<1, 1>;
+    using WarpLayout1 = tl::RowMajor<2, 1>;
+    using WarpLayout2 = tl::RowMajor<4, 1>;
 
-    run<B2BGemmShape<1024 /*M*/, 128 /*N*/, 128 /*K*/, 128 /*P*/>,
-        B2BGemmShape<64 /*kTM*/, 128 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>, 2>();
+    // run<B2BGemmShape<32 /*M*/, 64 /*N*/, 32 /*K*/, 16 /*P*/>,
+    //     B2BGemmShape<32 /*kTM*/, 32 /*kTN*/, 32 /*kTK*/, 16 /*kTP*/>,
+    //     WarpLayout1, 1>();  // ok
+
+    // run<B2BGemmShape<64 /*M*/, 64 /*N*/, 32 /*K*/, 16 /*P*/>,
+    //     B2BGemmShape<32 /*kTM*/, 32 /*kTN*/, 32 /*kTK*/, 16 /*kTP*/>,
+    //     WarpLayout1, 1>();  // failed
+
+    // run<B2BGemmShape<16 /*M*/, 16 /*N*/, 16 /*K*/, 16 /*P*/>,
+    //     B2BGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 16 /*kTP*/>,
+    //     WarpLayout0, 1>();  // ok
+
+    // run<B2BGemmShape<16 /*M*/, 32 /*N*/, 16 /*K*/, 16 /*P*/>,
+    //     B2BGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 16 /*kTP*/>,
+    //     WarpLayout0, 1>();  // ok
+
+    // run<B2BGemmShape<16 /*M*/, 16 /*N*/, 16 /*K*/, 32 /*P*/>,
+    //     B2BGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 32 /*kTP*/>,
+    //     WarpLayout0, 1>();  // ok
+
+    run<B2BGemmShape<16 /*M*/, 32 /*N*/, 16 /*K*/, 32 /*P*/>,
+        B2BGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 32 /*kTP*/>,
+        WarpLayout0, 1>();  // failed
+
+    // run<B2BGemmShape<32 /*M*/, 64 /*N*/, 32 /*K*/, 16 /*P*/>,
+    //     B2BGemmShape<32 /*kTM*/, 32 /*kTN*/, 32 /*kTK*/, 16 /*kTP*/>,
+    //     WarpLayout1, 1>();
+
+    // run<B2BGemmShape<64 /*M*/, 64 /*N*/, 32 /*K*/, 16 /*P*/>,
+    //     B2BGemmShape<64 /*kTM*/, 32 /*kTN*/, 32 /*kTK*/, 16 /*kTP*/>,
+    //     WarpLayout1, 1>();
+
+    // run<B2BGemmShape<64 /*M*/, 64 /*N*/, 64 /*K*/, 16 /*P*/>,
+    //     B2BGemmShape<64 /*kTM*/, 32 /*kTN*/, 64 /*kTK*/, 16 /*kTP*/>,
+    //     WarpLayout1, 1>();
+
+    // run<B2BGemmShape<64 /*M*/, 64 /*N*/, 64 /*K*/, 64 /*P*/>,
+    //     B2BGemmShape<64 /*kTM*/, 32 /*kTN*/, 64 /*kTK*/, 64 /*kTP*/>,
+    //     WarpLayout1, 1>();
+
+    // run<B2BGemmShape<64 /*M*/, 64 /*N*/, 64 /*K*/, 64 /*P*/>,
+    //     B2BGemmShape<64 /*kTM*/, 32 /*kTN*/, 64 /*kTK*/, 64 /*kTP*/>,
+    //     WarpLayout1, 1>();  // failed
+
+    // run<B2BGemmShape<1024 /*M*/, 128 /*N*/, 128 /*K*/, 128 /*P*/>,
+    //     B2BGemmShape<64 /*kTM*/, 128 /*kTN*/, 128 /*kTK*/, 128
+    //     /*kTP*/>, 2>();
 
     return 0;
 }

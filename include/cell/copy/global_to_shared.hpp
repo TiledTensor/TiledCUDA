@@ -118,6 +118,10 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
     static constexpr int kDstCstride = BaseShape::kCols * Shared::kRows;
 
     DEVICE void operator()(const DType* src, DType* dst) {
+        if (thread0()) {
+            printf("kRowExec: %d, kColExec: %d\n", kRowExec, kColExec);
+        }
+
         int lane_row = this->lane_row_id() * kNumPerAccess;
         int lane_col = this->lane_col_id();
 
@@ -134,6 +138,18 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
             for (int j = 0; j < kRowExec; ++j) {
                 src_offset = j * kRstride + i * kSrcCstride + src_lane_offset;
                 dst_offset = j * kRstride + i * kDstCstride + dst_lane_offset;
+
+                if (thread0() && i == 1) {
+                    printf(
+                        "kRstride = %d, kSrcCstride = %d, kDstCstride = %d\n",
+                        kRstride, kSrcCstride, kDstCstride);
+                    printf("src_lane_offset: %d, dst_lane_offset: %d\n",
+                           src_lane_offset, dst_lane_offset);
+
+                    printf("src_offset: %d, dst_offset: %d\n", src_offset,
+                           dst_offset);
+                    printf("data = %.2f\n", __half2float(src[src_offset]));
+                }
 
                 this->copy(&src[src_offset], &dst[dst_offset]);
             }
