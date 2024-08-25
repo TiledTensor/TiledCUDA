@@ -50,8 +50,8 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
     static constexpr int kNumPerAccess = LoadBase::kNumPerAccess;
 
     // strides to iterate over each 16x16 `BaseTile` in the shared memory
-    static constexpr int kSrcRstride = BaseShape::kRows * Global::kCols;
-    static constexpr int kDstRstride = BaseShape::kRows * Shared::kCols;
+    static constexpr int kSrcRstride = BaseShape::kRows * Global::kRowStride;
+    static constexpr int kDstRstride = BaseShape::kRows * Shared::kRowStride;
     static constexpr int kCstride = BaseShape::kCols;
 
     DEVICE void operator()(const DType* src, DType* dst) {
@@ -114,14 +114,10 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
 
     // strides to iterate over each 16x16 `BaseTile` in the shared memory
     static constexpr int kRstride = BaseShape::kRows;
-    static constexpr int kSrcCstride = BaseShape::kCols * Global::kRows;
-    static constexpr int kDstCstride = BaseShape::kCols * Shared::kRows;
+    static constexpr int kSrcCstride = BaseShape::kCols * Global::kColStride;
+    static constexpr int kDstCstride = BaseShape::kCols * Shared::kColStride;
 
     DEVICE void operator()(const DType* src, DType* dst) {
-        if (thread0()) {
-            printf("kRowExec: %d, kColExec: %d\n", kRowExec, kColExec);
-        }
-
         int lane_row = this->lane_row_id() * kNumPerAccess;
         int lane_col = this->lane_col_id();
 
@@ -138,18 +134,6 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
             for (int j = 0; j < kRowExec; ++j) {
                 src_offset = j * kRstride + i * kSrcCstride + src_lane_offset;
                 dst_offset = j * kRstride + i * kDstCstride + dst_lane_offset;
-
-                if (thread0() && i == 1) {
-                    printf(
-                        "kRstride = %d, kSrcCstride = %d, kDstCstride = %d\n",
-                        kRstride, kSrcCstride, kDstCstride);
-                    printf("src_lane_offset: %d, dst_lane_offset: %d\n",
-                           src_lane_offset, dst_lane_offset);
-
-                    printf("src_offset: %d, dst_offset: %d\n", src_offset,
-                           dst_offset);
-                    printf("data = %.2f\n", __half2float(src[src_offset]));
-                }
 
                 this->copy(&src[src_offset], &dst[dst_offset]);
             }

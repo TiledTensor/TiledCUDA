@@ -71,9 +71,9 @@ void cublas_two_gemms(int kM, int kN, int kK, int kP, int kBatch,
     cublasDestroy(handle);
 }
 
-bool check_results(const float* values1, const __half* values2, int numel) {
+bool check_results(const float* values1, const __half* values2, int numel,
+                   float epsilon) {
     bool passed = true;
-    const float epsilon = 1e-3;
 
     float v2 = 0.;
 
@@ -87,10 +87,12 @@ bool check_results(const float* values1, const __half* values2, int numel) {
         max_abs_diff = max_abs_diff < diff ? diff : max_abs_diff;
         total_diff += diff;
 
-        // if (diff > epsilon) {
-        //     printf("%d-th value has large differences: %.3f vs. %.3f\n", i,
-        //            values1[i], v2);
-        // }
+#ifdef DEBUG
+        if (diff > epsilon) {
+            printf("%d-th value has large differences: %.3f vs. %.3f\n", i,
+                   values1[i], v2);
+        }
+#endif
     }
 
     double avg_diff = total_diff / numel;
@@ -125,7 +127,9 @@ struct B2BGemmTraits {
     // chunk the K dimension to fit into shared memory
     using GIteratorA = TileIterator<GlobalA, TileShape<kTM, kTK>>;
 
-    using SharedA = SharedTile<InType, tl::RowMajor<kTM, kTK>, false>;
+    static const bool kUseSwizzling = true;
+
+    using SharedA = SharedTile<InType, tl::RowMajor<kTM, kTK>, kUseSwizzling>;
 
     static constexpr int kAMs = kTM / kWarpPerRow / BaseShape::kTileSize;
     static constexpr int kAKs = kTK / BaseShape::kTileSize;
@@ -138,7 +142,7 @@ struct B2BGemmTraits {
     // operand B
     using GlobalB = GlobalTile<InType, tl::ColMajor<kK, kN>>;
     using GIteratorB = TileIterator<GlobalB, TileShape<kTK, kTN>>;
-    using SharedB = SharedTile<InType, tl::ColMajor<kTK, kTN>, false>;
+    using SharedB = SharedTile<InType, tl::ColMajor<kTK, kTN>, kUseSwizzling>;
 
     static constexpr int kBKs = kTK / BaseShape::kTileSize;
     static constexpr int kBNs = kTN / kWarpPerCol / BaseShape::kTileSize;
@@ -152,7 +156,7 @@ struct B2BGemmTraits {
     using GlobalC = GlobalTile<InType, tl::ColMajor<kN, kTP>>;
     // chunk the N dimension to fit into shared memory
     using GIteratorC = TileIterator<GlobalC, TileShape<kTN, kTP>>;
-    using SharedC = SharedTile<InType, tl::ColMajor<kTN, kTP>, false>;
+    using SharedC = SharedTile<InType, tl::ColMajor<kTN, kTP>, kUseSwizzling>;
 
     static constexpr int kCNs = kTN / BaseShape::kTileSize;
     static constexpr int kCPs = kTP / kWarpPerCol / BaseShape::kTileSize;

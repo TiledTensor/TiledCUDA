@@ -1,7 +1,5 @@
 #include "util.hpp"
 
-// #define DEBUG
-
 template <typename InType, typename AccType,                     //
           typename GIteratorA, typename SharedA, typename RegA,  //
           typename SharedALoader, typename RegALoader,           //
@@ -56,39 +54,29 @@ __global__ void KeBack2BackGemm(const InType* dA, const InType* dB,
     RegAcc acc;
     RegAccCast acc_half;
 
-    // for (int n = 0; n < GIteratorC::sc0; ++n) {
-    for (int n = 0; n < 1; ++n) {
+    for (int n = 0; n < GIteratorC::sc0; ++n) {
         load_sc(gCs(n), sC);
 
-        if (tiledcuda::thread0()) {
-            printf("\niter %d\ngC:\n", n);
+        for (int k = 0; k < GIteratorA::sc1; ++k) {
+            load_sa(gAs(k), sA);
+            load_sb(gBs(k, n), sB);
+            __copy_async();
+            __syncthreads();
 
-            gCs(n).dump_value();
+            load_ra(sA, rA);
+            load_rb(sB, rB);
+            __syncthreads();
 
-            printf("sC:\n");
-            sC.dump_value();
+            compute::gemm_(rA, rB, acc);
         }
+        load_rc(sC, rC);
+        __syncthreads();
 
-        // for (int k = 0; k < GIteratorA::sc1; ++k) {
-        //     load_sa(gAs(k), sA);
-        //     load_sb(gBs(k, n), sB);
-        //     __copy_async();
-        //     __syncthreads();
+        ConvertAcc cast_acc;  // Convert acc to half precision
+        cast_acc(acc, acc_half);
 
-        //     load_ra(sA, rA);
-        //     load_rb(sB, rB);
-        //     __syncthreads();
-
-        //     compute::gemm_(rA, rB, acc);
-        // }
-        // load_rc(sC, rC);
-        // __syncthreads();
-
-        // ConvertAcc cast_acc;  // Convert acc to half precision
-        // cast_acc(acc, acc_half);
-
-        // compute::gemm_(acc_half, rC, rD);
-        // acc.clear();
+        compute::gemm_(acc_half, rC, rD);
+        acc.clear();
     }
     __syncthreads();
 
@@ -99,7 +87,7 @@ __global__ void KeBack2BackGemm(const InType* dA, const InType* dB,
 
 template <typename WholeShape, typename CtaTileShape, typename WarpLayout,
           const int kBatch>
-void run() {
+void run(float epsilon = 1e-3) {
     using InType = __half;
     using AccType = float;
 
@@ -116,24 +104,20 @@ void run() {
     static_assert(kK == kTK, "The current implementation requires kTK == K.");
     static_assert(kP == kTP, "The current implementation requires kTP == P.");
 
-    // initialize data
     thrust::host_vector<InType> h_a(kM * kK * kBatch);
 
     for (int i = 0; i < h_a.size(); ++i) {
-        // h_a[i] = static_cast<InType>(rand_float());
-        h_a[i] = static_cast<InType>(i);
+        h_a[i] = static_cast<InType>(rand_float());
     }
 
     thrust::host_vector<InType> h_b(kK * kN * kBatch);
     for (int i = 0; i < h_b.size(); ++i) {
-        // h_b[i] = static_cast<InType>(rand_float());
-        h_b[i] = static_cast<InType>(i);
+        h_b[i] = static_cast<InType>(rand_float());
     }
 
     thrust::host_vector<InType> h_c(kN * kP * kBatch);
     for (int i = 0; i < h_c.size(); ++i) {
-        // h_c[i] = static_cast<InType>(rand_float());
-        h_c[i] = static_cast<InType>(i);
+        h_c[i] = static_cast<InType>(rand_float());
     }
 
     thrust::host_vector<AccType> h_d(kM * kP * kBatch);
@@ -158,13 +142,6 @@ void run() {
     using RegD = typename Config::RegD;
     using RegAcc = typename Config::RegAcc;
     using RegAccCast = typename Config::RegAccCast;
-
-    std::cout << "RegA: " << RegA{} << std::endl
-              << "RegB: " << RegB{} << std::endl
-              << "RegC: " << RegC{} << std::endl
-              << "RegD: " << RegD{} << std::endl
-              << "RegAcc: " << RegAcc{} << std::endl
-              << "RegAccCast: " << RegAccCast{} << std::endl;
 
     using GIteratorA = typename Config::GIteratorA;
     using SharedA = typename Config::SharedA;
@@ -249,65 +226,51 @@ void run() {
     }
 #endif
 
-    if (check_results(data, ground_truth, kM * kP)) {
-        std::cout << "Test passed." << std::endl;
+    if (check_results(data, ground_truth, kM * kP, epsilon)) {
+        std::cout << "[" << kM << ", " << kN << ", " << kK << ", " << kP
+                  << "], batch = " << kBatch << ", passed." << std::endl;
     } else {
-        std::cerr << "Test failed." << std::endl;
+        std::cout << "[" << kM << ", " << kN << ", " << kK << ", " << kP
+                  << "], batch = " << kBatch << ", failed." << std::endl;
     }
 }
 
 int main() {
     using WarpLayout0 = tl::RowMajor<1, 1>;
-    using WarpLayout1 = tl::RowMajor<2, 1>;
-    using WarpLayout2 = tl::RowMajor<4, 1>;
-
-    // run<B2BGemmShape<32 /*M*/, 64 /*N*/, 32 /*K*/, 16 /*P*/>,
-    //     B2BGemmShape<32 /*kTM*/, 32 /*kTN*/, 32 /*kTK*/, 16 /*kTP*/>,
-    //     WarpLayout1, 1>();  // ok
-
-    // run<B2BGemmShape<64 /*M*/, 64 /*N*/, 32 /*K*/, 16 /*P*/>,
-    //     B2BGemmShape<32 /*kTM*/, 32 /*kTN*/, 32 /*kTK*/, 16 /*kTP*/>,
-    //     WarpLayout1, 1>();  // failed
-
-    // run<B2BGemmShape<16 /*M*/, 16 /*N*/, 16 /*K*/, 16 /*P*/>,
-    //     B2BGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 16 /*kTP*/>,
-    //     WarpLayout0, 1>();  // ok
-
-    // run<B2BGemmShape<16 /*M*/, 32 /*N*/, 16 /*K*/, 16 /*P*/>,
-    //     B2BGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 16 /*kTP*/>,
-    //     WarpLayout0, 1>();  // ok
-
-    // run<B2BGemmShape<16 /*M*/, 16 /*N*/, 16 /*K*/, 32 /*P*/>,
-    //     B2BGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 32 /*kTP*/>,
-    //     WarpLayout0, 1>();  // ok
+    run<B2BGemmShape<16 /*M*/, 16 /*N*/, 16 /*K*/, 16 /*P*/>,
+        B2BGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 16 /*kTP*/>,
+        WarpLayout0, 1>();
 
     run<B2BGemmShape<16 /*M*/, 32 /*N*/, 16 /*K*/, 32 /*P*/>,
         B2BGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 32 /*kTP*/>,
-        WarpLayout0, 1>();  // failed
+        WarpLayout0, 1>();
 
-    // run<B2BGemmShape<32 /*M*/, 64 /*N*/, 32 /*K*/, 16 /*P*/>,
-    //     B2BGemmShape<32 /*kTM*/, 32 /*kTN*/, 32 /*kTK*/, 16 /*kTP*/>,
-    //     WarpLayout1, 1>();
+    using WarpLayout1 = tl::RowMajor<2, 1>;
+    run<B2BGemmShape<32 /*M*/, 64 /*N*/, 32 /*K*/, 64 /*P*/>,
+        B2BGemmShape<32 /*kTM*/, 32 /*kTN*/, 32 /*kTK*/, 64 /*kTP*/>,
+        WarpLayout1, 1>();
 
-    // run<B2BGemmShape<64 /*M*/, 64 /*N*/, 32 /*K*/, 16 /*P*/>,
-    //     B2BGemmShape<64 /*kTM*/, 32 /*kTN*/, 32 /*kTK*/, 16 /*kTP*/>,
-    //     WarpLayout1, 1>();
+    run<B2BGemmShape<64 /*M*/, 64 /*N*/, 32 /*K*/, 64 /*P*/>,
+        B2BGemmShape<32 /*kTM*/, 32 /*kTN*/, 32 /*kTK*/, 64 /*kTP*/>,
+        WarpLayout1, 1>();
 
-    // run<B2BGemmShape<64 /*M*/, 64 /*N*/, 64 /*K*/, 16 /*P*/>,
-    //     B2BGemmShape<64 /*kTM*/, 32 /*kTN*/, 64 /*kTK*/, 16 /*kTP*/>,
-    //     WarpLayout1, 1>();
+    using WarpLayout2 = tl::RowMajor<4, 1>;
+    run<B2BGemmShape<256 /*M*/, 128 /*N*/, 64 /*K*/, 64 /*P*/>,
+        B2BGemmShape<64 /*kTM*/, 32 /*kTN*/, 64 /*kTK*/, 64 /*kTP*/>,
+        WarpLayout1, 1>(5e-3);
 
-    // run<B2BGemmShape<64 /*M*/, 64 /*N*/, 64 /*K*/, 64 /*P*/>,
-    //     B2BGemmShape<64 /*kTM*/, 32 /*kTN*/, 64 /*kTK*/, 64 /*kTP*/>,
-    //     WarpLayout1, 1>();
+    run<B2BGemmShape<1024 /*M*/, 1024 /*N*/, 128 /*K*/, 128 /*P*/>,
+        B2BGemmShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
+        WarpLayout2, 1>(8e-2 /*epsilon*/);
 
-    // run<B2BGemmShape<64 /*M*/, 64 /*N*/, 64 /*K*/, 64 /*P*/>,
-    //     B2BGemmShape<64 /*kTM*/, 32 /*kTN*/, 64 /*kTK*/, 64 /*kTP*/>,
-    //     WarpLayout1, 1>();  // failed
+    // batched
+    run<B2BGemmShape<16 /*M*/, 16 /*N*/, 16 /*K*/, 16 /*P*/>,
+        B2BGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 16 /*kTP*/>,
+        WarpLayout0, 2>();
 
-    // run<B2BGemmShape<1024 /*M*/, 128 /*N*/, 128 /*K*/, 128 /*P*/>,
-    //     B2BGemmShape<64 /*kTM*/, 128 /*kTN*/, 128 /*kTK*/, 128
-    //     /*kTP*/>, 2>();
+    run<B2BGemmShape<1024 /*M*/, 1024 /*N*/, 128 /*K*/, 128 /*P*/>,
+        B2BGemmShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
+        WarpLayout2, 5>(8e-2 /*epsilon*/);
 
     return 0;
 }
