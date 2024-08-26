@@ -50,8 +50,8 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
     static constexpr int kNumPerAccess = LoadBase::kNumPerAccess;
 
     // strides to iterate over each 16x16 `BaseTile` in the shared memory
-    static constexpr int kSrcRstride = BaseShape::kRows * Global::kCols;
-    static constexpr int kDstRstride = BaseShape::kRows * Shared::kCols;
+    static constexpr int kSrcRstride = BaseShape::kRows * Global::kRowStride;
+    static constexpr int kDstRstride = BaseShape::kRows * Shared::kRowStride;
     static constexpr int kCstride = BaseShape::kCols;
 
     DEVICE void operator()(const DType* src, DType* dst) {
@@ -114,8 +114,8 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
 
     // strides to iterate over each 16x16 `BaseTile` in the shared memory
     static constexpr int kRstride = BaseShape::kRows;
-    static constexpr int kSrcCstride = BaseShape::kCols * Global::kRows;
-    static constexpr int kDstCstride = BaseShape::kCols * Shared::kRows;
+    static constexpr int kSrcCstride = BaseShape::kCols * Global::kColStride;
+    static constexpr int kDstCstride = BaseShape::kCols * Shared::kColStride;
 
     DEVICE void operator()(const DType* src, DType* dst) {
         int lane_row = this->lane_row_id() * kNumPerAccess;
