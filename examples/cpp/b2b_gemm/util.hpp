@@ -4,6 +4,7 @@
 #include "cell/mod.hpp"
 #include "types/mod.hpp"
 
+#include <cublas_v2.h>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
@@ -22,67 +23,88 @@ float rand_float(float a = 1e-1, float b = 5e-2) {
     return a + r;
 }
 
-// In this implementation, A and D are interpreted as being laid out in
-// row-major, and B, C is interpreted as being laid out in column-major.
-void naive_back2back_gemm(int kM, int kN, int kK, int kP, int kBatch,
-                          const __half* As, const __half* Bs, const __half* Cs,
-                          float* Ds, __half* accs) {
+/* In this implementation, A and D are interpreted as being laid out in
+   row-major, and B, C is interpreted as being laid out in column-major.
+
+  A and D are laid out in row-major fashion
+  B and C are laid out in column-major fashion
+
+  acc[m, n] = A[m, k] @ B[k, n]
+    D[m, p] = acc[m, n] @ C[n, p]
+*/
+void cublas_two_gemms(int kM, int kN, int kK, int kP, int kBatch,
+                      const __half* As, const __half* Bs, const __half* Cs,
+                      __half* Ds, __half* accs) {
+    cublasHandle_t handle;
+    cublasCreate(&handle);
+
+    __half alf = static_cast<__half>(1.);
+    __half bet = static_cast<__half>(0.);
+
     const __half* A = As;
     const __half* B = Bs;
     const __half* C = Cs;
     __half* acc = accs;
-    float* D = Ds;
+    __half* D = Ds;
 
     for (int b = 0; b < kBatch; ++b) {
         A += b * kM * kK;
         B += b * kK * kN;
         C += b * kM * kN;
-        D += b * kM * kP;
         acc += b * kM * kN;
+        D += b * kM * kP;
 
-        for (int i = 0; i < kM; ++i) {
-            for (int j = 0; j < kN; ++j) {
-                __half s = 0.;
-                for (int k = 0; k < kK; ++k) {
-                    s += A[i * kK + k] * B[k + kK * j];
-                }
-                acc[i * kN + j] = s;
-            }
-        }
+        // acc   = A @ B
+        // acc^T = B^T @ A^T
+        // [n, m] = [n, k] @ [k, m]
+        cublasHgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N /* transb*/, kN, kM, kK,
+                    &alf, B, kK, A, kK, &bet, acc, kN);
 
-        for (int i = 0; i < kM; ++i) {
-            for (int j = 0; j < kP; ++j) {
-                float s = 0.;
-                for (int k = 0; k < kN; ++k) {
-                    s += __half2float(acc[i * kN + k]) *
-                         __half2float(C[k + kN * j]);
-                }
-                D[i * kP + j] = s;
-            }
-        }
+        // D and acc are laid out in row-major fashion, while C is in column
+        // major fashion. Operands of cuBLAS is by default in column fashion.
+        // D = acc @ C
+        // D^T = C^T @ acc^T; [p, m] = [p, n] @ [n, m]
+        cublasHgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N /* transb*/, kP, kM, kN,
+                    &alf, C, kN, acc, kN, &bet, D, kP);
     }
+
+    cublasDestroy(handle);
 }
 
-bool check_results(const float* values1, const float* values2, int numel) {
+bool check_results(const float* values1, const __half* values2, int numel,
+                   float epsilon) {
     bool passed = true;
-    const float epsilon = 1e-1;
+
+    float v2 = 0.;
+
+    double total_diff = 0.;
+    double max_abs_diff = FLT_MIN;
+    double diff = 0.;
 
     for (int i = 0; i < numel; ++i) {
-        if (fabs(values1[i] - values2[i]) > epsilon) {
-            printf("%d-th value differs: %.2f vs. %.2f\n", i, values1[i],
-                   values2[i]);
-            passed = false;
+        v2 = __half2float(values2[i]);
+        diff = abs(values1[i] - v2);
+        max_abs_diff = max_abs_diff < diff ? diff : max_abs_diff;
+        total_diff += diff;
+
+#ifdef DEBUG
+        if (diff > epsilon) {
+            printf("%d-th value has large differences: %.3f vs. %.3f\n", i,
+                   values1[i], v2);
         }
+#endif
     }
+
+    double avg_diff = total_diff / numel;
+    if (avg_diff > epsilon) passed = false;
+
     return passed;
 }
 
 template <typename InType, typename AccType, typename WholeShape,
-          typename CtaTileShape>
+          typename CtaTileShape, typename WarpLayout>
 struct B2BGemmTraits {
     using BaseShape = traits::BaseTileShape<InType>;
-
-    using WarpLayout = tl::RowMajor<4, 1>;
 
     static constexpr int kWarpPerRow = tl::num_rows<WarpLayout>;
     static constexpr int kWarpPerCol = tl::num_cols<WarpLayout>;
@@ -105,7 +127,9 @@ struct B2BGemmTraits {
     // chunk the K dimension to fit into shared memory
     using GIteratorA = TileIterator<GlobalA, TileShape<kTM, kTK>>;
 
-    using SharedA = SharedTile<InType, tl::RowMajor<kTM, kTK>, true>;
+    static const bool kUseSwizzling = true;
+
+    using SharedA = SharedTile<InType, tl::RowMajor<kTM, kTK>, kUseSwizzling>;
 
     static constexpr int kAMs = kTM / kWarpPerRow / BaseShape::kTileSize;
     static constexpr int kAKs = kTK / BaseShape::kTileSize;
@@ -118,7 +142,7 @@ struct B2BGemmTraits {
     // operand B
     using GlobalB = GlobalTile<InType, tl::ColMajor<kK, kN>>;
     using GIteratorB = TileIterator<GlobalB, TileShape<kTK, kTN>>;
-    using SharedB = SharedTile<InType, tl::ColMajor<kTK, kTN>, true>;
+    using SharedB = SharedTile<InType, tl::ColMajor<kTK, kTN>, kUseSwizzling>;
 
     static constexpr int kBKs = kTK / BaseShape::kTileSize;
     static constexpr int kBNs = kTN / kWarpPerCol / BaseShape::kTileSize;
@@ -132,7 +156,7 @@ struct B2BGemmTraits {
     using GlobalC = GlobalTile<InType, tl::ColMajor<kN, kTP>>;
     // chunk the N dimension to fit into shared memory
     using GIteratorC = TileIterator<GlobalC, TileShape<kTN, kTP>>;
-    using SharedC = SharedTile<InType, tl::ColMajor<kTN, kTP>, true>;
+    using SharedC = SharedTile<InType, tl::ColMajor<kTN, kTP>, kUseSwizzling>;
 
     static constexpr int kCNs = kTN / BaseShape::kTileSize;
     static constexpr int kCPs = kTP / kWarpPerCol / BaseShape::kTileSize;
