@@ -5,6 +5,7 @@
 #include "types/mod.hpp"
 
 #include <cublas_v2.h>
+#include <float.h>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 

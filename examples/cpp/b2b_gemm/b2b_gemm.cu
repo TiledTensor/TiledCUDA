@@ -272,5 +272,9 @@ int main() {
         B2BGemmShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
         WarpLayout2, 5>(8e-2 /*epsilon*/);
 
+    run<B2BGemmShape<64 /*M*/, 256 /*N*/, 128 /*K*/, 128 /*P*/>,
+        B2BGemmShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
+        WarpLayout2, 1>(8e-2 /*epsilon*/);
+
     return 0;
 }
