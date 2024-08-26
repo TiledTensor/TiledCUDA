@@ -22,3 +22,6 @@ def back2back_gemm(a, b, c, d, m, n, k, p):
 
 def lstm_cell(w, x, u, c0, h0, c1, h1, batch, hidden):
     torch.ops.tiledcuda.lstm_cell(w, x, u, c0, h0, c1, h1, batch, hidden)
+
+# def flash_attn_fwd(q, k, v, out, attn_mask, scale, heads, seq_len, dropout):
+#     torch.ops.tiledcuda.flash_attn_fwd(q, k, v, out, attn_mask, scale, heads, seq_len, dropout)
