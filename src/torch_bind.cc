@@ -12,7 +12,7 @@ TORCH_LIBRARY(tiledcuda, t) {
     t.def("back2back_gemm", &custom_back2back_op);
     t.def("lstm_cell", &custom_lstm_cell_op);
 
-    t.def("flash_attn", &custom_flash_attention_op);
+    t.def("flash_attention_fwd", &custom_flash_attention_op);
 };
 
 }  // namespace tiledcuda

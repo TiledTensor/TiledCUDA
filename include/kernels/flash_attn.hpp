@@ -34,7 +34,7 @@ void run_flash_attention(const InType* dQ, const InType* dK, const InType* dV,
 
 void custom_flash_attention_op(const torch::Tensor& Q, const torch::Tensor& K,
                                const torch::Tensor& V, torch::Tensor& O,
-                               int64_t m, int64_t n, int64_t k, int64_t p,
-                               int64_t batch);
+                               int64_t batch_size, int64_t num_heads,
+                               int64_t embed_dimension);
 
 }  // namespace tiledcuda::kernels
