@@ -52,6 +52,8 @@ class FlashAttention:
     def forward(self):
          N = self.n // self.ktn
 
+         print(N)
+
          prev_maxes = torch.zeros(self.m, 1, device='cpu')
          prev_sums = torch.zeros(self.m, 1, device='cpu')
 
@@ -60,7 +62,6 @@ class FlashAttention:
          for n in range(N):
             q = self.Q.view(self.m, self.k) # m * k
 
-            # k = self.K[n * self.k * self.ktn: (n + 1) * self.k * self.ktn].view(self.ktn, self.k)
             k = self.K[n * self.k * self.ktn: (n + 1) * self.k * self.ktn].view(self.k, self.ktn)
             v = self.V[n * self.p * self.ktn: (n + 1) * self.p * self.ktn].view(self.ktn, self.p)
             
@@ -77,6 +78,7 @@ class FlashAttention:
 
             # =======================    renormalization  ======================#
             new_maxes = torch.max(cur_maxes, prev_maxes) # update m(x)
+            print('new_maxes: ', new_maxes)
             # renormalization factor for the previous block
             renorm_prev = torch.exp(prev_maxes - new_maxes)
             # renormalization factor for the current block
@@ -84,6 +86,8 @@ class FlashAttention:
 
             # update normalization factor l(x)
             new_sums = renorm_prev * prev_sums + renorm_cur * cur_sums
+            # print('new_sums: ', new_sums)
+            # print('cur_sums: ', cur_sums)
 
             o = (o * prev_sums * renorm_prev +
                 renorm_cur * exp_values) / new_sums
@@ -100,7 +104,7 @@ class TestFlashAttention(unittest.TestCase):
 
     def test_flash_attention(self):
         m = 64
-        n = 256
+        n = 64
         k = 128 
         p = 128
 
@@ -123,7 +127,7 @@ class TestFlashAttention(unittest.TestCase):
 
         ref_o = flash_attn.forward()
 
-        print(ref_o)
+        # print(ref_o)
 
         dQ = dQ.half().flatten()
         dK = dK.half().flatten()
@@ -132,7 +136,7 @@ class TestFlashAttention(unittest.TestCase):
 
         flash_attention_fwd(dQ, dK, dV, dO, m, n, k, p)
 
-        print(dO.view(m, p))
+        # print(dO.view(m, p))
 
 if __name__ == "__main__":
 

@@ -287,7 +287,7 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         // Compute new max vector.
         vec_max(cur_max_vec, prev_max_vec, new_max_vec);
 
-#ifdef DEBUG
+        // #ifdef DEBUG
         if (tiledcuda::thread(0)) {
             printf("Thread 0 new_max_vec: \n");
             new_max_vec.dump_value();
@@ -297,7 +297,7 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
             printf("Thread 4 new_max_vec: \n");
             new_max_vec.dump_value();
         }
-#endif
+        // #endif
 
         // Renormalization for the previous block.
         vec_sub(prev_max_vec, new_max_vec, prev_norm_vec);
@@ -325,16 +325,16 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         vec_mul(cur_norm_vec, cur_sum_vec, cur_sum_vec);
         vec_add(prev_sum_vec, cur_sum_vec, new_sum_vec);
 
-#ifdef DEBUG
+        // #ifdef DEBUG
         if (tiledcuda::thread(0)) {
-            printf("Thread 0 prev_sum_vec: \n");
-            prev_sum_vec.dump_value();
+            // printf("Thread 0 prev_sum_vec: \n");
+            // prev_sum_vec.dump_value();
             printf("Thread 0 cur_sum_vec: \n");
             cur_sum_vec.dump_value();
             printf("Thread 0 new_sum_vec: \n");
             new_sum_vec.dump_value();
         }
-#endif
+        // #endif
 
         // Compute unnormized attention block.
         compute::gemm_(attn_block, rV, unnormized_attn_block_f32);
@@ -508,7 +508,12 @@ void custom_flash_attention_op(const torch::Tensor& Q, const torch::Tensor& K,
     auto dO = reinterpret_cast<OutType*>(O.data_ptr());
 
     if (m == 64 && n == 256 && k == 128 && p == 128) {
-        using WholeShape = FlashAttentionShape<128, 128, 128, 128>;
+        using WholeShape = FlashAttentionShape<64, 256, 128, 128>;
+        const int kBatch = 1;
+        run_flash_attention<InType, AccType, OutType, WholeShape, CtaTileShape,
+                            kBatch>(dQ, dK, dV, dO);
+    } else if (m == 64 && n == 64 && k == 128 && p == 128) {
+        using WholeShape = FlashAttentionShape<64, 64, 128, 128>;
         const int kBatch = 1;
         run_flash_attention<InType, AccType, OutType, WholeShape, CtaTileShape,
                             kBatch>(dQ, dK, dV, dO);
