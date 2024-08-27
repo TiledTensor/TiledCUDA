@@ -20,18 +20,20 @@ class TestFlashAttention(unittest.TestCase):
         V = torch.randn(num_heads, embed_dim, device='cuda')
         O = torch.empty(num_heads, embed_dim, device='cuda')
 
+        # O = softmax(Q @ K.T) @ V
         ref_o = torch.nn.functional.scaled_dot_product_attention(Q.half(), K.half(), V.half())
 
         Q_data = Q.flatten().half()
         K_data = K.flatten().half()
-        V_data = V.flatten().half()
+        V_data = V.t().flatten().half()
         O_data = O.flatten().half()
 
         flash_attention_fwd(Q_data, K_data, V_data, O_data, batch_size, num_heads, embed_dim)
 
         print(ref_o)
-        print(O)
-        print(O_data)
+
+        ans_o = O_data.view(num_heads, embed_dim).half()
+        print(ans_o)
 
 if __name__ == "__main__":
 
