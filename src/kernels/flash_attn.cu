@@ -495,25 +495,19 @@ void run_flash_attention(const InType* dQ, const InType* dK, const InType* dV,
 
 void custom_flash_attention_op(const torch::Tensor& Q, const torch::Tensor& K,
                                const torch::Tensor& V, torch::Tensor& O,
-                               int64_t batch_size, int64_t num_heads,
-                               int64_t embed_dimension) {
+                               int64_t m, int64_t n, int64_t k, int64_t p) {
     using InType = __half;
     using AccType = float;
     using OutType = __half;
 
     using CtaTileShape = TileShape<64, 64, 128, 128>;
 
-    int m = num_heads;
-    int n = num_heads;
-    int k = embed_dimension;
-    int p = embed_dimension;
-
     auto dQ = reinterpret_cast<const InType*>(Q.data_ptr());
     auto dK = reinterpret_cast<const InType*>(K.data_ptr());
     auto dV = reinterpret_cast<const InType*>(V.data_ptr());
     auto dO = reinterpret_cast<OutType*>(O.data_ptr());
 
-    if (m == 128 && n == 128 && k == 128 && p == 128 && batch_size == 1) {
+    if (m == 64 && n == 256 && k == 128 && p == 128) {
         using WholeShape = FlashAttentionShape<128, 128, 128, 128>;
         const int kBatch = 1;
         run_flash_attention<InType, AccType, OutType, WholeShape, CtaTileShape,

@@ -253,6 +253,12 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
     GlobalO gO(gO_ptr);
     OStorer storer_o;  // Store O tile from register to global.
     storer_o(rO, gO);
+
+#ifdef DEBUG
+    if (tiledcuda::thread(0)) {
+        gO.dump_value();
+    }
+#endif
 }
 
 template <typename WholeShape, typename CtaTileShape, const int kBatch>
@@ -452,19 +458,23 @@ void run(bool check = true) {
 }
 
 int main() {
-    run<FlashAttentionShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
-        FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
-        1>();
+    // run<FlashAttentionShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
+    //     FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128
+    //     /*kTP*/>, 1>();
 
-    run<FlashAttentionShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
-        FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
-        2>();
+    // run<FlashAttentionShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
+    //     FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128
+    //     /*kTP*/>, 2>();
 
-    run<FlashAttentionShape<64 /*M*/, 128 /*N*/, 128 /*K*/, 128 /*P*/>,
-        FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
-        1>();
+    // run<FlashAttentionShape<64 /*M*/, 128 /*N*/, 128 /*K*/, 128 /*P*/>,
+    //     FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128
+    //     /*kTP*/>, 1>();
 
     run<FlashAttentionShape<64 /*M*/, 256 /*N*/, 128 /*K*/, 128 /*P*/>,
+        FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
+        1>();
+
+    run<FlashAttentionShape<64 /*M*/, 512 /*N*/, 128 /*K*/, 128 /*P*/>,
         FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
         1>();
 
