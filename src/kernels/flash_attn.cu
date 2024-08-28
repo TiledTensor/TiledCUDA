@@ -240,7 +240,7 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         ConvertAcc cast_acc;  // Convert acc to half precision
         cast_acc(attn_block_f32, attn_block);
 
-#ifdef DEBUG
+        // #ifdef DEBUG
         if (tiledcuda::thread(0)) {
             printf("Thread 0 attn block: \n");
             for (int h = 0; h < RegAccCast::kRows; ++h) {
@@ -250,7 +250,7 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
                 }
             }
         }
-#endif
+        // #endif
 
         // Compute row max.
         row_max(attn_block, cur_max_vec);
@@ -287,7 +287,7 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         // Compute new max vector.
         vec_max(cur_max_vec, prev_max_vec, new_max_vec);
 
-        // #ifdef DEBUG
+#ifdef DEBUG
         if (tiledcuda::thread(0)) {
             printf("Thread 0 new_max_vec: \n");
             new_max_vec.dump_value();
@@ -297,7 +297,7 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
             printf("Thread 4 new_max_vec: \n");
             new_max_vec.dump_value();
         }
-        // #endif
+#endif
 
         // Renormalization for the previous block.
         vec_sub(prev_max_vec, new_max_vec, prev_norm_vec);
@@ -509,6 +509,11 @@ void custom_flash_attention_op(const torch::Tensor& Q, const torch::Tensor& K,
 
     if (m == 64 && n == 256 && k == 128 && p == 128) {
         using WholeShape = FlashAttentionShape<64, 256, 128, 128>;
+        const int kBatch = 1;
+        run_flash_attention<InType, AccType, OutType, WholeShape, CtaTileShape,
+                            kBatch>(dQ, dK, dV, dO);
+    } else if (m == 64 && n == 128 && k == 128 && p == 128) {
+        using WholeShape = FlashAttentionShape<64, 128, 128, 128>;
         const int kBatch = 1;
         run_flash_attention<InType, AccType, OutType, WholeShape, CtaTileShape,
                             kBatch>(dQ, dK, dV, dO);
