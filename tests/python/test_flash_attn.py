@@ -65,8 +65,9 @@ class FlashAttention:
             k = self.K[n * self.k * self.ktn: (n + 1) * self.k * self.ktn].view(self.k, self.ktn)
             v = self.V[n * self.p * self.ktn: (n + 1) * self.p * self.ktn].view(self.ktn, self.p)
             
+            attn_weights = torch.mm(q, k) # m * ktn
 
-            attn_weights = q @ k
+            # print('attn_weights:', attn_weights)
 
             # reduce maxes
             cur_maxes, _ = torch.max(attn_weights, dim=-1, keepdim=True)
@@ -78,7 +79,7 @@ class FlashAttention:
 
             # =======================    renormalization  ======================#
             new_maxes = torch.max(cur_maxes, prev_maxes) # update m(x)
-            print('new_maxes: ', new_maxes)
+            # print('new_maxes: ', new_maxes)
             # renormalization factor for the previous block
             renorm_prev = torch.exp(prev_maxes - new_maxes)
             # renormalization factor for the current block
@@ -123,20 +124,23 @@ class TestFlashAttention(unittest.TestCase):
         dV = V.to('cuda')
         dO = O.to('cuda')
 
+        print(K.half().shape, K.half().t().shape)
+
         flash_attn = FlashAttention(Q.half().flatten(), K.half().flatten(), V.half().flatten(), O.half().flatten(), m, n, k, p, ktm, ktn, ktk, ktp)
 
         ref_o = flash_attn.forward()
 
-        # print(ref_o)
+        print(ref_o)
+
 
         dQ = dQ.half().flatten()
-        dK = dK.half().flatten()
-        dV = dV.half().flatten()
+        dK = dK.half().t().flatten()
+        dV = dV.half().t().flatten()
         dO = dO.half().flatten()
 
         flash_attention_fwd(dQ, dK, dV, dO, m, n, k, p)
 
-        # print(dO.view(m, p))
+        print(dO.view(m, p))
 
 if __name__ == "__main__":
 
