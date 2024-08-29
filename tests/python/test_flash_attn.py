@@ -113,8 +113,14 @@ class FlashAttention:
             lhs_o = o * prev_sums * renorm_prev
             rhs_o = renorm_cur * exp_values
 
-            print('lhs_o: ', lhs_o.flatten())
-            print('rhs_o: ', rhs_o.flatten())
+            # print('lhs_o: ', lhs_o.flatten())
+            # print('rhs_o: ', rhs_o.flatten())
+
+            x = prev_sums * renorm_prev
+            print('prev_sums: ', prev_sums.flatten())
+            print('renorm_prev: ', renorm_prev.flatten())
+            print('new_sums: ', new_sums.flatten())
+            print('prev_sums * renorm_prev: ', x.flatten())
 
             o = (o * prev_sums * renorm_prev +
                 renorm_cur * exp_values) / new_sums

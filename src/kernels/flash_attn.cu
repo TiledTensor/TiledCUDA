@@ -202,6 +202,10 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
     RegVec cur_sum_vec;
     RegVec new_sum_vec;
 
+    RegVec prev_norm_mul_sum;
+    RegVec cur_norm_mul_sum;
+    RegVec prev_sum_mul_norm;
+
     RowMax row_max;
     RowSum row_sum;
     CopyVec copy_vec;
@@ -320,10 +324,22 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         }
 #endif
 
+        if (tiledcuda::thread(0)) {
+            printf("Thread 0 prev_sum_vec: \n");
+            prev_sum_vec.dump_value();
+            printf("Thread 0 prev_norm_vec: \n");
+            prev_norm_vec.dump_value();
+        }
+
         // Update normalization factor l(x)
-        vec_mul(prev_norm_vec, prev_sum_vec, prev_sum_vec);
-        vec_mul(cur_norm_vec, cur_sum_vec, cur_sum_vec);
-        vec_add(prev_sum_vec, cur_sum_vec, new_sum_vec);
+        vec_mul(prev_norm_vec, prev_sum_vec, prev_norm_mul_sum);
+        vec_mul(cur_norm_vec, cur_sum_vec, cur_norm_mul_sum);
+        vec_add(prev_norm_mul_sum, cur_norm_mul_sum, new_sum_vec);
+
+        if (tiledcuda::thread(0)) {
+            printf("Thread 0 new_sum_vec: \n");
+            new_sum_vec.dump_value();
+        }
 
 #ifdef DEBUG
         if (tiledcuda::thread(0)) {
@@ -344,7 +360,7 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         ConvertO cast_o;  // Convert half precision to float.
         cast_o(unnormized_attn_block_f32, unnormized_attn_block);
 
-        #ifdef DEBUG
+#ifdef DEBUG
         if (tiledcuda::thread(0)) {
             printf("Thread 0 exp_weights: \n");
             for (int h = 0; h < RegAccCast::kRows; ++h) {
@@ -354,7 +370,7 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
                 }
             }
         }
-        #endif
+#endif
 
 #ifdef DEBUG
         if (tiledcuda::thread(0)) {
@@ -368,10 +384,19 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         }
 #endif
 
-        vec_mul(prev_sum_vec, prev_norm_vec, prev_norm_vec);
-        broadcast_mul(prev_norm_vec, rO);
+        vec_mul(prev_sum_vec, prev_norm_vec, prev_sum_mul_norm);
+        broadcast_mul(prev_sum_mul_norm, rO);
 
         broadcast_mul(cur_norm_vec, unnormized_attn_block);
+
+        if (tiledcuda::thread(0)) {
+            printf("Thread 0 prev_sum_vec * prev_norm_vec: \n");
+            prev_norm_vec.dump_value();
+            // printf("Thread 0 lhs_o: \n");
+            // rO.dump_value();
+            // printf("Thread 0 rhs_o: \n");
+            // unnormized_attn_block.dump_value();
+        }
 
         block_add(rO, unnormized_attn_block, rO);
 
