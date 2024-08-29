@@ -75,6 +75,7 @@ class FlashAttention:
             
             attn_weights = torch.mm(q, k) # m * ktn
 
+
             # print('attn_weights:', attn_weights)
 
             # reduce maxes
@@ -112,15 +113,19 @@ class FlashAttention:
 
             lhs_o = o * prev_sums * renorm_prev
             rhs_o = renorm_cur * exp_values
-
+            
+            # print('renorm_cur: ', renorm_cur.flatten())
             # print('lhs_o: ', lhs_o.flatten())
             # print('rhs_o: ', rhs_o.flatten())
 
-            x = prev_sums * renorm_prev
-            print('prev_sums: ', prev_sums.flatten())
-            print('renorm_prev: ', renorm_prev.flatten())
-            print('new_sums: ', new_sums.flatten())
-            print('prev_sums * renorm_prev: ', x.flatten())
+            # x = prev_sums * renorm_prev
+            # print('prev_sums: ', prev_sums.flatten())
+            # print('renorm_prev: ', renorm_prev.flatten())
+            # print('new_sums: ', new_sums.flatten())
+            # print('prev_sums * renorm_prev: ', x.flatten())
+
+            print('exp_weights: ', exp_weights.flatten())
+            print('exp_values: ', exp_values.flatten())
 
             o = (o * prev_sums * renorm_prev +
                 renorm_cur * exp_values) / new_sums

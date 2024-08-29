@@ -186,7 +186,8 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
     RegO unnormized_attn_block_f32;
 
     RegOCast rO;
-    RegOCast unnormized_attn_block;
+    // RegOCast unnormized_attn_block;
+    RegOCast exp_values;
 
     RegAcc attn_block_f32;
     RegAccCast attn_block;
@@ -324,22 +325,22 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         }
 #endif
 
-        if (tiledcuda::thread(0)) {
-            printf("Thread 0 prev_sum_vec: \n");
-            prev_sum_vec.dump_value();
-            printf("Thread 0 prev_norm_vec: \n");
-            prev_norm_vec.dump_value();
-        }
+        // if (tiledcuda::thread(0)) {
+        //     printf("Thread 0 prev_sum_vec: \n");
+        //     prev_sum_vec.dump_value();
+        //     printf("Thread 0 prev_norm_vec: \n");
+        //     prev_norm_vec.dump_value();
+        // }
 
         // Update normalization factor l(x)
         vec_mul(prev_norm_vec, prev_sum_vec, prev_norm_mul_sum);
         vec_mul(cur_norm_vec, cur_sum_vec, cur_norm_mul_sum);
         vec_add(prev_norm_mul_sum, cur_norm_mul_sum, new_sum_vec);
 
-        if (tiledcuda::thread(0)) {
-            printf("Thread 0 new_sum_vec: \n");
-            new_sum_vec.dump_value();
-        }
+        // if (tiledcuda::thread(0)) {
+        //     printf("Thread 0 new_sum_vec: \n");
+        //     new_sum_vec.dump_value();
+        // }
 
 #ifdef DEBUG
         if (tiledcuda::thread(0)) {
@@ -358,9 +359,9 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         __syncthreads();
 
         ConvertO cast_o;  // Convert half precision to float.
-        cast_o(unnormized_attn_block_f32, unnormized_attn_block);
+        cast_o(unnormized_attn_block_f32, exp_values);
 
-#ifdef DEBUG
+        // #ifdef DEBUG
         if (tiledcuda::thread(0)) {
             printf("Thread 0 exp_weights: \n");
             for (int h = 0; h < RegAccCast::kRows; ++h) {
@@ -370,35 +371,37 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
                 }
             }
         }
-#endif
+        // #endif
 
-#ifdef DEBUG
+        // #ifdef DEBUG
         if (tiledcuda::thread(0)) {
-            printf("Thread 0 unnormized_attn_block: \n");
+            printf("Thread 0 exp_values: \n");
             for (int h = 0; h < RegOCast::kRows; ++h) {
                 for (int w = 0; w < RegOCast::kCols; ++w) {
                     printf("(%d, %d):\n", h, w);
-                    unnormized_attn_block(h, w).dump_value();
+                    exp_values(h, w).dump_value();
                 }
             }
         }
-#endif
+        // #endif
 
-        vec_mul(prev_sum_vec, prev_norm_vec, prev_sum_mul_norm);
-        broadcast_mul(prev_sum_mul_norm, rO);
+        // vec_mul(prev_sum_vec, prev_norm_vec, prev_sum_mul_norm);
+        broadcast_mul(prev_norm_mul_sum, rO);
 
-        broadcast_mul(cur_norm_vec, unnormized_attn_block);
+        broadcast_mul(cur_norm_vec, exp_values);
 
-        if (tiledcuda::thread(0)) {
-            printf("Thread 0 prev_sum_vec * prev_norm_vec: \n");
-            prev_norm_vec.dump_value();
-            // printf("Thread 0 lhs_o: \n");
-            // rO.dump_value();
-            // printf("Thread 0 rhs_o: \n");
-            // unnormized_attn_block.dump_value();
-        }
+        // if (tiledcuda::thread(0)) {
+        //     // printf("Thread 0 prev_sum_vec * prev_norm_vec: \n");
+        //     // prev_norm_mul_sum.dump_value();
+        //     printf("Thread 0 cur_norm_vec: \n");
+        //     cur_norm_vec.dump_value();
+        //     printf("Thread 0 lhs_o: \n");
+        //     rO.dump_value();
+        //     printf("Thread 0 rhs_o: \n");
+        //     exp_values.dump_value();
+        // }
 
-        block_add(rO, unnormized_attn_block, rO);
+        block_add(rO, exp_values, rO);
 
         // Normalize the attention block.
         broadcast_div(new_sum_vec, rO);
