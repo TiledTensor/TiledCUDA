@@ -240,7 +240,7 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         ConvertAcc cast_acc;  // Convert acc to half precision
         cast_acc(attn_block_f32, attn_block);
 
-        // #ifdef DEBUG
+#ifdef DEBUG
         if (tiledcuda::thread(0)) {
             printf("Thread 0 attn block: \n");
             for (int h = 0; h < RegAccCast::kRows; ++h) {
@@ -250,7 +250,7 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
                 }
             }
         }
-        // #endif
+#endif
 
         // Compute row max.
         row_max(attn_block, cur_max_vec);
@@ -325,16 +325,16 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         vec_mul(cur_norm_vec, cur_sum_vec, cur_sum_vec);
         vec_add(prev_sum_vec, cur_sum_vec, new_sum_vec);
 
-        // #ifdef DEBUG
+#ifdef DEBUG
         if (tiledcuda::thread(0)) {
-            // printf("Thread 0 prev_sum_vec: \n");
-            // prev_sum_vec.dump_value();
+            printf("Thread 0 prev_sum_vec: \n");
+            prev_sum_vec.dump_value();
             printf("Thread 0 cur_sum_vec: \n");
             cur_sum_vec.dump_value();
             printf("Thread 0 new_sum_vec: \n");
             new_sum_vec.dump_value();
         }
-        // #endif
+#endif
 
         // Compute unnormized attention block.
         compute::gemm_(attn_block, rV, unnormized_attn_block_f32);
@@ -343,6 +343,18 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
 
         ConvertO cast_o;  // Convert half precision to float.
         cast_o(unnormized_attn_block_f32, unnormized_attn_block);
+
+        #ifdef DEBUG
+        if (tiledcuda::thread(0)) {
+            printf("Thread 0 exp_weights: \n");
+            for (int h = 0; h < RegAccCast::kRows; ++h) {
+                for (int w = 0; w < RegAccCast::kCols; ++w) {
+                    printf("(%d, %d):\n", h, w);
+                    attn_block(h, w).dump_value();
+                }
+            }
+        }
+        #endif
 
 #ifdef DEBUG
         if (tiledcuda::thread(0)) {
@@ -366,7 +378,7 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         // Normalize the attention block.
         broadcast_div(new_sum_vec, rO);
 
-        // Cear the accumulator.
+        // Clear the accumulator.
         attn_block_f32.clear();
 
         // Update max vector and sum vector.
