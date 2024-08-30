@@ -3,6 +3,7 @@
 #include "kernels/flash_attn.hpp"
 #include "types/mod.hpp"
 #include "util/debug.hpp"
+#include "util/print.hpp"
 
 using namespace tiledcuda;
 using namespace tiledcuda::cell;
@@ -103,6 +104,7 @@ struct FlashAttentionTraits {
     using ConvertO = compute::RegTileConvert<RegD, RegDCast>;
 
     using RegVec = RegTile<InType, tl::RowMajor<kAccMs, 2>>;
+    using RegVecPrinter = cell::RegVecWarpPrinter<RegVec>;
 
     using CopyVec = copy::BaseTileCopy<RegVec>;
     using RowMax = compute::MaxReduce<RegAccCast, tl::Layout::kRowMajor>;
@@ -141,7 +143,7 @@ template <typename InType,
           typename RowSum, typename BroadcastSub, typename BroadcastMul,
           typename BroadcastDiv, typename BlockExp, typename BlockAdd,
           typename VecMax, typename VecAdd, typename VecSub, typename VecMul,
-          typename VecExp>
+          typename VecExp, typename RegVecPrinter>
 __global__ void flash_attention(const InType* dQ, const InType* dK,
                                 const InType* dV, InType* dO, int kM, int kN,
                                 int kK, int kP, int kTM, int kTN, int kTK,
@@ -161,6 +163,8 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
     InType* sQ_ptr = shm;
     InType* sK_ptr = shm + SharedQ::kNumel;
     InType* sV_ptr = shm + SharedQ::kNumel + SharedK::kNumel;
+
+    int tid = threadIdx.x;
 
     GIteratorQ gQs(Q);
     SharedQ sQ(sQ_ptr);
@@ -190,6 +194,8 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
 
     RegAcc attn_block_f32;
     RegAccCast attn_block;
+
+    RegVecPrinter print_vec;
 
     RegVec prev_norm_vec;
     RegVec cur_norm_vec;
@@ -246,6 +252,10 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
 
         // Compute row max.
         row_max(attn_block, cur_max_vec);
+
+        if (tid < 32) {
+            print_vec(cur_max_vec, tid);
+        }
 
         // Broadcast subtract from `attn_block`.
         broadcast_sub(cur_max_vec, attn_block);
@@ -356,6 +366,7 @@ void run_flash_attention(const InType* dQ, const InType* dK, const InType* dV,
     using ConvertO = typename Config::ConvertO;
 
     using RegVec = typename Config::RegVec;
+    using RegVecPrinter = typename Config::RegVecPrinter;
 
     using CopyVec = typename Config::CopyVec;
     using RowMax = typename Config::RowMax;
@@ -399,7 +410,7 @@ void run_flash_attention(const InType* dQ, const InType* dK, const InType* dV,
                          RegDCast, DStorer, ConvertAcc, ConvertO, RegVec,
                          CopyVec, RowMax, RowSum, BroadcastSub, BroadcastMul,
                          BroadcastDiv, BlockExp, BlockAdd, VecMax, VecAdd,
-                         VecSub, VecMul, VecExp>;
+                         VecSub, VecMul, VecExp, RegVecPrinter>;
 
     if (shm_size > 48 * 1024) {
         cudaFuncSetAttribute(

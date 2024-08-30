@@ -49,6 +49,7 @@ class FlashAttention:
 
             # reduce maxes
             cur_maxes, _ = torch.max(attn_weights, dim=-1, keepdim=True)
+            print('cur_maxes: ', cur_maxes.flatten())
             exp_weights = torch.exp(attn_weights - cur_maxes)
             # unnormalized attention score @ values
             exp_values = exp_weights @ v

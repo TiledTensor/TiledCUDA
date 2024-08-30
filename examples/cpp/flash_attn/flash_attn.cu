@@ -18,9 +18,9 @@ template <typename InType,
           typename VecMax, typename VecAdd, typename VecSub, typename VecMul,
           typename VecExp>
 __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
-                                const InType* dV, InType* dO, int kM, int kN,
-                                int kK, int kP, int kTM, int kTN, int kTK,
-                                int kTP) {
+                                 const InType* dV, InType* dO, int kM, int kN,
+                                 int kK, int kP, int kTM, int kTN, int kTK,
+                                 int kTP) {
     // Advance to the global data tile to the current CTA.
     const InType* Q = dQ + blockIdx.z * (kM * kK) + blockIdx.x * (kTM * kK);
     const InType* K = dK + blockIdx.z * (kK * kN);
