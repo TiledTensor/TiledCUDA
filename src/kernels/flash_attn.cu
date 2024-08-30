@@ -1,5 +1,130 @@
-#include "util.hpp"
-#include "util/cuda_timer.hpp"
+#include "cell/compute/mod.hpp"
+#include "cell/mod.hpp"
+#include "kernels/flash_attn.hpp"
+#include "types/mod.hpp"
+#include "util/debug.hpp"
+
+using namespace tiledcuda;
+using namespace tiledcuda::cell;
+using namespace tiledcuda::cell::copy;
+namespace tl = tile_layout;
+
+namespace tiledcuda::kernels {
+
+template <const int kM, const int kN, const int kK, const int kP>
+using FlashAttentionShape = TileShape<kM, kN, kK, kP>;
+
+template <typename InType, typename AccType, typename OutType,
+          typename WholeShape, typename CtaTileShape>
+struct FlashAttentionTraits {
+    using BaseShape = traits::BaseTileShape<InType>;
+
+    using WarpLayout = tl::RowMajor<4, 1>;
+
+    static constexpr int kWarpPerRow = tl::num_rows<WarpLayout>;
+    static constexpr int kWarpPerCol = tl::num_cols<WarpLayout>;
+    static_assert(kWarpPerCol == 1, "WarpPerCol must be 1");
+
+    static constexpr int kThreads = tl::get_numel<WarpLayout> * 32;
+
+    static constexpr int kM = dim_size<0, WholeShape>;
+    static constexpr int kN = dim_size<1, WholeShape>;
+    static constexpr int kK = dim_size<2, WholeShape>;
+    static constexpr int kP = dim_size<3, WholeShape>;
+
+    static constexpr int kTM = dim_size<0, CtaTileShape>;
+    static constexpr int kTN = dim_size<1, CtaTileShape>;
+    static constexpr int kTK = dim_size<2, CtaTileShape>;
+    static constexpr int kTP = dim_size<3, CtaTileShape>;
+
+    // operand A
+    using GlobalA = GlobalTile<InType, tl::RowMajor<kTM, kK>>;
+    // chunk the K dimension to fit into shared memory
+    using GIteratorA = TileIterator<GlobalA, TileShape<kTM, kTK>>;
+
+    using SharedA = SharedTile<InType, tl::RowMajor<kTM, kTK>, true>;
+
+    static constexpr int kAMs = kTM / kWarpPerRow / BaseShape::kTileSize;
+    static constexpr int kAKs = kTK / BaseShape::kTileSize;
+    using RegA = RegTile<BaseTileRowMajor<InType>, tl::RowMajor<kAMs, kAKs>>;
+
+    using SharedALoader = GlobalToSharedLoader<SharedA, WarpLayout>;
+    using RegALoader =
+        SharedToRegLoader<RegA, WarpLayout, WarpReuse::kRowReuseCont>;
+
+    // operand B
+    using GlobalB = GlobalTile<InType, tl::ColMajor<kK, kN>>;
+    using GIteratorB = TileIterator<GlobalB, TileShape<kTK, kTN>>;
+    using SharedB = SharedTile<InType, tl::ColMajor<kTK, kTN>, true>;
+
+    static constexpr int kBKs = kTK / BaseShape::kTileSize;
+    static constexpr int kBNs = kTN / kWarpPerCol / BaseShape::kTileSize;
+    using RegB = RegTile<BaseTileColMajor<InType>, tl::ColMajor<kBKs, kBNs>>;
+
+    using SharedBLoader = GlobalToSharedLoader<SharedB, WarpLayout>;
+    using RegBLoader =
+        SharedToRegLoader<RegB, WarpLayout, WarpReuse::kColReuseCont>;
+
+    // operand C
+    using GlobalC = GlobalTile<InType, tl::ColMajor<kN, kTP>>;
+    // chunk the N dimension to fit into shared memory
+    using GIteratorC = TileIterator<GlobalC, TileShape<kTN, kTP>>;
+    using SharedC = SharedTile<InType, tl::ColMajor<kTN, kTP>, true>;
+
+    static constexpr int kCNs = kTN / BaseShape::kTileSize;
+    static constexpr int kCPs = kTP / kWarpPerCol / BaseShape::kTileSize;
+    using RegC = RegTile<BaseTileColMajor<InType>, tl::ColMajor<kCNs, kCPs>>;
+
+    using SharedCLoader = GlobalToSharedLoader<SharedC, WarpLayout>;
+    using RegCLoader =
+        SharedToRegLoader<RegC, WarpLayout, WarpReuse::kColReuseCont>;
+
+    // output D
+    using GlobalD = GlobalTile<OutType, tl::RowMajor<kTM, kTP>>;
+
+    static constexpr int kDMs = kTM / kWarpPerRow / BaseShape::kTileSize;
+    static constexpr int kDPs = kTP / kWarpPerCol / BaseShape::kTileSize;
+    using RegD = RegTile<BaseTileRowMajor<AccType>, tl::RowMajor<kDMs, kDPs>>;
+    using RegDCast =
+        RegTile<BaseTileRowMajor<InType>, tl::RowMajor<kDMs, kDPs>>;
+    using DStorer = copy::RegToGlobalStorer<GlobalD, RegDCast, WarpLayout>;
+
+    static constexpr int kAccMs = kTM / kWarpPerRow / BaseShape::kTileSize;
+    static constexpr int kAccNs = kTN / kWarpPerCol / BaseShape::kTileSize;
+
+    // Reg Acc
+    using RegAcc =
+        RegTile<BaseTileRowMajor<AccType>, tl::RowMajor<kAccMs, kAccNs>>;
+    using RegAccCast =
+        RegTile<BaseTileRowMajor<InType>, tl::RowMajor<kAccMs, kAccNs>>;
+
+    // Convert the accumulator to half
+    using ConvertHalf = compute::RegTileConvert<RegAcc, RegAccCast>;
+    using ConvertO = compute::RegTileConvert<RegD, RegDCast>;
+
+    using RegVec = RegTile<InType, tl::RowMajor<kAccMs, 2>>;
+
+    using CopyVec = copy::BaseTileCopy<RegVec>;
+    using RowMax = compute::MaxReduce<RegAccCast, tl::Layout::kRowMajor>;
+
+    using RowSum = compute::SumReduce<RegAccCast, tl::Layout::kRowMajor>;
+
+    using BroadcastSub =
+        compute::BroadcastSub<RegVec, RegAccCast, tl::Layout::kRowMajor>;
+    using BroadcastMul =
+        compute::BroadcastMul<RegVec, RegDCast, tl::Layout::kRowMajor>;
+    using BroadcastDiv =
+        compute::BroadcastDiv<RegVec, RegDCast, tl::Layout::kRowMajor>;
+
+    using BlockExp = compute::RegTileExp<RegAccCast>;
+    using BlockAdd = compute::RegTileAdd<RegDCast>;
+
+    using VecMax = compute::BaseTileMax<RegVec>;
+    using VecAdd = compute::BaseTileAdd<RegVec>;
+    using VecSub = compute::BaseTileSub<RegVec>;
+    using VecMul = compute::BaseTileMul<RegVec>;
+    using VecExp = compute::BaseTileExp<RegVec>;
+};
 
 template <typename InType,
           typename AccType,                                      //
@@ -17,7 +142,7 @@ template <typename InType,
           typename BroadcastDiv, typename BlockExp, typename BlockAdd,
           typename VecMax, typename VecAdd, typename VecSub, typename VecMul,
           typename VecExp>
-__global__ void KeFlashAttention(const InType* dQ, const InType* dK,
+__global__ void flash_attention(const InType* dQ, const InType* dK,
                                 const InType* dV, InType* dO, int kM, int kN,
                                 int kK, int kP, int kTM, int kTN, int kTK,
                                 int kTP) {
@@ -180,12 +305,10 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
     storer_o(rO, gO);
 }
 
-template <typename WholeShape, typename CtaTileShape, const int kBatch>
-void run(bool check = true) {
-    using InType = __half;
-    using AccType = float;
-    using OutType = __half;
-
+template <typename InType, typename AccType, typename OutType,
+          typename WholeShape, typename CtaTileShape, const int kBatch>
+void run_flash_attention(const InType* dQ, const InType* dK, const InType* dV,
+                         OutType* dO) {
     static constexpr int kM = dim_size<0, WholeShape>;
     static constexpr int kN = dim_size<1, WholeShape>;
     static constexpr int kK = dim_size<2, WholeShape>;
@@ -201,69 +324,8 @@ void run(bool check = true) {
     static_assert(kP == kTP,
                   "The current implementation requires kTP == P for now.");
 
-    // initialize data
-    thrust::host_vector<InType> h_a(kM * kK * kBatch);
-
-    for (int i = 0; i < h_a.size(); ++i)
-        h_a[i] = static_cast<InType>(rand_float());
-
-    thrust::host_vector<InType> h_b(kK * kN * kBatch);
-    for (int i = 0; i < h_b.size(); ++i)
-        h_b[i] = static_cast<InType>(rand_float());
-
-    thrust::host_vector<InType> h_c(kN * kP * kBatch);
-    for (int i = 0; i < h_c.size(); ++i)
-        h_c[i] = static_cast<InType>(rand_float());
-
-    thrust::host_vector<InType> h_d(kM * kP * kBatch);
-    thrust::fill(h_d.begin(), h_d.end(), 0.);
-
-    // Host side memory initialization.
-    thrust::host_vector<InType> acc(kM * kN * kBatch);
-    thrust::fill(acc.begin(), acc.end(), 0.);
-
-    thrust::host_vector<InType> exp_values(kM * kP * kBatch);
-    thrust::fill(exp_values.begin(), exp_values.end(), 0.);
-
-    thrust::host_vector<InType> h_o(kM * kP * kBatch);
-    thrust::fill(h_o.begin(), h_o.end(), 0.);
-
-    thrust::host_vector<InType> cur_row_max(kM * kBatch);
-    thrust::fill(cur_row_max.begin(), cur_row_max.end(), 0.);
-
-    thrust::host_vector<InType> prev_row_max(kM * kBatch);
-    thrust::fill(prev_row_max.begin(), prev_row_max.end(), 0.);
-
-    thrust::host_vector<InType> new_row_max(kM * kBatch);
-    thrust::fill(new_row_max.begin(), new_row_max.end(), 0.);
-
-    thrust::host_vector<InType> prev_norm_vec(kM * kBatch);
-    thrust::fill(prev_norm_vec.begin(), prev_norm_vec.end(), 0.);
-
-    thrust::host_vector<InType> new_norm_vec(kM * kBatch);
-    thrust::fill(new_norm_vec.begin(), new_norm_vec.end(), 0.);
-
-    thrust::host_vector<InType> prev_sum_vec(kM * kBatch);
-    thrust::fill(prev_sum_vec.begin(), prev_sum_vec.end(), 0.);
-
-    thrust::host_vector<InType> cur_sum_vec(kM * kBatch);
-    thrust::fill(cur_sum_vec.begin(), cur_sum_vec.end(), 0.);
-
-    thrust::host_vector<InType> new_sum_vec(kM * kBatch);
-    thrust::fill(new_sum_vec.begin(), new_sum_vec.end(), 0.);
-
-    thrust::device_vector<InType> d_a = h_a;
-    thrust::device_vector<InType> d_b = h_b;
-    thrust::device_vector<InType> d_c = h_c;
-    thrust::device_vector<InType> d_d = h_d;
-
-    const InType* A = thrust::raw_pointer_cast(d_a.data());
-    const InType* B = thrust::raw_pointer_cast(d_b.data());
-    const InType* C = thrust::raw_pointer_cast(d_c.data());
-    InType* D = thrust::raw_pointer_cast(d_d.data());
-
-    using Config =
-        FlashAttentionTraits<InType, AccType, WholeShape, CtaTileShape>;
+    using Config = FlashAttentionTraits<InType, AccType, OutType, WholeShape,
+                                        CtaTileShape>;
 
     using RegA = typename Config::RegA;
     using RegB = typename Config::RegB;
@@ -325,80 +387,63 @@ void run(bool check = true) {
                                           : shm_input * sizeof(InType);
 
     auto kernel =
-        &KeFlashAttention<InType, AccType,
-                          OutType,                    //
-                          GIteratorA, SharedA, RegA,  //
-                          SharedALoader, RegALoader,  //
-                          GIteratorB, SharedB, RegB,  //
-                          SharedBLoader, RegBLoader,  //
-                          GIteratorC, SharedC, RegC,  //
-                          SharedCLoader, RegCLoader,  //
-                          RegAcc, RegAccCast, typename Config::GlobalD, RegD,
-                          RegDCast, DStorer, ConvertAcc, ConvertO, RegVec,
-                          CopyVec, RowMax, RowSum, BroadcastSub, BroadcastMul,
-                          BroadcastDiv, BlockExp, BlockAdd, VecMax, VecAdd,
-                          VecSub, VecMul, VecExp>;
+        &flash_attention<InType, AccType,
+                         OutType,                    //
+                         GIteratorA, SharedA, RegA,  //
+                         SharedALoader, RegALoader,  //
+                         GIteratorB, SharedB, RegB,  //
+                         SharedBLoader, RegBLoader,  //
+                         GIteratorC, SharedC, RegC,  //
+                         SharedCLoader, RegCLoader,  //
+                         RegAcc, RegAccCast, typename Config::GlobalD, RegD,
+                         RegDCast, DStorer, ConvertAcc, ConvertO, RegVec,
+                         CopyVec, RowMax, RowSum, BroadcastSub, BroadcastMul,
+                         BroadcastDiv, BlockExp, BlockAdd, VecMax, VecAdd,
+                         VecSub, VecMul, VecExp>;
 
     if (shm_size > 48 * 1024) {
         cudaFuncSetAttribute(
             kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, shm_size);
     }
 
-    kernel<<<grid, block, shm_size, 0>>>(A, B, C, D, kM, kN, kK, kP, kTM, kTN,
-                                         kTK, kTP);
+    kernel<<<grid, block, shm_size, 0>>>(dQ, dK, dV, dO, kM, kN, kK, kP, kTM,
+                                         kTN, kTK, kTP);
 
     cudaDeviceSynchronize();
+}
 
-    // Call host-side reference implementation.
-    host_flash_attn(kM, kN, kK, kP, kBatch,
-                    thrust::raw_pointer_cast(h_a.data()),
-                    thrust::raw_pointer_cast(h_b.data()),
-                    thrust::raw_pointer_cast(h_c.data()),
-                    thrust::raw_pointer_cast(h_o.data()),
-                    thrust::raw_pointer_cast(acc.data()),
-                    thrust::raw_pointer_cast(exp_values.data()),
-                    thrust::raw_pointer_cast(cur_row_max.data()),
-                    thrust::raw_pointer_cast(prev_row_max.data()),
-                    thrust::raw_pointer_cast(new_row_max.data()),
-                    thrust::raw_pointer_cast(prev_norm_vec.data()),
-                    thrust::raw_pointer_cast(new_norm_vec.data()),
-                    thrust::raw_pointer_cast(prev_sum_vec.data()),
-                    thrust::raw_pointer_cast(cur_sum_vec.data()),
-                    thrust::raw_pointer_cast(new_sum_vec.data()));
+void custom_flash_attention_op(const torch::Tensor& Q, const torch::Tensor& K,
+                               const torch::Tensor& V, torch::Tensor& O,
+                               int64_t m, int64_t n, int64_t k, int64_t p) {
+    using InType = __half;
+    using AccType = float;
+    using OutType = __half;
 
-    h_d = d_d;
+    using CtaTileShape = TileShape<64, 64, 128, 128>;
 
-    if (check_results(thrust::raw_pointer_cast(h_o.data()),
-                      thrust::raw_pointer_cast(h_d.data()), kM * kP * kBatch)) {
-        std::cout << "Test passed." << std::endl;
+    auto dQ = reinterpret_cast<const InType*>(Q.data_ptr());
+    auto dK = reinterpret_cast<const InType*>(K.data_ptr());
+    auto dV = reinterpret_cast<const InType*>(V.data_ptr());
+    auto dO = reinterpret_cast<OutType*>(O.data_ptr());
+
+    if (m == 64 && n == 256 && k == 128 && p == 128) {
+        using WholeShape = FlashAttentionShape<64, 256, 128, 128>;
+        const int kBatch = 1;
+        run_flash_attention<InType, AccType, OutType, WholeShape, CtaTileShape,
+                            kBatch>(dQ, dK, dV, dO);
+    } else if (m == 64 && n == 128 && k == 128 && p == 128) {
+        using WholeShape = FlashAttentionShape<64, 128, 128, 128>;
+        const int kBatch = 1;
+        run_flash_attention<InType, AccType, OutType, WholeShape, CtaTileShape,
+                            kBatch>(dQ, dK, dV, dO);
+    } else if (m == 64 && n == 64 && k == 128 && p == 128) {
+        using WholeShape = FlashAttentionShape<64, 64, 128, 128>;
+        const int kBatch = 1;
+        run_flash_attention<InType, AccType, OutType, WholeShape, CtaTileShape,
+                            kBatch>(dQ, dK, dV, dO);
     } else {
-        std::cout << "Test failed." << std::endl;
+        throw std::runtime_error("Unsupported shape");
     }
 }
 
-int main() {
-    run<FlashAttentionShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
-        FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128
-                            /*kTP*/>,
-        1>();
-
-    run<FlashAttentionShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
-        FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128
-                            /*kTP*/>,
-        2>();
-
-    run<FlashAttentionShape<64 /*M*/, 128 /*N*/, 128 /*K*/, 128 /*P*/>,
-        FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128
-                            /*kTP*/>,
-        1>();
-
-    run<FlashAttentionShape<64 /*M*/, 256 /*N*/, 128 /*K*/, 128 /*P*/>,
-        FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
-        1>();
-
-    run<FlashAttentionShape<64 /*M*/, 512 /*N*/, 128 /*K*/, 128 /*P*/>,
-        FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
-        1>();
-
-    return 0;
-}
+}  // namespace tiledcuda::kernels
