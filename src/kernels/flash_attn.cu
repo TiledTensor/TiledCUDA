@@ -183,10 +183,9 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
     RegVLoader load_rv;
     RegV rV;
 
-    RegO unnormized_attn_block_f32;
+    RegO exp_values_f32;
 
     RegOCast rO;
-    // RegOCast unnormized_attn_block;
     RegOCast exp_values;
 
     RegAcc attn_block_f32;
@@ -274,12 +273,12 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         vec_add(prev_norm_mul_sum, cur_norm_mul_sum, new_sum_vec);
 
         // Compute unnormized attention block.
-        compute::gemm_(attn_block, rV, unnormized_attn_block_f32);
+        compute::gemm_(attn_block, rV, exp_values_f32);
 
         __syncthreads();
 
         ConvertO cast_o;  // Convert half precision to float.
-        cast_o(unnormized_attn_block_f32, exp_values);
+        cast_o(exp_values_f32, exp_values);
 
         broadcast_mul(prev_norm_mul_sum, rO);
 
@@ -290,14 +289,13 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         // Normalize the attention block.
         broadcast_div(new_sum_vec, rO);
 
-        // Clear the accumulator.
-        attn_block_f32.clear();
-
         // Update max vector and sum vector.
         copy_vec(new_max_vec, prev_max_vec);
         copy_vec(new_sum_vec, prev_sum_vec);
 
-        unnormized_attn_block_f32.clear();
+        // Clear the accumulator.
+        attn_block_f32.clear();
+        exp_values_f32.clear();
         exp_values.clear();
     }
     __syncthreads();
