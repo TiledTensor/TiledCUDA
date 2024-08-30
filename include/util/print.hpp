@@ -44,7 +44,7 @@ template <typename Layout>
 DEVICE void print_tile(const __half* data, const Layout& layout) {
     for (int i = 0; i < tl::num_rows<Layout>; ++i) {
         for (int j = 0; j < tl::num_cols<Layout>; ++j) {
-            printf("%e, ", __half2float(data[layout(i, j)]));
+            printf("%.3f, ", __half2float(data[layout(i, j)]));
         }
         printf("\n");
 
