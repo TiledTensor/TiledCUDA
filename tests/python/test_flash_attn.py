@@ -78,7 +78,6 @@ class FlashAttention:
 
 
 
-
 class TestFlashAttention(unittest.TestCase):
 
     def setUp(self):
@@ -164,5 +163,3 @@ class TestFlashAttention(unittest.TestCase):
 if __name__ == "__main__":
 
     unittest.main()
-
-    

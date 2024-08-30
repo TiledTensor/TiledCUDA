@@ -61,7 +61,8 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
     RegO unnormized_attn_block_f32;
 
     RegOCast rO;
-    RegOCast unnormized_attn_block;
+    // RegOCast unnormized_attn_block;
+    RegOCast exp_values;
 
     RegAcc attn_block_f32;
     RegAccCast attn_block;
@@ -76,6 +77,10 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
     RegVec prev_sum_vec;
     RegVec cur_sum_vec;
     RegVec new_sum_vec;
+
+    RegVec prev_norm_mul_sum;
+    RegVec cur_norm_mul_sum;
+    RegVec prev_sum_mul_norm;
 
     RowMax row_max;
     RowSum row_sum;
@@ -115,43 +120,11 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
         ConvertAcc cast_acc;  // Convert acc to half precision
         cast_acc(attn_block_f32, attn_block);
 
-#ifdef DEBUG
-        if (tiledcuda::thread(0)) {
-            printf("Thread 0 attn block: \n");
-            for (int h = 0; h < RegAccCast::kRows; ++h) {
-                for (int w = 0; w < RegAccCast::kCols; ++w) {
-                    printf("(%d, %d):\n", h, w);
-                    attn_block(h, w).dump_value();
-                }
-            }
-        }
-#endif
-
         // Compute row max.
         row_max(attn_block, cur_max_vec);
 
-#ifdef DEBUG
-        if (tiledcuda::thread(0)) {
-            // WarpLayout: (4, 1)
-            printf("Thread 0 cur_max_vec: \n");
-            cur_max_vec.dump_value();
-        }
-#endif
-
         // Broadcast subtract from `attn_block`.
         broadcast_sub(cur_max_vec, attn_block);
-
-#ifdef DEBUG
-        if (tiledcuda::thread(0)) {
-            printf("Thread 0 attn block after broadcast sub: \n");
-            for (int h = 0; h < RegAccCast::kRows; ++h) {
-                for (int w = 0; w < RegAccCast::kCols; ++w) {
-                    printf("(%d, %d):\n", h, w);
-                    attn_block(h, w).dump_value();
-                }
-            }
-        }
-#endif
 
         // Compute exp in `attn_block`.
         block_exp(attn_block, attn_block);
@@ -162,18 +135,6 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
         // Compute new max vector.
         vec_max(cur_max_vec, prev_max_vec, new_max_vec);
 
-#ifdef DEBUG
-        if (tiledcuda::thread(0)) {
-            printf("Thread 0 new_max_vec: \n");
-            new_max_vec.dump_value();
-        }
-
-        if (tiledcuda::thread(4)) {
-            printf("Thread 4 new_max_vec: \n");
-            new_max_vec.dump_value();
-        }
-#endif
-
         // Renormalization for the previous block.
         vec_sub(prev_max_vec, new_max_vec, prev_norm_vec);
         vec_exp(prev_norm_vec, prev_norm_vec);
@@ -182,34 +143,10 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
         vec_sub(cur_max_vec, new_max_vec, cur_norm_vec);
         vec_exp(cur_norm_vec, cur_norm_vec);
 
-#ifdef DEBUG
-        if (tiledcuda::thread(0)) {
-            printf("Thread 0 prev_max_vec: \n");
-            prev_max_vec.dump_value();
-            printf("Thread 0 cur_max_vec: \n");
-            cur_max_vec.dump_value();
-            printf("Thread 0 prev_norm_vec: \n");
-            prev_norm_vec.dump_value();
-            printf("Thread 0 cur_norm_vec: \n");
-            cur_norm_vec.dump_value();
-        }
-#endif
-
         // Update normalization factor l(x)
-        vec_mul(prev_norm_vec, prev_sum_vec, prev_sum_vec);
-        vec_mul(cur_norm_vec, cur_sum_vec, cur_sum_vec);
-        vec_add(prev_sum_vec, cur_sum_vec, new_sum_vec);
-
-#ifdef DEBUG
-        if (tiledcuda::thread(0)) {
-            printf("Thread 0 prev_sum_vec: \n");
-            prev_sum_vec.dump_value();
-            printf("Thread 0 cur_sum_vec: \n");
-            cur_sum_vec.dump_value();
-            printf("Thread 0 new_sum_vec: \n");
-            new_sum_vec.dump_value();
-        }
-#endif
+        vec_mul(prev_norm_vec, prev_sum_vec, prev_norm_mul_sum);
+        vec_mul(cur_norm_vec, cur_sum_vec, cur_norm_mul_sum);
+        vec_add(prev_norm_mul_sum, cur_norm_mul_sum, new_sum_vec);
 
         // Compute unnormized attention block.
         compute::gemm_(attn_block, rV, unnormized_attn_block_f32);
@@ -217,48 +154,32 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
         __syncthreads();
 
         ConvertO cast_o;  // Convert half precision to float.
-        cast_o(unnormized_attn_block_f32, unnormized_attn_block);
+        cast_o(unnormized_attn_block_f32, exp_values);
 
-#ifdef DEBUG
-        if (tiledcuda::thread(0)) {
-            printf("Thread 0 unnormized_attn_block: \n");
-            for (int h = 0; h < RegOCast::kRows; ++h) {
-                for (int w = 0; w < RegOCast::kCols; ++w) {
-                    printf("(%d, %d):\n", h, w);
-                    unnormized_attn_block(h, w).dump_value();
-                }
-            }
-        }
-#endif
+        broadcast_mul(prev_norm_mul_sum, rO);
 
-        vec_mul(prev_sum_vec, prev_norm_vec, prev_norm_vec);
-        broadcast_mul(prev_norm_vec, rO);
+        broadcast_mul(cur_norm_vec, exp_values);
 
-        broadcast_mul(cur_norm_vec, unnormized_attn_block);
-
-        block_add(rO, unnormized_attn_block, rO);
+        block_add(rO, exp_values, rO);
 
         // Normalize the attention block.
         broadcast_div(new_sum_vec, rO);
 
-        // Cear the accumulator.
+        // Clear the accumulator.
         attn_block_f32.clear();
 
         // Update max vector and sum vector.
         copy_vec(new_max_vec, prev_max_vec);
         copy_vec(new_sum_vec, prev_sum_vec);
+
+        unnormized_attn_block_f32.clear();
+        exp_values.clear();
     }
     __syncthreads();
 
     GlobalO gO(gO_ptr);
     OStorer storer_o;  // Store O tile from register to global.
     storer_o(rO, gO);
-
-#ifdef DEBUG
-    if (tiledcuda::thread(0)) {
-        gO.dump_value();
-    }
-#endif
 }
 
 template <typename WholeShape, typename CtaTileShape, const int kBatch>
@@ -458,17 +379,20 @@ void run(bool check = true) {
 }
 
 int main() {
-    // run<FlashAttentionShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
-    //     FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128
-    //     /*kTP*/>, 1>();
+    run<FlashAttentionShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
+        FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128
+                            /*kTP*/>,
+        1>();
 
-    // run<FlashAttentionShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
-    //     FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128
-    //     /*kTP*/>, 2>();
+    run<FlashAttentionShape<64 /*M*/, 64 /*N*/, 128 /*K*/, 128 /*P*/>,
+        FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128
+                            /*kTP*/>,
+        2>();
 
-    // run<FlashAttentionShape<64 /*M*/, 128 /*N*/, 128 /*K*/, 128 /*P*/>,
-    //     FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128
-    //     /*kTP*/>, 1>();
+    run<FlashAttentionShape<64 /*M*/, 128 /*N*/, 128 /*K*/, 128 /*P*/>,
+        FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128
+                            /*kTP*/>,
+        1>();
 
     run<FlashAttentionShape<64 /*M*/, 256 /*N*/, 128 /*K*/, 128 /*P*/>,
         FlashAttentionShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,

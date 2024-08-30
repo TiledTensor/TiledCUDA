@@ -305,12 +305,6 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
     GlobalO gO(gO_ptr);
     OStorer storer_o;  // Store O tile from register to global.
     storer_o(rO, gO);
-
-#ifdef DEBUG
-    if (thread(0)) {
-        gO.dump_value();
-    }
-#endif
 }
 
 template <typename InType, typename AccType, typename OutType,
