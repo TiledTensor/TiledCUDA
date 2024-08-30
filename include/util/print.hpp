@@ -63,4 +63,29 @@ DEVICE void print_tile(const DType* data, const Layout& layout) {
         }
     }
 }
+
+template <typename RegTile>
+struct RegVecWarpPrinter {
+    static constexpr int kRows = RegTile::kRows;
+    static constexpr int kCols = RegTile::kCols;
+
+    DEVICE void operator()(const RegTile& tile, int tid) {
+        int lane_id = tid % 32;
+        for (int i = 0; i < kRows; ++i) {
+            printf("[");
+            for (int j = 0; j < kCols; ++j) {
+                printf("[");
+                auto base_tile = tile(i, j);
+                if (lane_id % 4 == 0) {
+                    printf("%.e, ", base_tile(0, 0));
+                } else if (lane_id % 4 == 1) {
+                    printf("%.e, ", base_tile(0, 1));
+                }
+                printf("]\n");
+            }
+            printf("]\n");
+        }
+    }
+};
+
 }  // namespace tiledcuda::cell
