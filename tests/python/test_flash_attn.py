@@ -47,8 +47,6 @@ class FlashAttention:
             
             attn_weights = q @ k # m * ktn
 
-            print('attn_weights: ', attn_weights)
-
             # reduce maxes
             cur_maxes, _ = torch.max(attn_weights, dim=-1, keepdim=True)
             exp_weights = torch.exp(attn_weights - cur_maxes)
