@@ -263,9 +263,11 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         }
 #endif
 
+#ifdef DEBUG
         if (tid < 32) {
             print_acc(attn_block, tid);
         }
+#endif
 
         // Broadcast subtract from `attn_block`.
         broadcast_sub(cur_max_vec, attn_block);

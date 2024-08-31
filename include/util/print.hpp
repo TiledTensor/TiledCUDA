@@ -74,6 +74,11 @@ struct RegVecPrinter {
             if (lane_id % 4 == 0) {
                 printf("%.3f, ", __half2float(tile(i, 0)));
             }
+
+#if defined(__CUDA_ARCH__)
+            // Sync Threads to print in-order data.
+            __syncthreads();
+#endif
             if (lane_id % 4 == 0) {
                 printf("%.3f, ", __half2float(tile(i, 1)));
             }
@@ -141,6 +146,11 @@ struct RegTilePrinter<RegTile, tl::Layout::kRowMajor> {
                 print_tile_col(tile, lane_id, i, true);
             else if (lane_id >= 28 && lane_id <= 31)
                 print_tile_col(tile, lane_id, i, true);
+
+#if defined(__CUDA_ARCH__)
+            // Sync Threads to print in-order data.
+            __syncthreads();
+#endif
 
             // Print bottom row.
             if (lane_id >= 0 && lane_id <= 3)
