@@ -20,18 +20,18 @@ option(ENABLE_DEBUG "Enable debug mode" OFF)
 include(generic)
 include(dependencies)
 
-
 include_directories(include)
 add_subdirectory(src)
 add_subdirectory(tests/cpp)
 
-
 set(EXAMPLES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/examples/cpp")
-file(GLOB_RECURSE SUBDIRS "${EXAMPLES_DIR}/*")
+file(GLOB SUBDIRS "${EXAMPLES_DIR}/*")
 
-foreach(EXAMPLE_DIR ${SUBDIRS})
-  if(IS_DIRECTORY ${EXAMPLE_DIR})
-    get_filename_component(EXAMPLE_NAME ${EXAMPLE_DIR} NAME)
-    add_subdirectory(${EXAMPLE_DIR})
+foreach(SUBDIR ${SUBDIRS})
+  message(STATUS "Add Example: ${SUBDIR}")
+  if(IS_DIRECTORY ${SUBDIR})
+    # get_filename_component(EXAMPLE_NAME ${EXAMPLE_DIR} NAME)
+    message(STATUS "Adding example: ${EXAMPLE_DIR}")
+    add_subdirectory(${SUBDIR})
   endif()
 endforeach()
