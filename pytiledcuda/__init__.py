@@ -33,6 +33,7 @@ class TiledFlashAttention():
         self.n, self.p = value.size(-2), value.size(-1)
 
         self.query = query.half().flatten()
+        # TODO(KuangjuX): To simplify the usage of the kernel, we treat K as k.Transpose.
         self.key = key.half().t().flatten()
         self.value = value.half().t().flatten()
 
