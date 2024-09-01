@@ -102,9 +102,11 @@ class TestFlashAttention(unittest.TestCase):
         O = tiled_flash_attention.forward()
         
         print('ref_o: ', ref_o)
-        print('dO: ', O)
+        print('TiledCUDA O: ', O)
 
         hO = O.cpu()
+
+        passed = True
 
         # Compare elements one by one and print the different numbers.
         for i in range(m):
@@ -113,6 +115,12 @@ class TestFlashAttention(unittest.TestCase):
                     print('(', i, ', ', j, ')')
                     print('hO: ', hO[i][j])
                     print('ref_o: ', ref_o[i][j])
+
+                    passed = False
+                    break
+        
+        assert passed
+
 
 
     def test_flash_attention_v0(self):
