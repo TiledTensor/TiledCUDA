@@ -3,11 +3,11 @@ import unittest
 import torch
 
 import context
-from pytiledcuda import flash_attention_fwd
+from pytiledcuda import TiledFlashAttention
 
 class FlashAttention:
 
-    def __init__(self, Q, K, V, O, m, n, k, p, kTM, kTN, kTK, kTP):
+    def __init__(self, Q, K, V,  m, n, k, p, kTM, kTN, kTK, kTP):
         self.m = m
         self.n = n
         self.k = k
@@ -21,7 +21,7 @@ class FlashAttention:
         self.Q = Q # m * k
         self.K = K # n * k
         self.V = V # n * p
-        self.O = O # m * p
+        self.O = torch.empty(m, p, device = 'cpu')
 
 
     def forward(self):
@@ -90,28 +90,22 @@ class TestFlashAttention(unittest.TestCase):
         V = torch.randn(n, p, device='cpu')
         O = torch.empty(m, p, device='cpu')
 
-        flash_attn = FlashAttention(Q.half().flatten(), K.half().flatten(), V.half().flatten(), O.half().flatten(), m, n, k, p, kTM, kTN, kTK, kTP)
+        flash_attn = FlashAttention(Q.half().flatten(), K.half().flatten(), V.half().flatten(),  m, n, k, p, kTM, kTN, kTK, kTP)
 
         ref_o = flash_attn.forward().half()
 
-        dQ = Q.to('cuda')
-        dK = K.to('cuda')
-        dV = V.to('cuda')
-        dO = O.to('cuda')
+        CUDA_Q = Q.cuda()  
+        CUDA_K = K.cuda()
+        CUDA_V = V.cuda()
 
-        dQ = dQ.half().flatten()
-        dK = dK.half().t().flatten()
-        dV = dV.half().t().flatten()
-        dO = dO.half().flatten()
-
-        flash_attention_fwd(dQ, dK, dV, dO, m, n, k, p)
-
+        tiled_flash_attention = TiledFlashAttention(CUDA_Q, CUDA_K, CUDA_V)
+        O = tiled_flash_attention.forward()
+        
         print('ref_o: ', ref_o)
-        print('dO: ', dO.view(m, p))
+        print('dO: ', O)
 
-        hO = dO.view(m, p).cpu()
+        hO = O.cpu()
 
-    
         # Compare elements one by one and print the different numbers.
         for i in range(m):
             for j in range(p):
