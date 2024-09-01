@@ -167,8 +167,6 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
     InType* sK_ptr = shm + SharedQ::kNumel;
     InType* sV_ptr = shm + SharedQ::kNumel + SharedK::kNumel;
 
-    int tid = threadIdx.x;
-
     GIteratorQ gQs(Q);
     SharedQ sQ(sQ_ptr);
     RegQ rQ;
@@ -258,12 +256,14 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         row_max(attn_block, cur_max_vec);
 
 #ifdef DEBUG
+        int tid = threadIdx.x;
         if (tid < 32) {
             print_vec(cur_max_vec, tid);
         }
 #endif
 
 #ifdef DEBUG
+        int tid = threadIdx.x;
         if (tid < 32) {
             print_acc(attn_block, tid);
         }

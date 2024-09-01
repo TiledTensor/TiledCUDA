@@ -101,7 +101,7 @@ class TestFlashAttention(unittest.TestCase):
         tiled_flash_attention = TiledFlashAttention(CUDA_Q, CUDA_K, CUDA_V)
         O = tiled_flash_attention.forward()
         
-        print('ref_o: ', ref_o)
+        print('CPU Reference O: ', ref_o)
         print('TiledCUDA O: ', O)
 
         hO = O.cpu()

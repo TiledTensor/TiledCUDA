@@ -25,7 +25,13 @@ include_directories(include)
 add_subdirectory(src)
 add_subdirectory(tests/cpp)
 
-# TODO(KuangjuX): Traverse and query the examples under the `examples` directory, and include them.
-add_subdirectory(examples/cpp/gemm)
-add_subdirectory(examples/cpp/b2b_gemm)
-add_subdirectory(examples/cpp/flash_attn)
+
+set(EXAMPLES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/examples/cpp")
+file(GLOB_RECURSE SUBDIRS "${EXAMPLES_DIR}/*")
+
+foreach(EXAMPLE_DIR ${SUBDIRS})
+  if(IS_DIRECTORY ${EXAMPLE_DIR})
+    get_filename_component(EXAMPLE_NAME ${EXAMPLE_DIR} NAME)
+    add_subdirectory(${EXAMPLE_DIR})
+  endif()
+endforeach()
