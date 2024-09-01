@@ -113,8 +113,8 @@ class TestFlashAttention(unittest.TestCase):
             for j in range(p):
                 if abs(hO[i][j] - ref_o[i][j]) > 8e-2:
                     print('(', i, ', ', j, ')')
-                    print('hO: ', hO[i][j])
-                    print('ref_o: ', ref_o[i][j])
+                    print('TiledCUDA O: ', hO[i][j])
+                    print('CPU Reference O: ', ref_o[i][j])
 
                     passed = False
                     break
