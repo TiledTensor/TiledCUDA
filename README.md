@@ -8,12 +8,10 @@
 
 TildedCUDA adopts a hardware bottom-up approach by building kernels around the core concept of the **BaseTile**. The shapes of these BaseTiles align with TensorCore's instruction shape and encapsulate hardware-dependent performance parameters to optimally utilize TensorCore's capabilities. Serving as building blocks, these BaseTiles are then combined to construct larger tiles in both temporal and spatial dimensions, enabling users to process larger tiles composed of BaseTiles for their applications.
 
-<details>
-<summary>Latest News 🔥</summary>
+## Latest News 🔥
 
-- [2024/8/30] TiledCUDA supported FlashAttention-v2, [FlashAttention-v2 Example](src/kernels/flash_attn.cu)
+- [2024/8/30] TiledCUDA supported FlashAttention-v2, [FlashAttention-v2 Example](src/kernels/flash_attn.cu).
 
-</details>
 
 ## Example
 
