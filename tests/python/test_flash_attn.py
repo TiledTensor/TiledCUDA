@@ -5,47 +5,46 @@ import torch
 import context
 from pytiledcuda import TiledFlashAttention
 
+
 class FlashAttention:
 
-    def __init__(self, Q, K, V,  m, n, k, p, kTM, kTN, kTK, kTP):
-        self.m = m
-        self.n = n
-        self.k = k
-        self.p = p
+    def __init__(self, query, key, value, M, N, K, P, kTM, kTN, kTK, kTP):
+        self.M = M
+        self.N = N
+        self.K = K
+        self.P = P
 
         self.kTM = kTM
         self.kTN = kTN
         self.kTK = kTK
         self.kTP = kTP
 
-        self.Q = Q # m * k
-        self.K = K # n * k
-        self.V = V # n * p
-        self.O = torch.empty(m, p, device = 'cpu')
-
+        self.query = query
+        self.key = key
+        self.value = value
+        self.output = torch.empty(M, P, device='cpu')
 
     def forward(self):
-         N = self.n // self.kTN
+        iter_n = self.N // self.kTN
 
-         prev_maxes = torch.zeros(self.m, 1, device='cpu')
-         prev_sums = torch.zeros(self.m, 1, device='cpu')
+        prev_maxes = torch.zeros(self.M, 1, device='cpu')
+        prev_sums = torch.zeros(self.M, 1, device='cpu')
 
-         o = self.O.view(self.m, self.p)
+        output = self.output.view(self.M, self.P)
 
-         dK = self.K.view(self.k, self.n)
-         dV = self.V.view(self.n, self.p)
+        dK = self.key.view(self.K, self.N)
+        dV = self.value.view(self.N, self.P)
 
-         ks = torch.chunk(dK, N, dim=-1)
-         vs = torch.chunk(dV, N, dim=-2)
+        ks = torch.chunk(dK, iter_n, dim=-1)
+        vs = torch.chunk(dV, iter_n, dim=-2)
 
-
-         for n in range(N):
-            q = self.Q.view(self.m, self.k) # m * k
+        for n in range(iter_n):
+            q = self.query.view(self.M, self.K)  # m * k
 
             k = ks[n]
             v = vs[n]
-            
-            attn_weights = q @ k # m * ktn
+
+            attn_weights = q @ k  # m * ktn
 
             # reduce maxes
             cur_maxes, _ = torch.max(attn_weights, dim=-1, keepdim=True)
@@ -53,10 +52,10 @@ class FlashAttention:
             # unnormalized attention score @ values
             exp_values = exp_weights @ v
             # move the normalization step to the very end of the attention computation.
-            cur_sums = torch.sum(exp_weights, dim=-1, keepdim=True) # l(x_cur)
+            cur_sums = torch.sum(exp_weights, dim=-1, keepdim=True)  # l(x_cur)
 
             # =======================    renormalization  ======================#
-            new_maxes = torch.max(cur_maxes, prev_maxes) # update m(x)
+            new_maxes = torch.max(cur_maxes, prev_maxes)  # update m(x)
             # print('new_maxes: ', new_maxes.flatten())
             # renormalization factor for the previous block
             renorm_prev = torch.exp(prev_maxes - new_maxes)
@@ -66,23 +65,22 @@ class FlashAttention:
             # update normalization factor l(x)
             new_sums = renorm_prev * prev_sums + renorm_cur * cur_sums
 
-            o = (o * prev_sums * renorm_prev +
-                renorm_cur * exp_values) / new_sums
+            output = (output * prev_sums * renorm_prev +
+                      renorm_cur * exp_values) / new_sums
 
             prev_sums = new_sums
             prev_maxes = new_maxes
 
-         self.O = o
+        self.output = output
 
-         return self.O
-
+        return self.output
 
 
 class TestFlashAttention(unittest.TestCase):
 
     def setUp(self):
         torch.manual_seed(1234)
-    
+
     def run_flash_attention(self, m, n, k, p, kTM, kTN, kTK, kTP):
 
         Q = torch.randn(m, k, device='cpu')
@@ -90,17 +88,20 @@ class TestFlashAttention(unittest.TestCase):
         V = torch.randn(n, p, device='cpu')
         O = torch.empty(m, p, device='cpu')
 
-        flash_attn = FlashAttention(Q.half().flatten(), K.half().flatten(), V.half().flatten(),  m, n, k, p, kTM, kTN, kTK, kTP)
+        flash_attn = FlashAttention(Q.half().flatten(),
+                                    K.half().flatten(),
+                                    V.half().flatten(), m, n, k, p, kTM, kTN,
+                                    kTK, kTP)
 
         ref_o = flash_attn.forward().half()
 
-        CUDA_Q = Q.cuda()  
+        CUDA_Q = Q.cuda()
         CUDA_K = K.cuda()
         CUDA_V = V.cuda()
 
         tiled_flash_attention = TiledFlashAttention(CUDA_Q, CUDA_K, CUDA_V)
         O = tiled_flash_attention.forward()
-        
+
         print('CPU Reference O: ', ref_o)
         print('TiledCUDA O: ', O)
 
@@ -118,50 +119,48 @@ class TestFlashAttention(unittest.TestCase):
 
                     passed = False
                     break
-        
+
         assert passed
 
-
-
     def test_flash_attention_v0(self):
-        m = 64
-        n = 64
-        k = 128 
-        p = 128
+        M = 64
+        N = 64
+        K = 128
+        P = 128
 
         kTM = 64
         kTN = 64
         kTK = 128
         kTP = 128
 
-        self.run_flash_attention(m, n, k, p, kTM, kTN, kTK, kTP)
+        self.run_flash_attention(M, N, K, P, kTM, kTN, kTK, kTP)
 
     def test_flash_attention_v1(self):
-        m = 64
-        n = 128
-        k = 128 
-        p = 128
+        M = 64
+        N = 128
+        K = 128
+        P = 128
 
         kTM = 64
         kTN = 64
         kTK = 128
         kTP = 128
 
-        self.run_flash_attention(m, n, k, p, kTM, kTN, kTK, kTP)
+        self.run_flash_attention(M, N, K, P, kTM, kTN, kTK, kTP)
 
     def test_flash_attention_v2(self):
-        m = 64
-        n = 256
-        k = 128 
-        p = 128
+        M = 64
+        N = 256
+        K = 128
+        P = 128
 
         kTM = 64
         kTN = 64
         kTK = 128
         kTP = 128
 
-        self.run_flash_attention(m, n, k, p, kTM, kTN, kTK, kTP)
+        self.run_flash_attention(M, N, K, P, kTM, kTN, kTK, kTP)
+
 
 if __name__ == "__main__":
-
     unittest.main()
