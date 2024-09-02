@@ -20,12 +20,17 @@ option(ENABLE_DEBUG "Enable debug mode" OFF)
 include(generic)
 include(dependencies)
 
-
 include_directories(include)
 add_subdirectory(src)
 add_subdirectory(tests/cpp)
 
-# TODO(KuangjuX): Traverse and query the examples under the `examples` directory, and include them.
-add_subdirectory(examples/cpp/gemm)
-add_subdirectory(examples/cpp/b2b_gemm)
-add_subdirectory(examples/cpp/flash_attn)
+set(EXAMPLES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/examples/cpp")
+file(GLOB SUBDIRS "${EXAMPLES_DIR}/*")
+
+foreach(SUBDIR ${SUBDIRS})
+  message(STATUS "Add Example: ${SUBDIR}")
+  if(IS_DIRECTORY ${SUBDIR})
+    message(STATUS "Adding example: ${EXAMPLE_DIR}")
+    add_subdirectory(${SUBDIR})
+  endif()
+endforeach()
