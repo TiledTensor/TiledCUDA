@@ -56,7 +56,6 @@ class FlashAttention:
 
             # =======================    renormalization  ======================#
             new_maxes = torch.max(cur_maxes, prev_maxes)  # update m(x)
-            # print('new_maxes: ', new_maxes.flatten())
             # renormalization factor for the previous block
             renorm_prev = torch.exp(prev_maxes - new_maxes)
             # renormalization factor for the current block
