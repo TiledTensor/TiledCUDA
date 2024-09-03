@@ -218,6 +218,9 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
     RowSum row_sum;
     CopyVec copy_vec;
 
+    ConvertAcc cast_acc;  // Convert acc to half precision
+    ConvertO cast_o;      // Convert half precision to float.
+
     BroadcastSub broadcast_sub;
     BroadcastMul broadcast_mul;
     BroadcastDiv broadcast_div;
@@ -249,7 +252,6 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         load_rv(sV, rV);
         __syncthreads();
 
-        ConvertAcc cast_acc;  // Convert acc to half precision
         cast_acc(attn_block_f32, attn_block);
 
         // Compute row max.
@@ -297,9 +299,6 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         // Compute unnormized attention block.
         compute::gemm_(attn_block, rV, exp_values_f32);
 
-        __syncthreads();
-
-        ConvertO cast_o;  // Convert half precision to float.
         cast_o(exp_values_f32, exp_values);
 
         broadcast_mul(prev_norm_mul_sum, rO);
@@ -318,7 +317,6 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
         // Clear the accumulator.
         attn_block_f32.clear();
         exp_values_f32.clear();
-        exp_values.clear();
     }
     __syncthreads();
 
