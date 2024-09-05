@@ -1,33 +1,6 @@
+#include "gemm.hpp"
 #include "util.hpp"
 #include "util/cuda_timer.hpp"
-
-template <typename InType, typename AccType, typename IteratorA, typename RegA,
-          typename LoaderA, typename IteratorB, typename RegB, typename LoaderB,
-          typename GlobalC, typename RegC, typename CStorer>
-__global__ void simple_gemm(const InType* dA, const InType* dB, AccType* dC) {
-    IteratorA gAs(dA);
-    RegA rA;
-    LoaderA loader_a;
-
-    IteratorB gBs(dB);
-    RegB rB;
-    LoaderB loader_b;
-
-    RegC acc;
-
-    for (int k = 0; k < IteratorA::sc1; ++k) {
-        loader_a(gAs(k), rA);
-        loader_b(gBs(k), rB);
-        __syncthreads();
-
-        compute::gemm_(rA, rB, acc);
-    }
-    __syncthreads();
-
-    GlobalC gC(dC);
-    CStorer storer_c;
-    storer_c(acc, gC);
-}
 
 int main() {
     using InType = __half;
