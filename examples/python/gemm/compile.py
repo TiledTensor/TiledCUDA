@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import os
 import importlib.util
+import shutil
 from collections import defaultdict
 
 import subprocess
@@ -52,7 +53,7 @@ class Compile:
         else:
             raise RuntimeError("Cannot find cuda path")
 
-    def _create_entry_code(self, M: int, N: int, K: int):
+    def _create_entry_code(self, M: int, N: int, K: int, TM: int, TN: int):
         entry_code_path = "entry.py"
         spec = importlib.util.spec_from_file_location("entry_code",
                                                       entry_code_path)
@@ -63,15 +64,28 @@ class Compile:
         shape["kM"] = M
         shape["kN"] = N
         shape["kK"] = K
+        shape["kTM"] = TM
+        shape["kTN"] = TN
 
         return foo.types.format_map(shape) + foo.entry
 
-    def compile(self, M, N, K, compute_capability="80", timeout: float = None):
+    def compile(self,
+                M: int,
+                N: int,
+                K: int,
+                TM: int,
+                TN: int,
+                timeout: float = None):
         temp_dir = self.tmp_dir
-        lib_name = self.file_name.replace(".cu", ".so")
+
+        prefix_name = os.path.splitext(self.file_name)[0]
+        lib_name = f"{prefix_name}_{M}_{N}_{K}_{TM}_{TN}.so"
         lib_path = os.path.join(temp_dir, lib_name)
 
-        entry_code = self._create_entry_code(M, N, K)
+        if os.path.exists(lib_path):
+            return lib_path
+
+        entry_code = self._create_entry_code(M, N, K, TM, TN)
 
         source_path = os.path.join(temp_dir, self.file_name)
         with open(source_path, "w") as f:

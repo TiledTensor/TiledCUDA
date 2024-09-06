@@ -10,9 +10,9 @@ __all__ = [
 class GemmFunc(torch.autograd.Function):
 
     @staticmethod
-    def forward(ctx, A, B, C, M, N, K):
+    def forward(ctx, A, B, C, M, N, K, kM, kN):
         builder = Compile(file_name="gemm.cu", tmp_dir="tmp")
-        lib_name = builder.compile(M, N, K)
+        lib_name = builder.compile(M, N, K, kM, kN)
 
         if lib_name is None:
             raise RuntimeError("Failed to compile the library.")

@@ -1,36 +1,40 @@
 #pragma once
 
-#include "cell/mod.hpp"
-#include "types/mod.hpp"
-
 using namespace tiledcuda;
 using namespace tiledcuda::cell;
 using namespace tiledcuda::cell::compute;
 
-template <typename InType, typename AccType, typename IteratorA, typename RegA,
-          typename LoaderA, typename IteratorB, typename RegB, typename LoaderB,
+template <typename InType, typename AccType,                    //
+          const int kM, const int kN, const int kK,             //
+          const int kTM, const int kTN,                         //
+          typename IteratorA, typename RegA, typename ALoader,  //
+          typename IteratorB, typename RegB, typename BLoader,  //
           typename GlobalC, typename RegC, typename CStorer>
 __global__ void gemm(const InType* dA, const InType* dB, AccType* dC) {
-    IteratorA gAs(dA);
-    RegA rA;
-    LoaderA loader_a;
+    int offset_a = blockIdx.x * kTM * kK;
+    int offset_b = blockIdx.y * kTN * kK;
+    int offset_c = blockIdx.x * kTM * kN + blockIdx.y * kTN;
 
-    IteratorB gBs(dB);
+    IteratorA gAs(dA + offset_a);
+    RegA rA;
+    ALoader loader_a;
+
+    IteratorB gBs(dB + offset_b);
     RegB rB;
-    LoaderB loader_b;
+    BLoader loader_b;
 
     RegC acc;
+    GlobalC gC(dC + offset_c);
+    CStorer storer_c;
 
     for (int k = 0; k < IteratorA::sc1; ++k) {
         loader_a(gAs(k), rA);
         loader_b(gBs(k), rB);
         __syncthreads();
 
-        gemm_(rA, rB, acc);
+        compute::gemm_(rA, rB, acc);
     }
     __syncthreads();
 
-    GlobalC gC(dC);
-    CStorer storer_c;
     storer_c(acc, gC);
 }

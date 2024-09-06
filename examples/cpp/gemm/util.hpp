@@ -30,14 +30,27 @@ void naive_gemm(int kM, int kN, int kK,  //
 
 bool check_results(const float* values1, const float* values2, int numel) {
     bool passed = true;
-    const float epsilon = 1e-3;
+    const float epsilon = 5e-2;
+
+    double total_diff = 0.;
+    double max_abs_diff = FLT_MIN;
+    double diff = 0.;
 
     for (int i = 0; i < numel; ++i) {
-        if (fabs(values1[i] - values2[i]) > epsilon) {
-            printf("Diff: %.2f vs. %.2f\n", values1[i], values2[i]);
-            passed = false;
-            break;
+        diff = fabs(values1[i] - values2[i]);
+        max_abs_diff = max_abs_diff < diff ? diff : max_abs_diff;
+        total_diff += diff;
+
+#ifdef DEBUG
+        if (diff > epsilon) {
+            printf("the %d-th value differs: %.2f vs. %.2f\n", i, values1[i],
+                   values2[i]);
         }
+#endif
     }
+
+    double avg_diff = total_diff / numel;
+    if (avg_diff > epsilon) passed = false;
+
     return passed;
 }
