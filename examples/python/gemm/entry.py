@@ -12,10 +12,10 @@ static constexpr int kK = {kK};
 static constexpr int kTM = {kTM};
 static constexpr int kTN = {kTN};
 
-using WarpLayout = tl::RowMajor<2, 2>;
+using WarpLayout = tl::RowMajor<{warp_per_row}, {warp_per_col}>;
 
 using BaseShape = traits::BaseTileShape<InType>;
-static constexpr int kChunkK = 128;
+static constexpr int kChunkK = {kChunkK};
 
 static constexpr int kThreads = tl::get_numel<WarpLayout> * 32;
 static constexpr int kWarpPerRow = tl::num_rows<WarpLayout>;

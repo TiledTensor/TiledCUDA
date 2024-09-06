@@ -1,4 +1,5 @@
 import torch
+from torch import Tensor
 
 from compile import Compile
 
@@ -10,9 +11,23 @@ __all__ = [
 class GemmFunc(torch.autograd.Function):
 
     @staticmethod
-    def forward(ctx, A, B, C, M, N, K, kM, kN):
-        builder = Compile(file_name="gemm.cu", tmp_dir="tmp")
-        lib_name = builder.compile(M, N, K, kM, kN)
+    def forward(
+        ctx,
+        A: Tensor,
+        B: Tensor,
+        C: Tensor,
+        M: int,
+        N: int,
+        K: int,
+        kM: int,
+        kN: int,
+        kChunkK: int,
+        warp_per_row: int,
+        warp_per_col: int,
+    ) -> Tensor:
+        builder = Compile(file_prefix="gemm", tmp_dir="tmp")
+        lib_name = builder.compile(M, N, K, kM, kN, kChunkK, warp_per_row,
+                                   warp_per_col)
 
         if lib_name is None:
             raise RuntimeError("Failed to compile the library.")

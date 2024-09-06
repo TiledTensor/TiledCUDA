@@ -22,9 +22,9 @@ csrc_include_dir = os.path.join(os.path.dirname(__file__), "csrc")
 
 class Compile:
 
-    def __init__(self, file_name, tmp_dir):
+    def __init__(self, file_prefix, tmp_dir):
         self.tmp_dir = tmp_dir
-        self.file_name = file_name
+        self.file_prefix = file_prefix
 
         if not os.path.exists(self.tmp_dir):
             os.makedirs(self.tmp_dir)
@@ -53,7 +53,17 @@ class Compile:
         else:
             raise RuntimeError("Cannot find cuda path")
 
-    def _create_entry_code(self, M: int, N: int, K: int, TM: int, TN: int):
+    def _create_entry_code(
+        self,
+        M: int,
+        N: int,
+        K: int,
+        TM: int,
+        TN: int,
+        kChunkK: int,
+        warp_per_row: int,
+        warp_per_col: int,
+    ):
         entry_code_path = "entry.py"
         spec = importlib.util.spec_from_file_location("entry_code",
                                                       entry_code_path)
@@ -66,6 +76,9 @@ class Compile:
         shape["kK"] = K
         shape["kTM"] = TM
         shape["kTN"] = TN
+        shape["kChunkK"] = kChunkK
+        shape["warp_per_row"] = warp_per_row
+        shape["warp_per_col"] = warp_per_col
 
         return foo.types.format_map(shape) + foo.entry
 
@@ -75,19 +88,23 @@ class Compile:
                 K: int,
                 TM: int,
                 TN: int,
+                kChunkK: int,
+                warp_per_row: int,
+                warp_per_col: int,
                 timeout: float = None):
         temp_dir = self.tmp_dir
 
-        prefix_name = os.path.splitext(self.file_name)[0]
-        lib_name = f"{prefix_name}_{M}_{N}_{K}_{TM}_{TN}.so"
-        lib_path = os.path.join(temp_dir, lib_name)
+        file_name = (f"{self.file_prefix}_{M}_{N}_{K}"
+                     f"_{TM}_{TN}_{warp_per_row}_{warp_per_col}")
+        lib_path = os.path.join(temp_dir, f"{file_name}.so")
 
         if os.path.exists(lib_path):
             return lib_path
 
-        entry_code = self._create_entry_code(M, N, K, TM, TN)
+        entry_code = self._create_entry_code(M, N, K, TM, TN, kChunkK,
+                                             warp_per_row, warp_per_col)
 
-        source_path = os.path.join(temp_dir, self.file_name)
+        source_path = os.path.join(temp_dir, f"{file_name}.cu")
         with open(source_path, "w") as f:
             f.write(entry_code)
 
