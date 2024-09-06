@@ -4,14 +4,24 @@ from torch import Tensor
 from gemm import gemm_func
 
 
-def run_unittest(a: Tensor, b: Tensor, c: Tensor, M, N, K, TM, TN):
+def run_unittest(a: Tensor,
+                 b: Tensor,
+                 c: Tensor,
+                 M,
+                 N,
+                 K,
+                 TM,
+                 TN,
+                 debug_print=False):
     gemm_func(a, b, c, M, N, K, TM, TN)
-    print("Result:")
-    print(c)
-
-    print("\nReference:")
     ref_c = a @ b.t()
-    print(ref_c)
+
+    if debug_print:
+        print("Result:")
+        print(c)
+
+        print("\nReference:")
+        print(ref_c)
 
     if not torch.allclose(c.half(), ref_c, atol=1e-3):
         return False
@@ -29,9 +39,8 @@ def run_test(M: int, N: int, K: int, TM: int, TN: int):
 
     if not run_unittest(a, b, c, M, N, K, TM, TN):
         raise RuntimeError("Failed unittest.")
-    print("Passed unittest.")
 
-    for i in range(5):  # warm up
+    for _ in range(5):  # warm up
         gemm_func(a, b, c, M, N, K, TM, TN)
         ref_c = a @ b.t()
 
@@ -61,7 +70,29 @@ if __name__ == "__main__":
     M = 4096
     N = 4096
     K = 4096
-    time1, time2 = run_test(M, N, K, 256, 128)
-    print("Shape\ttiledcuda(ms)\tcublass(ms)\tRatio")
-    print("[{}, {}, {}]\t{:.4f}\t{:.4f}\t{:.3f}".format(
-        M, N, K, time1, time2, time1 / time2))
+
+    print("Whole Shape\tBlock Shape\ttiledcuda(ms)\tcublass(ms)\tRatio")
+
+    TM = 64
+    TN = 64
+    time1, time2 = run_test(M, N, K, TM, TN)
+    print("[{}, {}, {}]\t[{}, {}]\t{:.4f}\t{:.4f}\t{:.3f}".format(
+        M, N, K, TM, TN, time1, time2, time1 / time2))
+
+    TM = 64
+    TN = 128
+    time1, time2 = run_test(M, N, K, TM, TN)
+    print("[{}, {}, {}]\t[{}, {}]\t{:.4f}\t{:.4f}\t{:.3f}".format(
+        M, N, K, TM, TN, time1, time2, time1 / time2))
+
+    TM = 128
+    TN = 128
+    time1, time2 = run_test(M, N, K, TM, TN)
+    print("[{}, {}, {}]\t[{}, {}]\t{:.4f}\t{:.4f}\t{:.3f}".format(
+        M, N, K, TM, TN, time1, time2, time1 / time2))
+
+    TM = 256
+    TN = 128
+    time1, time2 = run_test(M, N, K, TM, TN)
+    print("[{}, {}, {}]\t[{}, {}]\t{:.4f}\t{:.4f}\t{:.3f}".format(
+        M, N, K, TM, TN, time1, time2, time1 / time2))
