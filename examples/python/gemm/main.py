@@ -15,6 +15,7 @@ def run_unittest(a: Tensor,
                  TN: int,
                  kChunkK: int,
                  warp_layout: Tuple,
+                 epsilon: float = 5e-2,
                  debug_print=False):
     gemm_func(a, b, c, M, N, K, TM, TN, kChunkK, *warp_layout)
     ref_c = a @ b.t()
@@ -27,7 +28,7 @@ def run_unittest(a: Tensor,
         print(ref_c)
 
     avg_diff = (torch.sum(torch.abs(ref_c - c)) / (M * N)).item()
-    if avg_diff > 5e-2:
+    if avg_diff > epsilon:
         return False
     else:
         return True
