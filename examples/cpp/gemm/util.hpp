@@ -3,6 +3,8 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
+#include <cfloat>
+
 template <const int kM, const int kN, const int kK>
 using GemmShape = TileShape<kM, kN, kK>;
 
