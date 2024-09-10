@@ -318,7 +318,6 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kRowMajor> {
 
     DEVICE void copy(const DType* src, DType* dst) {
         int offset = 0;
-
 #pragma unroll
         for (int i = 0; i < kExecCount; ++i) {
             auto src_tensor =

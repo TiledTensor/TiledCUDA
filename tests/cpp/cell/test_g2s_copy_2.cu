@@ -11,6 +11,22 @@ namespace tiledcuda::testing {
 using namespace cell;
 
 namespace {
+
+DEVICE bool check_results(const float* data1, const float* data2, int numel,
+                          const float epsilon = 1e-4) {
+    float diff = 0.;
+    for (int i = 0; i < numel; ++i) {
+        diff = abs(data1[i] - data2[i]);
+        if (diff > epsilon) {
+            printf("Error data[%d]; Expected: %.0f, Got: %.0f\n", i, data1[i],
+                   data2[i]);
+            return false;
+        }
+    }
+
+    return true;
+}
+
 template <typename Element, typename SrcTile, typename DstTile, typename Loader,
           typename Storer>
 __global__ void copy_g2s(const Element* src_ptr, Element* dst_ptr,
@@ -98,8 +114,7 @@ __global__ void s2g_storer(Element* dst_ptr, Storer& storer) {
     storer(src, dst);
 
     if (thread0()) {
-        // src.dump_value();
-        dst.dump_value();
+        assert(check_results(buf, dst_ptr, DstTile::kNumel));
     }
 }
 
@@ -115,6 +130,7 @@ void run_test_storer() {
 
     using SrcTile = SharedTile<Element, tl::RowMajor<kRows, kCols>>;
     using DstTile = GlobalTile<Element, tl::RowMajor<kRows, kCols>>;
+
     using Storer = copy::SharedToGlobalStorer<SrcTile, WarpLayout>;
     Storer storer;
 
@@ -127,18 +143,22 @@ void run_test_storer() {
 }
 }  // namespace
 
-// TEST(GlobalToSharedLoad, test_g2s_loader) {
-//     run_test<__half, tl::RowMajor<1, 1>, 16, 16, false>();
-//     run_test<__half, tl::RowMajor<1, 1>, 32, 32, false>();
-//     run_test<__half, tl::RowMajor<2, 2>, 64, 64, false>();
+TEST(GlobalToSharedLoad, test_g2s_loader) {
+    run_test<__half, tl::RowMajor<1, 1>, 16, 16, false>();
+    run_test<__half, tl::RowMajor<1, 1>, 32, 32, false>();
+    run_test<__half, tl::RowMajor<2, 2>, 64, 64, false>();
 
-//     run_test<__half, tl::RowMajor<1, 1>, 16, 16, true>();
-//     run_test<__half, tl::RowMajor<1, 1>, 32, 32, true>();
-//     run_test<__half, tl::RowMajor<2, 2>, 64, 64, true>();
-// }
+    run_test<__half, tl::RowMajor<1, 1>, 16, 16, true>();
+    run_test<__half, tl::RowMajor<1, 1>, 32, 32, true>();
+    run_test<__half, tl::RowMajor<2, 2>, 64, 64, true>();
+}
 
 TEST(SharedToGlobalStore, test_non_swizzled_layout) {
     run_test_storer<float, tl::RowMajor<1, 1>, 16, 16>();
+    run_test_storer<float, tl::RowMajor<1, 4>, 32, 128>();
+    run_test_storer<float, tl::RowMajor<4, 1>, 192, 32>();
+    run_test_storer<float, tl::RowMajor<2, 2>, 64, 128>();
+    run_test_storer<float, tl::RowMajor<2, 4>, 96, 128>();
 }
 
 }  // namespace tiledcuda::testing
