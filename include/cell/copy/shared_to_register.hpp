@@ -122,7 +122,7 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
 };
 
 template <typename Shared, typename Reg_, const int kRowExec_,
-          const int kColExec_, CopyInst kCopyInst>
+          const int kColExec_, const tl::Layout kType>
 struct RegToSharedStorerImpl {
     using DType = typename Shared::DType;
     using Reg = Reg_;
@@ -133,59 +133,75 @@ struct RegToSharedStorerImpl {
 template <typename Shared, typename Reg_, const int kRowExec_,
           const int kColExec_>
 struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
-                             CopyInst::kStoreShared32>
-    : public StoreMmmaBase<Shared> {
-    using Base = StoreMmmaBase<Shared>;
-
+                             tl::Layout::kRowMajor> {
     using Reg = Reg_;
     using DType = typename Shared::DType;
     using BaseShape = BaseTileShape<DType>;
 
+    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
+
+    // the thread layout for wmma's output tile.
+    using ThreadLayout = tile_layout::RowMajor<8, 4>;
+
+    static constexpr int kWarpSize = 32;
+
+    // in the output of a wmma tile, each thread stores four segments in 2x2
+    // layout, and each fragment contains 2 elements regardless of the data type
+    static constexpr int kSegRows = 2;
+    static constexpr int kSegCols = 2;
+    // the number of elements per segment, vectorized instruction are used to
+    // access `kElemPerSeg` elements.
+    static constexpr int kElemPerSeg = 2;
+    static constexpr int kBitPerAccess = sizeof(DType) * 8 * kElemPerSeg;
+
     static constexpr int kRowExec = kRowExec_;
     static constexpr int kColExec = kColExec_;
 
-    // strides to iterate over each 16x16 `BaseTile` in the shared memory
-    static constexpr int kTileRstride =  // row stride for a `BaseTile`
-        Shared::kType == tl::Layout::kRowMajor
-            ? BaseShape::kRows * Shared::kRowStride
-            : BaseShape::kRows;
-    static constexpr int kTileCstride =
-        Shared::kType == tl::Layout::kRowMajor
-            ? BaseShape::kCols
-            : BaseShape::kCols * Shared::kColStride;
-
-    // Given the lane position of the current thread, calculate the strides
-    // needed to address the data within the 16x16 `BaseTile` for the current
-    // thread. These strides corresponds to the thread layout and specific
-    // instruction used.
-    static constexpr int kLaneRstride = Shared::kType == tl::Layout::kRowMajor
-                                            ? Shared::kRowStride
-                                            : Base::kElemPerSeg;
-    static constexpr int kLaneCstride = Shared::kType == tl::Layout::kRowMajor
-                                            ? Base::kElemPerSeg
-                                            : Shared::kColStride;
+    using BaseTilesLayout =
+        tl::MatrixLayout<kRowExec, kColExec,
+                         BaseShape::kRows * Shared::kRowStride,
+                         BaseShape::kCols>;
 
     DEVICE void operator()(const Reg& src, DType* dst) {
-        DType* data;
-        int lane_row = this->lane_row_id();
-        int lane_col = this->lane_col_id();
+        int lane_row = lane_row_id();
+        int lane_col = lane_col_id() * kElemPerSeg;
+
+        int lane_offset = in_base_tile_(lane_row, lane_col);
+        int offset = 0;
 
 #pragma unroll
         for (int i = 0; i < kRowExec; ++i) {
 #pragma unroll
             for (int j = 0; j < kColExec; ++j) {
-                // 2. advance pointer to the 16x128-bits `BaseTile` indexed by
-                // (i, j).
-                data = dst + (i * kTileRstride + j * kTileCstride);
-                // 3. advance the pointer to data accessed by the current thread
-                // inside a 16x16 `BaseTile`.
-                data += (lane_row * kLaneRstride + lane_col * kLaneCstride);
-
-                // store the 16x16 `BaseTile` to shared memory
-                this->store_base_tile(src(i, j), data);
+                offset = base_tiles_(i, j) + lane_offset;
+                storer_(src(i, j).data(), dst + offset);
             }
         }
-    };
+    }
+
+  private:
+    // Each thread stores 8 numbers in a 16x16 `BaseTile`. These 8 numbers are
+    // split into 4 segments, with each segment containing 2 numbers.
+    // `kRStride`and `kCStride` calculate the row and column strides,
+    // respectively, when iterating over these 4 segments in shared memory.
+    static constexpr int kRstride =
+        tl::num_rows<ThreadLayout> * Shared::kRowStride / kElemPerSeg;
+    static constexpr int kCstride = tl::num_cols<ThreadLayout>;
+
+    using Storer = BaseTileStorer<DType, kSegRows, kSegCols, kRstride, kCstride,
+                                  kBitPerAccess>;
+
+    DEVICE int lane_row_id() {
+        return (threadIdx.x % kWarpSize) / tl::num_cols<ThreadLayout>;
+    }
+
+    DEVICE int lane_col_id() {
+        return (threadIdx.x % kWarpSize) % tl::num_cols<ThreadLayout>;
+    }
+
+    BaseTilesLayout base_tiles_;
+    BaseTileSharedLayout in_base_tile_;
+    Storer storer_;
 };
 }  // namespace  detail
 
@@ -241,6 +257,7 @@ struct RegToSharedStorer : public Base {
     using Reg = Reg_;
     // elementary data type stored in the register tile.
     using DType = typename Reg::DType::DType;
+
     using BaseShape = BaseTileShape<DType>;
 
     using WarpLayout = WarpLayout_;
@@ -258,6 +275,9 @@ struct RegToSharedStorer : public Base {
                       "The number of elements held in the local register file "
                       "by all threads in the CTA must be the same as the "
                       "number held in the shared memory tile.");
+        static_assert(
+            Shared::kType == Reg::kType,
+            "The layout of Shared and Register tile must be the same.");
 
         DType* dst_ptr = dst.mutable_data();  // pointer for shared memory tile
 
@@ -274,9 +294,8 @@ struct RegToSharedStorer : public Base {
         // `Cont`.
         int offset = Base::template get_warp_offset<Shared>();
 
-        using Storer =
-            detail::RegToSharedStorerImpl<Shared, Reg, kRowExec, kColExec,
-                                          CopyInst::kStoreShared32>;
+        using Storer = detail::RegToSharedStorerImpl<Shared, Reg, kRowExec,
+                                                     kColExec, Shared::kType>;
         Storer storer;
         storer(src, dst_ptr + offset);
     }

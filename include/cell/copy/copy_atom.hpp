@@ -60,60 +60,55 @@ struct LoadMatBase {
     }
 };
 
-template <typename Shared>
-struct StoreMmmaBase {
-    using DType = Shared::DType;
+template <typename DType_, const int kSegRows_, const int kSegCols_,
+          const int kRstride_, const int kCstride_, const size_t kBitPerAccess>
+struct BaseTileStorer;
 
-    // the thread layout for wmma's output tile.
-    using ThreadLayout = tile_layout::RowMajor<8, 4>;
+template <typename DType_, const int kSegRows_, const int kSegCols_,
+          const int kRstride_, const int kCstride_>
+struct BaseTileStorer<DType_, kSegRows_, kSegCols_, kRstride_, kCstride_, 32> {
+    using DType = DType_;
+    static constexpr int kSegRows = kSegRows_;
+    static constexpr int kSegCols = kSegCols_;
+    static constexpr int kRstride = kRstride_;
+    static constexpr int kCstride = kCstride_;
 
-    // in the output of a wmma tile, each thread stores four segments in 2x2
-    // layout, and each fragment contains 2 elements
-    static constexpr int kElemPerSeg = 2;
-    static constexpr int kSegRows = 2;
-    static constexpr int kSegCols = 2;
-    static constexpr int kElemPerRow = kElemPerSeg * kSegCols;
+    DEVICE void operator()(const DType* src_, DType* dst_) {
+        const int* src = reinterpret_cast<const int*>(src_);
+        int* dst = reinterpret_cast<int*>(dst_);
 
-    // Each thread stores 8 numbers in a 16x16 `BaseTile`. These 8 numbers are
-    // split into 4 segments, with each segment containing 2 numbers. `kRStride`
-    // and `kCStride` calculate the row and column strides, respectively, when
-    // iterating over these 4 segments in shared memory.
-    static constexpr int kRstride =
-        Shared::kType == tl::Layout::kRowMajor
-            ? tl::num_rows<ThreadLayout> * Shared::kRowStride
-            : tl::num_rows<ThreadLayout>;
-    static constexpr int kCstride =
-        Shared::kType == tl::Layout::kRowMajor
-            ? kElemPerSeg * tl::num_cols<ThreadLayout>
-            : kElemPerSeg * tl::num_cols<ThreadLayout> * Shared::kColStride;
-
-    DEVICE int lane_row_id() {
-        return (threadIdx.x % warpSize) / tl::num_cols<ThreadLayout>;
+#pragma unroll
+        for (int i = 0; i < kSegCols; ++i) {
+#pragma unroll
+            for (int j = 0; j < kSegRows; ++j) {
+                dst[i * kRstride + j * kCstride] = src[j * kSegCols + i];
+            }
+        }
     }
+};
 
-    DEVICE int lane_col_id() {
-        return (threadIdx.x % warpSize) % tl::num_cols<ThreadLayout>;
-    }
+template <typename DType_, const int kSegRows_, const int kSegCols_,
+          const int kRstride_, const int kCstride_, const size_t kBitPerAccess>
+struct BaseTileStorer;
 
-    /// @brief: Store the `16x16` tensor core WMMA output register tile and
-    ///         convert it into a comprehensive shared memory layout (row-major
-    ///         or column-major).
-    template <typename RegTile>
-    DEVICE void store_base_tile(const RegTile& src, DType* dst) {
-        const DType* data = src.data();
+template <typename DType_, const int kSegRows_, const int kSegCols_,
+          const int kRstride_, const int kCstride_>
+struct BaseTileStorer<DType_, kSegRows_, kSegCols_, kRstride_, kCstride_, 64> {
+    using DType = DType_;
+    static constexpr int kSegRows = kSegRows_;
+    static constexpr int kSegCols = kSegCols_;
+    static constexpr int kRstride = kRstride_;
+    static constexpr int kCstride = kCstride_;
 
-        int src_offset, dst_offset;
-        for (int i = 0; i < kSegRows; ++i) {
-            for (int j = 0; j < kSegCols; ++j) {
-                src_offset = RegTile::kType == tl::Layout::kRowMajor
-                                 ? i * kElemPerRow + j * kElemPerSeg
-                                 : j * kElemPerRow + i * kElemPerSeg;
+    DEVICE void operator()(const DType* src_, DType* dst_) {
+        const int2* src = reinterpret_cast<const int2*>(src_);
+        int2* dst = reinterpret_cast<int2*>(dst_);
 
-                // Be cautious, j and i are swapped here. DONOT change this
-                dst_offset = j * kRstride + i * kCstride;
-
-                dst[dst_offset] = data[src_offset];
-                dst[dst_offset + 1] = data[src_offset + 1];
+#pragma unroll
+        for (int i = 0; i < kSegCols; ++i) {
+#pragma unroll
+            for (int j = 0; j < kSegRows; ++j) {
+                dst[i * kRstride + j * kCstride] = src[j * kSegCols + i];
             }
         }
     }

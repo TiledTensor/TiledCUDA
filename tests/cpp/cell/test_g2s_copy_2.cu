@@ -32,7 +32,7 @@ __global__ void copy_g2s(const Element* src_ptr, Element* dst_ptr,
 }
 
 template <typename Element, typename WarpLayout, const int kRows,
-          const int kCols>
+          const int kCols, const bool kUseSwizzledLayout>
 void run_test() {
     static const int kThreads = tl::get_numel<WarpLayout> * 32;
 
@@ -47,7 +47,6 @@ void run_test() {
 
     using SrcTile = GlobalTile<Element, tl::RowMajor<kRows, kCols>>;
 
-    static constexpr bool kUseSwizzledLayout = true;
     using DstTile =
         SharedTile<Element, tl::RowMajor<kRows, kCols>, kUseSwizzledLayout>;
 
@@ -76,10 +75,14 @@ void run_test() {
 }
 }  // namespace
 
-TEST(GlobalToSharedCopy, test_non_swizzled_layout) {
-    run_test<__half, tl::RowMajor<1, 1>, 16, 16>();
-    run_test<__half, tl::RowMajor<1, 1>, 32, 32>();
-    run_test<__half, tl::RowMajor<2, 2>, 64, 64>();
+TEST(GlobalToSharedLoad, test_g2s_loader) {
+    run_test<__half, tl::RowMajor<1, 1>, 16, 16, false>();
+    run_test<__half, tl::RowMajor<1, 1>, 32, 32, false>();
+    run_test<__half, tl::RowMajor<2, 2>, 64, 64, false>();
+
+    run_test<__half, tl::RowMajor<1, 1>, 16, 16, true>();
+    run_test<__half, tl::RowMajor<1, 1>, 32, 32, true>();
+    run_test<__half, tl::RowMajor<2, 2>, 64, 64, true>();
 }
 
 }  // namespace tiledcuda::testing
