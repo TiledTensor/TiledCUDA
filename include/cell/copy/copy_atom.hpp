@@ -60,6 +60,60 @@ struct LoadMatBase {
     }
 };
 
+template <typename DType_, const int kSegRows_, const int kSegCols_,
+          const int kRstride_, const int kCstride_, const size_t kBitPerAccess>
+struct BaseTileStorer;
+
+template <typename DType_, const int kSegRows_, const int kSegCols_,
+          const int kRstride_, const int kCstride_>
+struct BaseTileStorer<DType_, kSegRows_, kSegCols_, kRstride_, kCstride_, 32> {
+    using DType = DType_;
+    static constexpr int kSegRows = kSegRows_;
+    static constexpr int kSegCols = kSegCols_;
+    static constexpr int kRstride = kRstride_;
+    static constexpr int kCstride = kCstride_;
+
+    DEVICE void operator()(const DType* src_, DType* dst_) {
+        const int* src = reinterpret_cast<const int*>(src_);
+        int* dst = reinterpret_cast<int*>(dst_);
+
+#pragma unroll
+        for (int i = 0; i < kSegCols; ++i) {
+#pragma unroll
+            for (int j = 0; j < kSegRows; ++j) {
+                dst[i * kRstride + j * kCstride] = src[j * kSegCols + i];
+            }
+        }
+    }
+};
+
+template <typename DType_, const int kSegRows_, const int kSegCols_,
+          const int kRstride_, const int kCstride_, const size_t kBitPerAccess>
+struct BaseTileStorer;
+
+template <typename DType_, const int kSegRows_, const int kSegCols_,
+          const int kRstride_, const int kCstride_>
+struct BaseTileStorer<DType_, kSegRows_, kSegCols_, kRstride_, kCstride_, 64> {
+    using DType = DType_;
+    static constexpr int kSegRows = kSegRows_;
+    static constexpr int kSegCols = kSegCols_;
+    static constexpr int kRstride = kRstride_;
+    static constexpr int kCstride = kCstride_;
+
+    DEVICE void operator()(const DType* src_, DType* dst_) {
+        const int2* src = reinterpret_cast<const int2*>(src_);
+        int2* dst = reinterpret_cast<int2*>(dst_);
+
+#pragma unroll
+        for (int i = 0; i < kSegCols; ++i) {
+#pragma unroll
+            for (int j = 0; j < kSegRows; ++j) {
+                dst[i * kRstride + j * kCstride] = src[j * kSegCols + i];
+            }
+        }
+    }
+};
+
 template <class Global, class Shared, const tl::Layout kType>
 struct GlobalToSharedBaseTileLoader {
     using DType = Shared::DType;

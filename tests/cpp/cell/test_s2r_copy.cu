@@ -21,8 +21,6 @@ __device__ bool check_results(const Element* data, int numel);
 
 template <>
 __device__ bool check_results(const __half* data, int numel) {
-    // const float* data_f = reinterpret_cast<const float*>(data);
-
     const float epsilon = 1e-4;
     bool pass_test = true;
 
@@ -76,8 +74,6 @@ __global__ void run_test_load(Copy& copy) {
 #endif
 }
 
-#define DEBUG true
-
 template <typename Shared, typename Reg, typename Loader, typename Storer>
 __global__ void run_test_store(Loader& loader, Storer& storer) {
     using DType = typename Shared::DType;
@@ -92,12 +88,6 @@ __global__ void run_test_store(Loader& loader, Storer& storer) {
     loader(s_tile, r_tile);  // load from shared to register
     __syncthreads();
 
-#if defined(DEBUG)
-    if (thread0()) {
-        printf("register tile:\n");
-        r_tile.dump_value();
-    }
-#endif
     memset(buf, 0, Shared::kNumel * sizeof(DType));  // clean the shared memory
 
     // the reverse operation, store from register to shared
@@ -105,7 +95,6 @@ __global__ void run_test_store(Loader& loader, Storer& storer) {
     __syncthreads();
 
     if (thread0()) {
-        s_tile.dump_value();
         assert(check_results(buf, Shared::kNumel));
     }
 }
@@ -159,64 +148,62 @@ __global__ void run_test_store_float(ConvertHalf& convert, Loader& loader,
 }
 }  // namespace
 
-// TEST(TestShared2Reg, operand_A) {  // load mode for loading operand A in gemm
-//     using Element = __half;
+TEST(TestShared2Reg, operand_A) {  // load mode for loading operand A in gemm
+    using Element = __half;
 
-//     using WarpLayout = tl::RowMajor<2, 2>;
-//     const int kThreads = tl::get_numel<WarpLayout> * 32;
+    using WarpLayout = tl::RowMajor<2, 2>;
+    const int kThreads = tl::get_numel<WarpLayout> * 32;
 
-//     using Shared = SharedTile<Element, tl::RowMajor<64, 32>>;
-//     // Each thread accesses 2x4 elements (the shape of
-//     // `BaseHalfTileRowMajor`)
-//     // within a 16x16 `BaseTile`. These 2x4 elements are accessed 2x2 times
-//     // along each dimension, contributing to the final register tile handled
-//     // by  a single thread.
-//     using Reg = RegTile<BaseTileRowMajor<Element>, tl::RowMajor<2, 2>>;
+    using Shared = SharedTile<Element, tl::RowMajor<64, 32>>;
+    // Each thread accesses 2x4 elements (the shape of `BaseHalfTileRowMajor`)
+    // within a 16x16 `BaseTile`. These 2x4 elements are accessed 2x2 times
+    // along each dimension, contributing to the final register tile handled by
+    // a single thread.
+    using Reg = RegTile<BaseTileRowMajor<Element>, tl::RowMajor<2, 2>>;
 
-//     // In the `RowReuseCont` mode, warps in the same row repeatedly access
-//     //  the same data.
-//     using Copy = SharedToRegLoader<Reg, WarpLayout,
-//     WarpReuse::kRowReuseCont>; Copy copy;
+    // In the `RowReuseCont` mode, warps in the same row repeatedly access the
+    // same data.
+    using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::kRowReuseCont>;
+    Copy copy;
 
-//     dim3 dim_grid(1, 1, 1);
-//     dim3 dim_block(kThreads, 1, 1);
-//     int shm_size = Shared::kNumel * sizeof(Element);
+    dim3 dim_grid(1, 1, 1);
+    dim3 dim_block(kThreads, 1, 1);
+    int shm_size = Shared::kNumel * sizeof(Element);
 
-//     run_test_load<Element, Shared, Reg, Copy>
-//         <<<dim_grid, dim_block, shm_size>>>(copy);
-//     cudaDeviceSynchronize();
-// }
+    run_test_load<Element, Shared, Reg, Copy>
+        <<<dim_grid, dim_block, shm_size>>>(copy);
+    cudaDeviceSynchronize();
+}
 
-// TEST(TestShared2Reg, operand_B) {  // load mode for loading operand B in gemm
-//     using Element = __half;
+TEST(TestShared2Reg, operand_B) {  // load mode for loading operand B in gemm
+    using Element = __half;
 
-//     using WarpLayout = tl::RowMajor<2, 2>;
-//     const int kThreads = tl::get_numel<WarpLayout> * 32;
+    using WarpLayout = tl::RowMajor<2, 2>;
+    const int kThreads = tl::get_numel<WarpLayout> * 32;
 
-//     // a 32x64 row-major shared tile is equivalent to a 64x32 col-major tile
-//     using Shared = SharedTile<Element, tl::RowMajor<32, 64>>;
+    // a 32x64 row-major shared tile is equivalent to a 64x32 col-major tile
+    using Shared = SharedTile<Element, tl::RowMajor<32, 64>>;
 
-//     // Each thread accesses 4x2 elements (the shape of
-//     // `BaseHalfTileRowMajor`) within a 16x16 `BaseTile`. These 4x2 elements
-//     are
-//     // accessed 2x2 times along each dimension, contributing to the final
-//     // register tile handled by a single thread.
-//     using Reg = RegTile<BaseTileColMajor<Element>, tl::ColMajor<2, 2>>;
-//     // In the `ColReuseCont` mode, warps in the same column repeatedly access
-//     // the same data.
-//     using Copy = SharedToRegLoader<Reg, WarpLayout,
-//     WarpReuse::kColReuseCont>; Copy copy;
+    // Each thread accesses 4x2 elements (the shape of `BaseHalfTileRowMajor`)
+    // within a 16x16 `BaseTile`. These 4x2 elements are accessed 2x2 times
+    // along each dimension, contributing to the final register tile handled by
+    // a single thread.
+    using Reg = RegTile<BaseTileColMajor<Element>, tl::ColMajor<2, 2>>;
+    // In the `ColReuseCont` mode, warps in the same column repeatedly access
+    // the same data.
+    using Copy = SharedToRegLoader<Reg, WarpLayout, WarpReuse::kColReuseCont>;
+    Copy copy;
 
-//     dim3 dim_grid(1, 1, 1);
-//     dim3 dim_block(kThreads, 1, 1);
-//     int shm_size = Shared::kNumel * sizeof(Element);
+    dim3 dim_grid(1, 1, 1);
+    dim3 dim_block(kThreads, 1, 1);
+    int shm_size = Shared::kNumel * sizeof(Element);
 
-//     run_test_load<Element, Shared, Reg, Copy>
-//         <<<dim_grid, dim_block, shm_size>>>(copy);
-//     cudaDeviceSynchronize();
-// }
+    run_test_load<Element, Shared, Reg, Copy>
+        <<<dim_grid, dim_block, shm_size>>>(copy);
+    cudaDeviceSynchronize();
+}
 
-TEST(TestReg2Shared, operand_C) {
+TEST(TestReg2Shared, operand_C_half) {
     using Element = __half;
 
     using WarpLayout = tl::RowMajor<1, 1>;
@@ -240,7 +227,6 @@ TEST(TestReg2Shared, operand_C) {
     cudaDeviceSynchronize();
 }
 
-/*
 TEST(TestShared2Reg, operand_A_swizzle) {
     using Element = __half;
 
@@ -266,9 +252,7 @@ TEST(TestShared2Reg, operand_A_swizzle) {
         <<<dim_grid, dim_block, shm_size>>>(copy);
     cudaDeviceSynchronize();
 }
-*/
 
-/*
 TEST(TestReg2Shared, operand_C_float) {
     using Element = __half;
     using AccType = float;
@@ -312,6 +296,5 @@ TEST(TestReg2Shared, operand_C_float) {
         <<<dim_grid, dim_block, shm_size>>>(convert, loader, storer);
     cudaDeviceSynchronize();
 }
-*/
 
 }  // namespace tiledcuda::testing
