@@ -144,13 +144,8 @@ struct GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kRowMajor> {
 
     using BaseShape = traits::BaseTileShape<DType>;
 
-    static constexpr int kExecCount =
-        BaseShape::kCols / (kNumPerAccess * kThreadsPerCol);
-
-    static_assert(
-        kExecCount == 1,
-        "The current implementation requires that number of elements per "
-        "access should be equal to the number of columns in the BaseTile.");
+    static constexpr int kColStride = kThreadsPerCol * kNumPerAccess;
+    static constexpr int kExecCount = BaseShape::kCols / kColStride;
 
     using BaseTileGlobalLayout =
         cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
@@ -176,10 +171,18 @@ struct GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kRowMajor> {
     DEVICE GlobalToSharedBaseTileLoader() : tiled_copy_(TiledCopy{}) {}
 
     DEVICE void copy(const DType* src, DType* dst) {
-        auto src_tensor = make_tensor(make_gmem_ptr(src), data_layout_);
-        auto dst_tensor = make_tensor(make_smem_ptr(dst), data_layout_);
+        int offset = 0;
+#pragma unroll
+        for (int i = 0; i < kExecCount; ++i) {
+            auto src_tensor =
+                make_tensor(make_gmem_ptr(src + offset), data_layout_);
+            auto dst_tensor =
+                make_tensor(make_smem_ptr(dst + offset), data_layout_);
 
-        cute::copy(tiled_copy_, src_tensor, dst_tensor);
+            cute::copy(tiled_copy_, src_tensor, dst_tensor);
+
+            offset += kColStride;
+        }
     }
 
     DEVICE int lane_row_id() {
@@ -219,13 +222,8 @@ struct GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kColMajor> {
 
     using BaseShape = traits::BaseTileShape<DType>;
 
-    static constexpr int kExecCount =
-        BaseShape::kRows / (kNumPerAccess * kThreadsPerRow);
-
-    static_assert(
-        kExecCount == 1,
-        "The current implementation requires that number of elements per "
-        "access should be equal to the number of columns in the BaseTile.");
+    static constexpr int kRowStride = kThreadsPerRow * kNumPerAccess;
+    static constexpr int kExecCount = BaseShape::kRows / kRowStride;
 
     // create CuTe's compatible column-major layout for the global memory.
     using BaseTileGlobalLayout =
@@ -252,10 +250,18 @@ struct GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kColMajor> {
     DEVICE GlobalToSharedBaseTileLoader() : tiled_copy_(TiledCopy{}) {}
 
     DEVICE void copy(const DType* src, DType* dst) {
-        auto src_tensor = make_tensor(make_gmem_ptr(src), data_layout_);
-        auto dst_tensor = make_tensor(make_smem_ptr(dst), data_layout_);
+        int offset = 0;
+#pragma unroll
+        for (int i = 0; i < kExecCount; ++i) {
+            auto src_tensor =
+                make_tensor(make_gmem_ptr(src + offset), data_layout_);
+            auto dst_tensor =
+                make_tensor(make_smem_ptr(dst + offset), data_layout_);
 
-        cute::copy(tiled_copy_, src_tensor, dst_tensor);
+            cute::copy(tiled_copy_, src_tensor, dst_tensor);
+
+            offset += kRowStride;
+        }
     }
 
     DEVICE int lane_col_id() {
@@ -295,10 +301,8 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kRowMajor> {
 
     using BaseShape = traits::BaseTileShape<DType>;
 
-    static constexpr int kExecCount =
-        BaseShape::kCols / (kNumPerAccess * kThreadsPerCol);
-
     static constexpr int kColStride = kThreadsPerCol * kNumPerAccess;
+    static constexpr int kExecCount = BaseShape::kCols / kColStride;
 
     using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
     using BaseTileGlobalLayout =
@@ -328,6 +332,70 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kRowMajor> {
             cute::copy(tiled_copy_, src_tensor, dst_tensor);
 
             offset += kColStride;
+        }
+    }
+
+    DEVICE int lane_row_id() {
+        int lane_id = threadIdx.x % warpSize;
+        return lane_id % tl::num_rows<ThreadLayout>;
+    }
+
+    /// @brief returns the lane col of the current thread within a warp.
+    DEVICE int lane_col_id() {
+        int lane_id = threadIdx.x % warpSize;
+        return lane_id / tl::num_rows<ThreadLayout>;
+    }
+
+  private:
+    DataLayoutPerThread data_layout_;
+    TiledCopy tiled_copy_;
+};
+
+template <class Shared, class Global>
+struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kColMajor> {
+    using DType = Shared::DType;
+
+    using ThreadLayout = tile_layout::ColMajor<2, 16>;
+    static constexpr int kThreadsPerRow = tl::num_rows<ThreadLayout>;
+    static constexpr int kThreadsPerCol = tl::num_cols<ThreadLayout>;
+    static constexpr int kWarpSize = 32;
+
+    static constexpr int kNumPerAccess =
+        traits::TraitsBase<DType>::kNumPerAccess;
+
+    using BaseShape = traits::BaseTileShape<DType>;
+
+    static constexpr int kRowStride = kThreadsPerRow * kNumPerAccess;
+    static constexpr int kExecCount = BaseShape::kRows / kRowStride;
+
+    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
+    using BaseTileGlobalLayout =
+        cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
+                     Stride<_1, Int<Global::kColStride>>>;
+
+    using TiledCopy = decltype(make_tiled_copy(
+        Copy_Atom<DefaultCopy, DType>{},
+        cute::Layout<Shape<Int<kThreadsPerRow>, Int<kThreadsPerCol>>,
+                     Stride<Int<kThreadsPerCol>, _1>>{},
+        cute::Layout<Shape<_1, Int<kNumPerAccess>>>{}));
+
+    using DataLayoutPerThread = cute::Layout<Shape<Int<kNumPerAccess>, _1>,
+                                             Stride<_1, Int<kNumPerAccess>>>;
+
+    DEVICE SharedToGlobalBaseTileStorer() : tiled_copy_(TiledCopy{}) {}
+
+    DEVICE void copy(const DType* src, DType* dst) {
+        int offset = 0;
+#pragma unroll
+        for (int i = 0; i < kExecCount; ++i) {
+            auto src_tensor =
+                make_tensor(make_smem_ptr(src + offset), data_layout_);
+            auto dst_tensor =
+                make_tensor(make_gmem_ptr(dst + offset), data_layout_);
+
+            cute::copy(tiled_copy_, src_tensor, dst_tensor);
+
+            offset += kRowStride;
         }
     }
 
