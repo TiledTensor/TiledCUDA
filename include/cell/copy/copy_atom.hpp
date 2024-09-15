@@ -294,6 +294,7 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kRowMajor> {
     using ThreadLayout = tile_layout::RowMajor<16, 2>;
     static constexpr int kThreadsPerRow = tl::num_rows<ThreadLayout>;
     static constexpr int kThreadsPerCol = tl::num_cols<ThreadLayout>;
+
     static constexpr int kWarpSize = 32;
 
     static constexpr int kNumPerAccess =
