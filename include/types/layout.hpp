@@ -94,6 +94,37 @@ struct SwizzledRowMajor<16, AtomLayout> {
     AtomLayout layout_;
 };
 
+template <typename AtomLayout>
+struct SwizzledRowMajor<32, AtomLayout> {
+    using BaseShape = traits::BaseTileShape<float>;
+
+    static constexpr int kB = 3;
+    static constexpr int kM = 2;
+    static constexpr int kS = 3;
+
+    static_assert(
+        BaseShape::kNumel == ((1 << kB) * (1 << kM) * (1 << kS)),
+        "Swizzling is performed based on the BaseTile, and the number of "
+        "elements in a BaseTile should be equal to 2^B x 2^S x 2^M.");
+
+    using SwizzledBaseTile = decltype(composition(
+        cute::Swizzle<kB, kM, kS>{},
+        cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
+                     Stride<Int<BaseShape::kCols>, _1>>{}));
+
+    DEVICE SwizzledRowMajor()
+        : swizzled_(SwizzledBaseTile{}), layout_(AtomLayout{}){};
+
+    DEVICE int operator()(int i, int j) const {
+        int s = swizzled_(i, j);
+        return layout_(s / BaseShape::kCols, s % BaseShape::kCols);
+    }
+
+  private:
+    SwizzledBaseTile swizzled_;
+    AtomLayout layout_;
+};
+
 /// @brief Swizzled column-major layout for 16x16 BaseTile.
 template <const int kElemBits, typename AtomLayout>
 struct SwizzledColMajor {};
@@ -173,6 +204,17 @@ struct SharedLayoutWrapperImpl<Shared, false, kType, 32> {
     using Layout =
         cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
                      Stride<Int<Shared::kRowStride>, Int<Shared::kColStride>>>;
+};
+
+/// @brief Shared memory layout for swizzled layout with 32-bit data type.
+template <typename Shared>
+struct SharedLayoutWrapperImpl<Shared, true, Layout::kRowMajor, 32> {
+    using BaseShape = traits::BaseTileShape<typename Shared::DType>;
+    using LayoutAtom =
+        cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
+                     Stride<Int<Shared::kRowStride>, Int<Shared::kColStride>>>;
+
+    using Layout = SwizzledRowMajor<32, LayoutAtom>;
 };
 
 }  // namespace detail

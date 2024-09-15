@@ -286,6 +286,10 @@ struct GlobalToSharedLoader : public Base {
 
     using BaseShape = traits::BaseTileShape<DType>;
 
+    static_assert(
+        (Shared::kSwizzled && sizeof(DType) == 2 || Shared::kSwizzled == false),
+        "Not implemented for swizzled layout with 4-byte data types.");
+
     static constexpr int kRowExec =
         Base::template row_exec_count<BaseShape, Shared::kRows>();
     static constexpr int kColExec =
