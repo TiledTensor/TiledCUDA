@@ -284,7 +284,7 @@ __global__ void swizzled_store(const Element* src, Element* dst, Loader loader,
     // __syncthreads();
 
     if (thread0()) {
-        printf("reg tile:\n");
+        printf("\nreg tile:\n");
         r_tile.dump_value();
 
         printf("\nshared tile:\n");
@@ -344,7 +344,6 @@ void run_test_swizzled_store() {
 
     thrust::host_vector<Element> h_dst = d_dst;
 };
-
 }  // namespace
 
 // TEST(TestSwizzledLayout, test1) {

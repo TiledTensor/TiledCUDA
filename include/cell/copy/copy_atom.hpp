@@ -291,7 +291,7 @@ template <class Shared, class Global>
 struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kRowMajor> {
     using DType = Shared::DType;
 
-    using ThreadLayout = tile_layout::ColMajor<16, 2>;
+    using ThreadLayout = tile_layout::RowMajor<16, 2>;
     static constexpr int kThreadsPerRow = tl::num_rows<ThreadLayout>;
     static constexpr int kThreadsPerCol = tl::num_cols<ThreadLayout>;
     static constexpr int kWarpSize = 32;
@@ -337,13 +337,13 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kRowMajor> {
 
     DEVICE int lane_row_id() {
         int lane_id = threadIdx.x % warpSize;
-        return lane_id % tl::num_rows<ThreadLayout>;
+        return lane_id / tl::num_cols<ThreadLayout>;
     }
 
     /// @brief returns the lane col of the current thread within a warp.
     DEVICE int lane_col_id() {
         int lane_id = threadIdx.x % warpSize;
-        return lane_id / tl::num_rows<ThreadLayout>;
+        return lane_id % tl::num_cols<ThreadLayout>;
     }
 
   private:
@@ -355,7 +355,7 @@ template <class Shared, class Global>
 struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kColMajor> {
     using DType = Shared::DType;
 
-    using ThreadLayout = tile_layout::ColMajor<2, 16>;
+    using ThreadLayout = tile_layout::RowMajor<2, 16>;
     static constexpr int kThreadsPerRow = tl::num_rows<ThreadLayout>;
     static constexpr int kThreadsPerCol = tl::num_cols<ThreadLayout>;
     static constexpr int kWarpSize = 32;
@@ -401,13 +401,13 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kColMajor> {
 
     DEVICE int lane_row_id() {
         int lane_id = threadIdx.x % warpSize;
-        return lane_id % tl::num_rows<ThreadLayout>;
+        return lane_id / tl::num_cols<ThreadLayout>;
     }
 
     /// @brief returns the lane col of the current thread within a warp.
     DEVICE int lane_col_id() {
         int lane_id = threadIdx.x % warpSize;
-        return lane_id / tl::num_rows<ThreadLayout>;
+        return lane_id % tl::num_cols<ThreadLayout>;
     }
 
   private:

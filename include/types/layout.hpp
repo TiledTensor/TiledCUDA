@@ -98,8 +98,8 @@ template <typename AtomLayout>
 struct SwizzledRowMajor<32, AtomLayout> {
     using BaseShape = traits::BaseTileShape<float>;
 
-    static constexpr int kB = 3;
-    static constexpr int kM = 2;
+    static constexpr int kB = 2;
+    static constexpr int kM = 3;
     static constexpr int kS = 3;
 
     static_assert(
@@ -107,20 +107,34 @@ struct SwizzledRowMajor<32, AtomLayout> {
         "Swizzling is performed based on the BaseTile, and the number of "
         "elements in a BaseTile should be equal to 2^B x 2^S x 2^M.");
 
-    using SwizzledBaseTile = decltype(composition(
-        cute::Swizzle<kB, kM, kS>{},
+    using BaseTileLayout =
         cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
-                     Stride<Int<BaseShape::kCols>, _1>>{}));
+                     Stride<Int<BaseShape::kCols>, _1>>;
+
+    using SwizzledBaseTile =
+        decltype(composition(cute::Swizzle<kB, kM, kS>{}, BaseTileLayout{}));
 
     DEVICE SwizzledRowMajor()
         : swizzled_(SwizzledBaseTile{}), layout_(AtomLayout{}){};
 
     DEVICE int operator()(int i, int j) const {
         int s = swizzled_(i, j);
-        return layout_(s / BaseShape::kCols, s % BaseShape::kCols);
+
+        int new_i = s / BaseShape::kCols;
+        int new_j = s % BaseShape::kCols;
+
+        if (thread(17)) {
+            printf("i = %d, j = %d\n", i, j);
+            printf("origin_1d = %d\n", base_tile_layout_(i, j));
+            printf("s = %d\n", s);
+            printf("new_i = %d, new_j = %d\n", new_i, new_j);
+        }
+
+        return layout_(new_i, new_j);
     }
 
   private:
+    BaseTileLayout base_tile_layout_;
     SwizzledBaseTile swizzled_;
     AtomLayout layout_;
 };

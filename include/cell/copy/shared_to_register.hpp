@@ -165,10 +165,9 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
     DEVICE void operator()(const Reg& src, DType* dst) {
         int lane_row = lane_row_id();
         int lane_col = lane_col_id() * kElemPerSeg;
-
         int lane_offset = in_base_tile_(lane_row, lane_col);
-        int offset = 0;
 
+        int offset = 0;
 #pragma unroll
         for (int i = 0; i < kRowExec; ++i) {
 #pragma unroll
@@ -278,6 +277,11 @@ struct RegToSharedStorer : public Base {
         static_assert(
             Shared::kType == Reg::kType,
             "The layout of Shared and Register tile must be the same.");
+
+        static_assert(
+            (Shared::kSwizzled && sizeof(DType) == 4 ||
+             Shared::kSwizzled == false),
+            "Not implemented for swizzled layout with 2-byte data types.");
 
         DType* dst_ptr = dst.mutable_data();  // pointer for shared memory tile
 
