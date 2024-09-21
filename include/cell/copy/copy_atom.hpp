@@ -60,58 +60,117 @@ struct LoadMatBase {
     }
 };
 
-template <typename DType_, const int kSegRows_, const int kSegCols_,
-          const int kRstride_, const int kCstride_, const size_t kBitPerAccess>
+template <typename Shared, const tl::Layout kType, const size_t kBitPerAccess>
 struct BaseTileStorer;
 
-template <typename DType_, const int kSegRows_, const int kSegCols_,
-          const int kRstride_, const int kCstride_>
-struct BaseTileStorer<DType_, kSegRows_, kSegCols_, kRstride_, kCstride_, 32> {
-    using DType = DType_;
-    static constexpr int kSegRows = kSegRows_;
-    static constexpr int kSegCols = kSegCols_;
-    static constexpr int kRstride = kRstride_;
-    static constexpr int kCstride = kCstride_;
+template <typename Shared>
+struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 16> {
+    using DType = Shared::DType;
 
     DEVICE void operator()(const DType* src_, DType* dst_) {
         const int* src = reinterpret_cast<const int*>(src_);
         int* dst = reinterpret_cast<int*>(dst_);
 
+        int lane_row = lane_row_id();
+        int lane_col = lane_col_id();
+
+        int row = 0, col = 0;
 #pragma unroll
-        for (int i = 0; i < kSegCols; ++i) {
+        for (int i = 0; i < kSegRows; ++i) {
+            row = lane_row + i * tl::num_rows<ThreadLayout>;
 #pragma unroll
-            for (int j = 0; j < kSegRows; ++j) {
-                dst[i * kRstride + j * kCstride] = src[j * kSegCols + i];
+            for (int j = 0; j < kSegCols; ++j) {
+                col = (lane_col + j * tl::num_cols<ThreadLayout>)*kElemPerSeg;
+                dst[in_tile_(row, col) / kElemPerSeg] = src[j * kSegCols + i];
             }
         }
     }
+
+  private:
+    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
+
+    // the thread layout for wmma's output tile.
+    using ThreadLayout = tile_layout::RowMajor<8, 4>;
+    static constexpr int kWarpSize = 32;
+
+    // in the output of a wmma tile, each thread stores four segments in 2x2
+    // layout, and each fragment contains 2 elements regardless of the data
+    // type
+    static constexpr int kSegRows = 2;
+    static constexpr int kSegCols = 2;
+
+    // the number of elements per segment, vectorized instruction are used to
+    // access `kElemPerSeg` elements.
+    static constexpr int kElemPerSeg = 2;
+
+    // Each thread stores 8 numbers in a 16x16 `BaseTile`. These 8 numbers are
+    // split into 4 segments, with each segment containing 2 numbers.
+    // `kRStride`and `kCStride` calculate the row and column strides,
+    // respectively, when iterating over these 4 segments in shared memory.
+    static constexpr int kRstride =
+        tl::num_rows<ThreadLayout> * Shared::kRowStride / kElemPerSeg;
+    static constexpr int kCstride = tl::num_cols<ThreadLayout>;
+
+    DEVICE int lane_row_id() {
+        return (threadIdx.x % kWarpSize) / tl::num_cols<ThreadLayout>;
+    }
+
+    DEVICE int lane_col_id() {
+        return (threadIdx.x % kWarpSize) % tl::num_cols<ThreadLayout>;
+    }
+
+    BaseTileSharedLayout in_tile_;
 };
 
-template <typename DType_, const int kSegRows_, const int kSegCols_,
-          const int kRstride_, const int kCstride_, const size_t kBitPerAccess>
-struct BaseTileStorer;
-
-template <typename DType_, const int kSegRows_, const int kSegCols_,
-          const int kRstride_, const int kCstride_>
-struct BaseTileStorer<DType_, kSegRows_, kSegCols_, kRstride_, kCstride_, 64> {
-    using DType = DType_;
-    static constexpr int kSegRows = kSegRows_;
-    static constexpr int kSegCols = kSegCols_;
-    static constexpr int kRstride = kRstride_;
-    static constexpr int kCstride = kCstride_;
+template <typename Shared>
+struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 32> {
+    using DType = Shared::DType;
 
     DEVICE void operator()(const DType* src_, DType* dst_) {
         const int2* src = reinterpret_cast<const int2*>(src_);
         int2* dst = reinterpret_cast<int2*>(dst_);
 
+        int lane_row = lane_row_id();
+        int lane_col = lane_col_id();
+
+        int row = 0, col = 0;
 #pragma unroll
-        for (int i = 0; i < kSegCols; ++i) {
+        for (int i = 0; i < kSegRows; ++i) {
+            row = lane_row + i * tl::num_rows<ThreadLayout>;
 #pragma unroll
-            for (int j = 0; j < kSegRows; ++j) {
-                dst[i * kRstride + j * kCstride] = src[j * kSegCols + i];
+            for (int j = 0; j < kSegCols; ++j) {
+                col = (lane_col + j * tl::num_cols<ThreadLayout>)*kElemPerSeg;
+                dst[in_tile_(row, col) / kElemPerSeg] = src[j * kSegCols + i];
             }
         }
     }
+
+  private:
+    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
+
+    // the thread layout for wmma's output tile.
+    using ThreadLayout = tile_layout::RowMajor<8, 4>;
+    static constexpr int kWarpSize = 32;
+
+    // in the output of a wmma tile, each thread stores four segments in 2x2
+    // layout, and each fragment contains 2 elements regardless of the data
+    // type
+    static constexpr int kSegRows = 2;
+    static constexpr int kSegCols = 2;
+
+    // the number of elements per segment, vectorized instruction are used to
+    // access `kElemPerSeg` elements.
+    static constexpr int kElemPerSeg = 2;
+
+    DEVICE int lane_row_id() {
+        return (threadIdx.x % kWarpSize) / tl::num_cols<ThreadLayout>;
+    }
+
+    DEVICE int lane_col_id() {
+        return (threadIdx.x % kWarpSize) % tl::num_cols<ThreadLayout>;
+    }
+
+    BaseTileSharedLayout in_tile_;
 };
 
 template <class Global, class Shared, const tl::Layout kType>
