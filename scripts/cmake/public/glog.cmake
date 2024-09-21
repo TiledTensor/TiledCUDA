@@ -1,3 +1,5 @@
+set(GLOG_FIND_REQUIRED ON)
+
 # find locally installed glog
 find_package(glog CONFIG QUIET) # try to use the config mode first
 if(NOT TARGET glog::glog)
@@ -52,15 +54,15 @@ else()
     message(STATUS "Found Glog")
     message(STATUS "  Includes : ${GLOG_INCLUDE_DIRS}")
     message(STATUS "  Libraries : ${GLOG_LIBRARIES}")
-  endif()
 
-  add_library(glog::glog INTERFACE IMPORTED)
-  target_include_directories(glog::glog INTERFACE ${GLOG_INCLUDE_DIRS})
-  target_link_libraries(glog::glog INTERFACE ${GLOG_LIBRARIES})
+    add_library(glog::glog INTERFACE IMPORTED)
+    target_include_directories(glog::glog INTERFACE ${GLOG_INCLUDE_DIRS})
+    target_link_libraries(glog::glog INTERFACE ${GLOG_LIBRARIES})
+  endif()
 endif()
 
 if(NOT GLOG_FOUND AND GLOG_FIND_REQUIRED)
-  # TODO(haruhi): If glog is not installed locally, download and build it using
-  # ExternalProject.
-  message(FATAL_ERROR "Could not find Glog")
+  # If glog is not installed locally, download and build it using
+  # ExternalProject. include(external/gflags)
+  include(external/glog)
 endif()

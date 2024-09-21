@@ -17,6 +17,9 @@ endif()
 
 option(ENABLE_DEBUG "Enable debug mode" OFF)
 
+# this is to be compatible with the latest glog. DO NOT remove it.
+add_compile_definitions(GLOG_USE_GLOG_EXPORT)
+
 include(generic)
 include(dependencies)
 

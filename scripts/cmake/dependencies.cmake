@@ -1,4 +1,15 @@
-set(THIRD_PARTY_DIR "${PROJECT_SOURCE_DIR}/3rd-party")
+# set the third party directory for dependencies that do not need a build
+set(THIRD_PARTY_DIR
+    "${PROJECT_SOURCE_DIR}/3rd-party"
+    CACHE STRING "A path setting third party download & build directories.")
+
+# set the third party build directory for dependencies that need a build
+set(THIRD_PARTY_BUILD_DIR
+    "${CMAKE_BINARY_DIR}/3rd-party"
+    CACHE STRING "A path setting third party install directories.")
+
+set(THIRD_PARTY_BUILD_TYPE Release)
+
 # add cutlass into dependence
 include_directories(${THIRD_PARTY_DIR}/cutlass/include)
 
