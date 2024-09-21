@@ -63,6 +63,7 @@ struct LoadMatBase {
 template <typename Shared, const tl::Layout kType, const size_t kBitPerAccess>
 struct BaseTileStorer;
 
+/// TODO(haruhi): try to reduece reusable codes.
 template <typename Shared>
 struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 16> {
     using DType = Shared::DType;
@@ -122,6 +123,7 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 16> {
     BaseTileSharedLayout in_tile_;
 };
 
+/// TODO(haruhi): try to reduece reusable codes.
 template <typename Shared>
 struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 32> {
     using DType = Shared::DType;
@@ -340,11 +342,7 @@ struct GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kColMajor> {
 };
 
 template <class Shared, class Global, const tl::Layout kType>
-struct SharedToGlobalBaseTileStorer {
-    using DType = Shared::DType;
-
-    DEVICE void copy(const DType* src, DType* dst);
-};
+struct SharedToGlobalBaseTileStorer;
 
 template <class Shared, class Global>
 struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kRowMajor> {
@@ -380,18 +378,21 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kRowMajor> {
 
     DEVICE SharedToGlobalBaseTileStorer() : tiled_copy_(TiledCopy{}) {}
 
-    DEVICE void copy(const DType* src, DType* dst) {
-        int offset = 0;
+    DEVICE void copy(const DType* src_, DType* dst_) {
+        int lane_row = this->lane_row_id();
+        int lane_col = this->lane_col_id() * kNumPerAccess;
+
+        DType *src, *dst;
 #pragma unroll
         for (int i = 0; i < kExecCount; ++i) {
-            auto src_tensor =
-                make_tensor(make_smem_ptr(src + offset), data_layout_);
-            auto dst_tensor =
-                make_tensor(make_gmem_ptr(dst + offset), data_layout_);
+            src = const_cast<DType*>(src_) +
+                  src_in_tile_(lane_row, lane_col + i * kColStride);
+            dst = dst_ + dst_in_tile_(lane_row, lane_col) + i * kColStride;
+
+            auto src_tensor = make_tensor(make_smem_ptr(src), data_layout_);
+            auto dst_tensor = make_tensor(make_gmem_ptr(dst), data_layout_);
 
             cute::copy(tiled_copy_, src_tensor, dst_tensor);
-
-            offset += kColStride;
         }
     }
 
@@ -407,6 +408,9 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kRowMajor> {
     }
 
   private:
+    BaseTileSharedLayout src_in_tile_;
+    BaseTileGlobalLayout dst_in_tile_;
+
     DataLayoutPerThread data_layout_;
     TiledCopy tiled_copy_;
 };

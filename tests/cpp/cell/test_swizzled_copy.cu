@@ -280,8 +280,8 @@ __global__ void swizzled_store(const Element* src, Element* dst, Loader loader,
     storer1(r_tile, s_tile);
     __syncthreads();
 
-    // storer2(s_tile, g_dst_tile);
-    // __syncthreads();
+    storer2(s_tile, g_dst_tile);
+    __syncthreads();
 
     if (thread0()) {
         printf("\nreg tile:\n");
@@ -290,12 +290,13 @@ __global__ void swizzled_store(const Element* src, Element* dst, Loader loader,
         printf("\nshared tile:\n");
         s_tile.dump_value();
 
-        // printf("\nglobal tile:\n");
-        // g_dst_tile.dump_value();
+        printf("\nglobal tile:\n");
+        g_dst_tile.dump_value();
     }
 }
 
-template <typename WarpLayout, const int kRows, const int kCols>
+template <typename WarpLayout, const int kRows, const int kCols,
+          const bool kSwizzled>
 void run_test_swizzled_store() {
     using Element = float;
     using BaseShape = traits::BaseTileShape<Element>;
@@ -312,7 +313,6 @@ void run_test_swizzled_store() {
     using Loader = GlobalToRegLoader<Reg, WarpLayout, copy::WarpReuse::kCont>;
     using StorerR2S = RegToSharedStorer<Reg, WarpLayout>;
 
-    static const bool kSwizzled = false;
     using Shared = GlobalTile<Element, tl::RowMajor<kRows, kCols>, kSwizzled>;
     using StorerS2G = SharedToGlobalStorer<Shared, WarpLayout>;
 
@@ -343,10 +343,13 @@ void run_test_swizzled_store() {
     cudaDeviceSynchronize();
 
     thrust::host_vector<Element> h_dst = d_dst;
+
+    assert_equal(thrust::raw_pointer_cast(h_src.data()),
+                 thrust::raw_pointer_cast(h_dst.data()), numel, 1e-4);
 };
 }  // namespace
 
-TEST(TestSwizzledLayout, test1) {
+TEST(TestSwizzledLayout, test_load_row_major) {
     run_test_rowmajor<tl::RowMajor<1, 2>, 16, 64, 16, 32, 32>();
     run_test_rowmajor<tl::RowMajor<1, 2>, 16, 128, 16, 64, 32>();
     run_test_rowmajor<tl::RowMajor<1, 2>, 32, 32, 32, 32, 16>();
@@ -367,7 +370,7 @@ TEST(TestSwizzledLayout, test1) {
     run_test_rowmajor<tl::RowMajor<8, 1>, 128, 512, 128, 256, 128>();
 }
 
-TEST(TestSwizzledLayout, test2) {
+TEST(TestSwizzledLayout, test_load_col_major) {
     run_test_colmajor<tl::RowMajor<1, 1>, 16 /*K*/, 16 /*N*/, 16, 16, 16>();
     run_test_colmajor<tl::RowMajor<1, 1>, 64 /*K*/, 64 /*N*/, 32, 64, 16>();
     run_test_colmajor<tl::RowMajor<1, 2>, 128 /*K*/, 32 /*N*/, 64, 32, 32>();
@@ -377,7 +380,8 @@ TEST(TestSwizzledLayout, test2) {
 }
 
 TEST(TestSwizzledLayout, swizzled_store) {
-    run_test_swizzled_store<tl::RowMajor<1, 1>, 16, 16>();
+    run_test_swizzled_store<tl::RowMajor<1, 1>, 16, 16, false>();
+    run_test_swizzled_store<tl::RowMajor<1, 1>, 16, 16, true>();
 }
 
 }  // namespace tiledcuda::testing

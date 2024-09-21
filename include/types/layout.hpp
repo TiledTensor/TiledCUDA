@@ -119,18 +119,7 @@ struct SwizzledRowMajor<32, AtomLayout> {
 
     DEVICE int operator()(int i, int j) const {
         int s = swizzled_(i, j);
-
-        int new_i = s / BaseShape::kCols;
-        int new_j = s % BaseShape::kCols;
-
-        if (thread(17)) {
-            printf("i = %d, j = %d\n", i, j);
-            printf("origin_1d = %d\n", base_tile_layout_(i, j));
-            printf("s = %d\n", s);
-            printf("new_i = %d, new_j = %d\n", new_i, new_j);
-        }
-
-        return layout_(new_i, new_j);
+        return layout_(s / BaseShape::kCols, s % BaseShape::kCols);
     }
 
   private:
@@ -230,7 +219,6 @@ struct SharedLayoutWrapperImpl<Shared, true, Layout::kRowMajor, 32> {
 
     using Layout = SwizzledRowMajor<32, LayoutAtom>;
 };
-
 }  // namespace detail
 
 /// @brief: Wapper for creating non-swizzled or swizzled shared memory layout.
