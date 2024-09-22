@@ -283,6 +283,7 @@ __global__ void swizzled_store(const Element* src, Element* dst, Loader loader,
     storer2(s_tile, g_dst_tile);
     __syncthreads();
 
+#ifdef DEBUG
     if (thread0()) {
         printf("\nreg tile:\n");
         r_tile.dump_value();
@@ -293,20 +294,23 @@ __global__ void swizzled_store(const Element* src, Element* dst, Loader loader,
         printf("\nglobal tile:\n");
         g_dst_tile.dump_value();
     }
+#endif
 }
 
-template <typename WarpLayout, const int kRows, const int kCols,
-          const bool kSwizzled>
+template <typename Element, typename WarpLayout, const int kRows,
+          const int kCols, const bool kSwizzled>
 void run_test_swizzled_store() {
-    using Element = float;
     using BaseShape = traits::BaseTileShape<Element>;
 
     const int kThreads = tl::get_numel<WarpLayout> * 32;
 
     using Global = GlobalTile<Element, tl::RowMajor<kRows, kCols>>;
 
-    static constexpr int kRowRepeats = kRows / BaseShape::kTileSize;
-    static constexpr int kColRepeats = kCols / BaseShape::kTileSize;
+    static constexpr int kRowRepeats =
+        kRows / tl::num_rows<WarpLayout> / BaseShape::kTileSize;
+    static constexpr int kColRepeats =
+        kCols / tl::num_cols<WarpLayout> / BaseShape::kTileSize;
+
     using Reg = RegTile<BaseTileRowMajor<Element>,
                         tl::RowMajor<kRowRepeats, kColRepeats>>;
 
@@ -379,9 +383,26 @@ TEST(TestSwizzledLayout, test_load_col_major) {
     run_test_colmajor<tl::RowMajor<4, 1>, 128 /*K*/, 64 /*N*/, 64, 64, 64>();
 }
 
-TEST(TestSwizzledLayout, swizzled_store) {
-    run_test_swizzled_store<tl::RowMajor<1, 1>, 16, 16, false>();
-    run_test_swizzled_store<tl::RowMajor<1, 1>, 16, 16, true>();
+TEST(TestNonSwizzledStore, test_row_major) {
+    static constexpr int kSwizzled = false;
+    run_test_swizzled_store<float, tl::RowMajor<1, 1>, 16, 16, kSwizzled>();
+    run_test_swizzled_store<float, tl::RowMajor<2, 1>, 64, 32, kSwizzled>();
+    run_test_swizzled_store<float, tl::RowMajor<1, 2>, 128, 64, kSwizzled>();
+    run_test_swizzled_store<float, tl::RowMajor<2, 2>, 64, 64, kSwizzled>();
+
+    run_test_swizzled_store<__half, tl::RowMajor<1, 1>, 16, 16, kSwizzled>();
+    run_test_swizzled_store<__half, tl::RowMajor<2, 1>, 64, 32, kSwizzled>();
+    run_test_swizzled_store<__half, tl::RowMajor<1, 2>, 128, 64, kSwizzled>();
+    run_test_swizzled_store<__half, tl::RowMajor<2, 2>, 64, 64, kSwizzled>();
+}
+
+TEST(TestSwizzledStored, test_row_major) {
+    // test for swizzled layout
+    static constexpr int kSwizzled = true;
+    run_test_swizzled_store<float, tl::RowMajor<1, 1>, 16, 16, kSwizzled>();
+    run_test_swizzled_store<float, tl::RowMajor<2, 1>, 64, 32, kSwizzled>();
+    run_test_swizzled_store<float, tl::RowMajor<1, 2>, 128, 64, kSwizzled>();
+    run_test_swizzled_store<float, tl::RowMajor<2, 2>, 64, 64, kSwizzled>();
 }
 
 }  // namespace tiledcuda::testing
