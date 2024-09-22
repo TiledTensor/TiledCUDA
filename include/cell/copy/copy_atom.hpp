@@ -75,6 +75,10 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 16> {
         int lane_row = lane_row_id();
         int lane_col = lane_col_id();
 
+        // A base tile has a fixed shape of 16x16 (a 16x16 2D coordinate space
+        // with integer indices ranging from 0 to 255). `row` and `col` are used
+        // to calculate the index of an element within this 16x16 coordinate
+        // space.
         int row = 0, col = 0;
 #pragma unroll
         for (int i = 0; i < kSegRows; ++i) {
@@ -103,14 +107,6 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 16> {
     // the number of elements per segment, vectorized instruction are used to
     // access `kElemPerSeg` elements.
     static constexpr int kElemPerSeg = 2;
-
-    // Each thread stores 8 numbers in a 16x16 `BaseTile`. These 8 numbers are
-    // split into 4 segments, with each segment containing 2 numbers.
-    // `kRStride`and `kCStride` calculate the row and column strides,
-    // respectively, when iterating over these 4 segments in shared memory.
-    static constexpr int kRstride =
-        tl::num_rows<ThreadLayout> * Shared::kRowStride / kElemPerSeg;
-    static constexpr int kCstride = tl::num_cols<ThreadLayout>;
 
     DEVICE int lane_row_id() {
         return (threadIdx.x % kWarpSize) / tl::num_cols<ThreadLayout>;
@@ -135,6 +131,10 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 32> {
         int lane_row = lane_row_id();
         int lane_col = lane_col_id();
 
+        // A base tile has a fixed shape of 16x16 (a 16x16 2D coordinate space
+        // with integer indices ranging from 0 to 255). `row` and `col` are used
+        // to calculate the index of an element within this 16x16 coordinate
+        // space.
         int row = 0, col = 0;
 #pragma unroll
         for (int i = 0; i < kSegRows; ++i) {
@@ -170,6 +170,119 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 32> {
 
     DEVICE int lane_col_id() {
         return (threadIdx.x % kWarpSize) % tl::num_cols<ThreadLayout>;
+    }
+
+    BaseTileSharedLayout in_tile_;
+};
+
+/// TODO(haruhi): try to reduece reusable codes.
+template <typename Shared>
+struct BaseTileStorer<Shared, tl::Layout::kColMajor, 16> {
+    using DType = Shared::DType;
+
+    DEVICE void operator()(const DType* src_, DType* dst_) {
+        const int* src = reinterpret_cast<const int*>(src_);
+        int* dst = reinterpret_cast<int*>(dst_);
+
+        int lane_row = lane_row_id();
+        int lane_col = lane_col_id();
+
+        // A base tile has a fixed shape of 16x16 (a 16x16 2D coordinate space
+        // with integer indices ranging from 0 to 255). `row` and `col` are used
+        // to calculate the index of an element within this 16x16 coordinate
+        // space.
+        int row = 0, col = 0;
+#pragma unroll
+        for (int i = 0; i < kSegRows; ++i) {
+            row = (lane_row + i * tl::num_rows<ThreadLayout>)*kElemPerSeg;
+#pragma unroll
+            for (int j = 0; j < kSegCols; ++j) {
+                col = lane_col + j * tl::num_cols<ThreadLayout>;
+                dst[in_tile_(row, col) / kElemPerSeg] = src[i * kSegRows + j];
+            }
+        }
+    }
+
+  private:
+    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
+
+    // the thread layout for wmma's output tile.
+    using ThreadLayout = tile_layout::ColMajor<4, 8>;
+
+    static constexpr int kWarpSize = 32;
+
+    // in the output of a wmma tile, each thread stores four segments in 2x2
+    // layout, and each fragment contains 2 elements regardless of the data
+    // type
+    static constexpr int kSegRows = 2;
+    static constexpr int kSegCols = 2;
+
+    // the number of elements per segment, vectorized instruction are used to
+    // access `kElemPerSeg` elements.
+    static constexpr int kElemPerSeg = 2;
+
+    DEVICE int lane_row_id() {
+        return (threadIdx.x % kWarpSize) % tl::num_rows<ThreadLayout>;
+    }
+
+    DEVICE int lane_col_id() {
+        return (threadIdx.x % kWarpSize) / tl::num_rows<ThreadLayout>;
+    }
+
+    BaseTileSharedLayout in_tile_;
+};
+
+/// TODO(haruhi): try to reduece reusable codes.
+template <typename Shared>
+struct BaseTileStorer<Shared, tl::Layout::kColMajor, 32> {
+    using DType = Shared::DType;
+
+    DEVICE void operator()(const DType* src_, DType* dst_) {
+        const int2* src = reinterpret_cast<const int2*>(src_);
+        int2* dst = reinterpret_cast<int2*>(dst_);
+
+        int lane_row = lane_row_id();
+        int lane_col = lane_col_id();
+
+        // A base tile has a fixed shape of 16x16 (a 16x16 2D coordinate space
+        // with integer indices ranging from 0 to 255). `row` and `col` are used
+        // to calculate the index of an element within this 16x16 coordinate
+        // space.
+        int row = 0, col = 0;
+#pragma unroll
+        for (int i = 0; i < kSegRows; ++i) {
+            row = (lane_row + i * tl::num_rows<ThreadLayout>)*kElemPerSeg;
+#pragma unroll
+            for (int j = 0; j < kSegCols; ++j) {
+                col = lane_col + j * tl::num_cols<ThreadLayout>;
+                dst[in_tile_(row, col) / kElemPerSeg] = src[i * kSegRows + j];
+            }
+        }
+    }
+
+  private:
+    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
+
+    // the thread layout for wmma's output tile.
+    using ThreadLayout = tile_layout::ColMajor<4, 8>;
+    static constexpr int kWarpSize = 32;
+
+    // in the output of a wmma tile, each thread stores four segments in 2x2
+    // layout, and each fragment contains 2 elements regardless of the data
+    // type
+    static constexpr int kSegRows = 2;
+    static constexpr int kSegCols = 2;
+
+    // the number of elements per segment, vectorized instruction are used to
+    // access `kElemPerSeg` elements.
+    static constexpr int kElemPerSeg = 2;
+
+    DEVICE int lane_row_id() {
+        return (threadIdx.x % kWarpSize) % tl::num_rows<ThreadLayout>;
+    }
+
+    DEVICE int lane_col_id() {
+        return (threadIdx.x % kWarpSize) / tl::num_rows<ThreadLayout>;
     }
 
     BaseTileSharedLayout in_tile_;
@@ -448,18 +561,21 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kColMajor> {
 
     DEVICE SharedToGlobalBaseTileStorer() : tiled_copy_(TiledCopy{}) {}
 
-    DEVICE void copy(const DType* src, DType* dst) {
-        int offset = 0;
+    DEVICE void copy(const DType* src_, DType* dst_) {
+        int lane_row = this->lane_row_id() * kNumPerAccess;
+        int lane_col = this->lane_col_id();
+
+        DType *src, *dst;
 #pragma unroll
         for (int i = 0; i < kExecCount; ++i) {
-            auto src_tensor =
-                make_tensor(make_smem_ptr(src + offset), data_layout_);
-            auto dst_tensor =
-                make_tensor(make_gmem_ptr(dst + offset), data_layout_);
+            src = const_cast<DType*>(src_) +
+                  src_in_tile_(lane_row + i * kRowStride, lane_col);
+            dst = dst_ + dst_in_tile_(lane_row, lane_col) + i * kRowStride;
+
+            auto src_tensor = make_tensor(make_smem_ptr(src), data_layout_);
+            auto dst_tensor = make_tensor(make_gmem_ptr(dst), data_layout_);
 
             cute::copy(tiled_copy_, src_tensor, dst_tensor);
-
-            offset += kRowStride;
         }
     }
 
@@ -475,6 +591,9 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kColMajor> {
     }
 
   private:
+    BaseTileSharedLayout src_in_tile_;
+    BaseTileGlobalLayout dst_in_tile_;
+
     DataLayoutPerThread data_layout_;
     TiledCopy tiled_copy_;
 };

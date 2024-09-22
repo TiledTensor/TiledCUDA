@@ -32,7 +32,7 @@ __global__ void copy_g2s(const Element* src_ptr, Element* dst_ptr,
 }
 
 template <typename Element, typename WarpLayout, const int kRows,
-          const int kCols, const bool kUseSwizzledLayout>
+          const int kCols>
 void run_test_row_major() {
     static const int kThreads = tl::get_numel<WarpLayout> * 32;
 
@@ -45,9 +45,10 @@ void run_test_row_major() {
     thrust::fill(d_B.begin(), d_B.end(), static_cast<Element>(0.));
     thrust::device_vector<Element> d_A = h_A;
 
+    static const bool kSwizzled = false;
+
     using SrcTile = GlobalTile<Element, tl::RowMajor<kRows, kCols>>;
-    using DstTile =
-        SharedTile<Element, tl::RowMajor<kRows, kCols>, kUseSwizzledLayout>;
+    using DstTile = SharedTile<Element, tl::RowMajor<kRows, kCols>, kSwizzled>;
 
     using Loader = copy::GlobalToSharedLoader<DstTile, WarpLayout>;
     Loader loader;
@@ -74,7 +75,7 @@ void run_test_row_major() {
 }
 
 template <typename Element, typename WarpLayout, const int kRows,
-          const int kCols, const bool kUseSwizzledLayout>
+          const int kCols>
 void run_test_col_major() {
     static const int kThreads = tl::get_numel<WarpLayout> * 32;
 
@@ -87,9 +88,9 @@ void run_test_col_major() {
     thrust::fill(d_B.begin(), d_B.end(), static_cast<Element>(0.));
     thrust::device_vector<Element> d_A = h_A;
 
+    static const bool kSwizzled = false;
     using SrcTile = GlobalTile<Element, tl::ColMajor<kRows, kCols>>;
-    using DstTile =
-        SharedTile<Element, tl::ColMajor<kRows, kCols>, kUseSwizzledLayout>;
+    using DstTile = SharedTile<Element, tl::ColMajor<kRows, kCols>, kSwizzled>;
 
     using Loader = copy::GlobalToSharedLoader<DstTile, WarpLayout>;
     Loader loader;
@@ -114,33 +115,34 @@ void run_test_col_major() {
         reinterpret_cast<Element*>(thrust::raw_pointer_cast(h_B.data())), numel,
         1e-5);
 }
-
 }  // namespace
 
-TEST(GlobalToSharedLoad, test_g2s_non_swizzled) {
-    run_test_row_major<__half, tl::RowMajor<1, 1>, 16, 16, false>();
-    run_test_row_major<__half, tl::RowMajor<1, 4>, 32, 128, false>();
-    run_test_row_major<__half, tl::RowMajor<4, 1>, 192, 32, false>();
-    run_test_row_major<__half, tl::RowMajor<2, 2>, 64, 128, false>();
-    run_test_row_major<__half, tl::RowMajor<2, 4>, 96, 128, false>();
+TEST(GlobalToSharedLoad, test_row_major_load) {
+    run_test_row_major<__half, tl::RowMajor<1, 1>, 16, 16>();
+    run_test_row_major<__half, tl::RowMajor<1, 4>, 32, 128>();
+    run_test_row_major<__half, tl::RowMajor<4, 1>, 192, 32>();
+    run_test_row_major<__half, tl::RowMajor<2, 2>, 64, 128>();
+    run_test_row_major<__half, tl::RowMajor<2, 4>, 96, 128>();
 
-    run_test_row_major<float, tl::RowMajor<1, 1>, 16, 16, false>();
-    run_test_row_major<float, tl::RowMajor<1, 4>, 32, 128, false>();
-    run_test_row_major<float, tl::RowMajor<4, 1>, 192, 32, false>();
-    run_test_row_major<float, tl::RowMajor<2, 2>, 64, 128, false>();
-    run_test_row_major<float, tl::RowMajor<2, 4>, 96, 128, false>();
+    run_test_row_major<float, tl::RowMajor<1, 1>, 16, 16>();
+    run_test_row_major<float, tl::RowMajor<1, 4>, 32, 128>();
+    run_test_row_major<float, tl::RowMajor<4, 1>, 192, 32>();
+    run_test_row_major<float, tl::RowMajor<2, 2>, 64, 128>();
+    run_test_row_major<float, tl::RowMajor<2, 4>, 96, 128>();
+}
 
-    run_test_col_major<__half, tl::RowMajor<1, 1>, 16, 16, false>();
-    run_test_col_major<__half, tl::RowMajor<1, 4>, 32, 128, false>();
-    run_test_col_major<__half, tl::RowMajor<4, 1>, 192, 32, false>();
-    run_test_col_major<__half, tl::RowMajor<2, 2>, 64, 128, false>();
-    run_test_col_major<__half, tl::RowMajor<2, 4>, 96, 128, false>();
+TEST(GlobalToSharedLoad, test_col_major_load) {
+    run_test_col_major<__half, tl::RowMajor<1, 1>, 16, 16>();
+    run_test_col_major<__half, tl::RowMajor<1, 4>, 32, 128>();
+    run_test_col_major<__half, tl::RowMajor<4, 1>, 192, 32>();
+    run_test_col_major<__half, tl::RowMajor<2, 2>, 64, 128>();
+    run_test_col_major<__half, tl::RowMajor<2, 4>, 96, 128>();
 
-    run_test_col_major<float, tl::RowMajor<1, 1>, 16, 16, false>();
-    run_test_col_major<float, tl::RowMajor<1, 4>, 32, 128, false>();
-    run_test_col_major<float, tl::RowMajor<4, 1>, 192, 32, false>();
-    run_test_col_major<float, tl::RowMajor<2, 2>, 64, 128, false>();
-    run_test_col_major<float, tl::RowMajor<2, 4>, 96, 128, false>();
+    run_test_col_major<float, tl::RowMajor<1, 1>, 16, 16>();
+    run_test_col_major<float, tl::RowMajor<1, 4>, 32, 128>();
+    run_test_col_major<float, tl::RowMajor<4, 1>, 192, 32>();
+    run_test_col_major<float, tl::RowMajor<2, 2>, 64, 128>();
+    run_test_col_major<float, tl::RowMajor<2, 4>, 96, 128>();
 }
 
 }  // namespace tiledcuda::testing

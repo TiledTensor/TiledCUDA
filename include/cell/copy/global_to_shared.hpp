@@ -223,9 +223,6 @@ struct SharedToGlobalStorerImpl<Shared_, Global_, kRowExec_, kColExec_,
     static_assert(std::is_same_v<typename Global::DType, DType>,
                   "The data type of Shared and Global must be the same.");
 
-    using StoreBase =
-        SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kColMajor>;
-
     using BaseShape = traits::BaseTileShape<DType>;
 
     static constexpr int kRowExec = kRowExec_;
@@ -237,29 +234,17 @@ struct SharedToGlobalStorerImpl<Shared_, Global_, kRowExec_, kColExec_,
 
     static constexpr int kRstride = BaseShape::kRows;
 
-    static constexpr int kNumPerAccess = StoreBase::kNumPerAccess;
-
     DEVICE void operator()(const DType* src, DType* dst) {
-        int lane_row = this->lane_row_id() * kNumPerAccess;
-        int lane_col = this->lane_col_id();
-
-        int src_lane_offset = src_layout_(lane_row, lane_col);
-        int dst_lane_offset = dst_layout_(lane_row, lane_col);
-
         int src_offset = 0, dst_offset = 0;
         for (int i = 0; i < kRowExec; ++i) {
             for (int j = 0; j < kColExec; ++j) {
-                src_offset = i * kRstride + j * kSrcCstride + src_lane_offset;
-                dst_offset = i * kRstride + j * kDstCstride + dst_lane_offset;
+                src_offset = i * kRstride + j * kSrcCstride;
+                dst_offset = i * kRstride + j * kDstCstride;
 
                 this->copy(src + src_offset, dst + dst_offset);
             }
         }
     }
-
-  private:
-    typename StoreBase::BaseTileSharedLayout src_layout_;
-    typename StoreBase::BaseTileGlobalLayout dst_layout_;
 };
 
 template <typename Shared_, typename WarpLayout_,

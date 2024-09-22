@@ -152,10 +152,46 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
     }
 
   private:
+    // layout to address the start position of an individual `BaseTile` in the
+    // whole shared memory tile.
     using BaseTilesLayout =
         tl::MatrixLayout<kRowExec, kColExec,
                          BaseShape::kRows * Shared::kRowStride,
                          BaseShape::kCols>;
+    using Storer = BaseTileStorer<Shared, Shared::kType, sizeof(DType) * 8>;
+
+    BaseTilesLayout base_tiles_;
+    Storer storer_;
+};
+
+template <typename Shared, typename Reg_, const int kRowExec_,
+          const int kColExec_>
+struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
+                             tl::Layout::kColMajor> {
+    using Reg = Reg_;
+    using DType = typename Shared::DType;
+    using BaseShape = BaseTileShape<DType>;
+
+    static constexpr int kRowExec = kRowExec_;
+    static constexpr int kColExec = kColExec_;
+
+    DEVICE void operator()(const Reg& src, DType* dst) {
+#pragma unroll
+        for (int i = 0; i < kRowExec; ++i) {
+#pragma unroll
+            for (int j = 0; j < kColExec; ++j) {
+                storer_(src(i, j).data(), dst + base_tiles_(i, j));
+            }
+        }
+    }
+
+  private:
+    // layout to address the start position of an individual `BaseTile` in the
+    // whole shared memory tile.
+    using BaseTilesLayout =
+        tl::MatrixLayout<kRowExec, kColExec, BaseShape::kRows,
+                         BaseShape::kCols * Shared::kColStride>;
+
     using Storer = BaseTileStorer<Shared, Shared::kType, sizeof(DType) * 8>;
 
     BaseTilesLayout base_tiles_;

@@ -163,6 +163,37 @@ struct SwizzledColMajor<16, AtomLayout> {
     AtomLayout layout_;
 };
 
+template <typename AtomLayout>
+struct SwizzledColMajor<32, AtomLayout> {
+    using BaseShape = traits::BaseTileShape<__half>;
+
+    static constexpr int kB = 2;
+    static constexpr int kM = 3;
+    static constexpr int kS = 3;
+
+    static_assert(
+        BaseShape::kNumel == ((1 << kB) * (1 << kM) * (1 << kS)),
+        "Swizzling is performed based on the BaseTile, and the number of "
+        "elements in a BaseTile should be equal to 2^B x 2^S x 2^M.");
+
+    using SwizzledBaseTile = decltype(composition(
+        cute::Swizzle<kB, kM, kS>{},
+        cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
+                     Stride<_1, Int<BaseShape::kRows>>>{}));
+
+    DEVICE SwizzledColMajor()
+        : swizzled_(SwizzledBaseTile{}), layout_(AtomLayout{}){};
+
+    DEVICE int operator()(int i, int j) const {
+        int s = swizzled_(i, j);
+        return layout_(s % BaseShape::kRows, s / BaseShape::kRows);
+    }
+
+  private:
+    SwizzledBaseTile swizzled_;
+    AtomLayout layout_;
+};
+
 template <typename Shared, const bool kSwizzled, const Layout kType,
           const int kSizeOfTypeBits>
 struct SharedLayoutWrapperImpl {};
@@ -198,6 +229,18 @@ struct SharedLayoutWrapperImpl<Shared, true, Layout::kColMajor, 16> {
                      Stride<Int<Shared::kRowStride>, Int<Shared::kColStride>>>;
 
     using Layout = SwizzledColMajor<16, LayoutAtom>;
+};
+
+/// @brief Shared memory layout for swizzled col-major layout with 16-bit data
+///        type.
+template <typename Shared>
+struct SharedLayoutWrapperImpl<Shared, true, Layout::kColMajor, 32> {
+    using BaseShape = traits::BaseTileShape<typename Shared::DType>;
+    using LayoutAtom =
+        cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
+                     Stride<Int<Shared::kRowStride>, Int<Shared::kColStride>>>;
+
+    using Layout = SwizzledColMajor<32, LayoutAtom>;
 };
 
 /// @brief Shared memory layout for non-swizzled layout with 32-bit data type.
