@@ -84,7 +84,8 @@ TEST(GlobalToSharedCopy, test1) {
 
     assert_equal(
         reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_A.data())),
-        reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_B.data())), numel);
+        reinterpret_cast<__half*>(thrust::raw_pointer_cast(h_B.data())), numel,
+        1e-5);
 }
 
 }  // namespace tiledcuda::testing

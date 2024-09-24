@@ -6,10 +6,103 @@
 #include <thrust/host_vector.h>
 
 namespace tiledcuda::testing {
-
 using namespace cell;
 using namespace cute;
 namespace tl = tile_layout;
+
+namespace {
+
+template <typename Element>
+void test_swizzled_function();
+
+template <>
+void test_swizzled_function<__half>() {
+    using Element = __half;
+    static constexpr int kBits = 16;
+
+    const int kRows = 16;
+    const int kCols = 32;
+
+    thrust::host_vector<Element> data(kRows * kCols);
+    for (int i = 0; i < data.size(); ++i) {
+        data[i] = static_cast<Element>(i % 2048);
+    }
+
+    using RowMajor = tl::RowMajor<kRows, 16, kCols>;
+    RowMajor layout1;
+
+    // only siwizzle the first [16x16] half of the [kRows, kCols] matrix
+    using LayoutAtom = cute::Layout<Shape<_16, _16>, Stride<Int<kCols>, _1>>;
+    using Swizzled = tl::detail::SwizzledRowMajor<kBits, LayoutAtom>;
+    Swizzled layout2;
+
+    Element* ptr = thrust::raw_pointer_cast(data.data());
+
+    printf("\nnon-swizzled:\n");
+    for (int i = 0; i < RowMajor::kRows; ++i) {
+        for (int j = 0; j < RowMajor::kCols; ++j) {
+            printf("%.0f, ", __half2float(ptr[layout1(i, j)]));
+        }
+        printf("\n");
+    }
+
+    printf("\nswizzled:\n");
+    for (int i = 0; i < kRows; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            printf("%.0f, ", __half2float(ptr[layout2(i, j)]));
+        }
+        printf("\n");
+    }
+}
+
+template <>
+void test_swizzled_function<float>() {
+    using Element = float;
+    static constexpr int kBits = 32;
+
+    const int kRows = 16;
+    const int kCols = 16;
+
+    thrust::host_vector<Element> data(kRows * kCols);
+    for (int i = 0; i < data.size(); ++i) {
+        data[i] = static_cast<Element>(i % 2048);
+    }
+
+    using RowMajor = tl::RowMajor<kRows, 16, kCols>;
+    RowMajor layout1;
+
+    // only siwizzle the first [16x16] half of the [kRows, kCols] matrix
+    using LayoutAtom = cute::Layout<Shape<_16, _16>, Stride<Int<kCols>, _1>>;
+    using Swizzled = tl::detail::SwizzledRowMajor<kBits, LayoutAtom>;
+    Swizzled layout2;
+
+    for (int i = 0; i < RowMajor::kRows; ++i) {
+        for (int j = 0; j < RowMajor::kCols; ++j) {
+            printf("[%d:%d], ", layout1(i, j), layout2(i, j));
+        }
+        printf("\n");
+    }
+
+    Element* ptr = thrust::raw_pointer_cast(data.data());
+
+    printf("\nnon-swizzled:\n");
+    for (int i = 0; i < RowMajor::kRows; ++i) {
+        for (int j = 0; j < RowMajor::kCols; ++j) {
+            printf("%.0f, ", ptr[layout1(i, j)]);
+        }
+        printf("\n");
+    }
+
+    printf("\nswizzled:\n");
+    for (int i = 0; i < kRows; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            printf("%.0f, ", ptr[layout2(i, j)]);
+        }
+        printf("\n");
+    }
+}
+
+}  // namespace
 
 TEST(TestLayout, test_layout) {
     using Element = cutlass::half_t;
@@ -39,42 +132,9 @@ TEST(TestLayout, test_layout) {
     EXPECT_EQ(layout_name2, "ColMajor");
 }
 
-TEST(TestLayout, test_swizzled_layout) {
-    using Element = __half;
-
-    const int kRows = 16;
-    const int kCols = 32;
-
-    thrust::host_vector<Element> data(kRows * kCols);
-    for (int i = 0; i < data.size(); ++i) {
-        data[i] = static_cast<Element>(i % 2048);
-    }
-
-    using RowMajor = tl::RowMajor<kRows, 16, kCols>;
-    RowMajor layout1;
-
-    // only siwizzle the first [16x16] half of the [kRows, kCols] matrix
-    using LayoutAtom = cute::Layout<Shape<_16, _16>, Stride<Int<kCols>, _1>>;
-    using Swizzled = tl::detail::SwizzledRowMajor<16 /*16bits*/, LayoutAtom>;
-    Swizzled layout2;
-
-    Element* ptr = thrust::raw_pointer_cast(data.data());
-
-    printf("\nnon-swizzled:\n");
-    for (int i = 0; i < RowMajor::kRows; ++i) {
-        for (int j = 0; j < RowMajor::kCols; ++j) {
-            printf("%.0f, ", __half2float(ptr[layout1(i, j)]));
-        }
-        printf("\n");
-    }
-
-    printf("\nswizzled:\n");
-    for (int i = 0; i < kRows; ++i) {
-        for (int j = 0; j < 16; ++j) {
-            printf("%.0f, ", __half2float(ptr[layout2(i, j)]));
-        }
-        printf("\n");
-    }
+TEST(TestLayout, test_swizzled_layout_half) {
+    test_swizzled_function<__half>();
+    test_swizzled_function<float>();
 }
 
 }  // namespace tiledcuda::testing

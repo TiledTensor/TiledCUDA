@@ -72,7 +72,9 @@ class RegTile {
     static constexpr int kRows = tl::num_rows<Layout>;
     static constexpr int kCols = tl::num_cols<Layout>;
 
-    static constexpr tl::Layout kType = tl::layout_type<Layout>;
+    // FIXME(haruhi): this is a hack to fix the layout type deduction for when
+    // the shape is 1x1. This is a workaround. Fix this to be more robust.
+    static constexpr tl::Layout kType = tl::layout_type<typename DType::Layout>;
 
     DEVICE RegTile() : layout_(Layout{}) {
         memset((void*)data_, 0, sizeof(data_));

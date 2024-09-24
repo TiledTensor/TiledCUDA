@@ -4,6 +4,8 @@
 #include "types/mod.hpp"
 
 #include <glog/logging.h>
+#include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
 
 #include <sstream>
 
@@ -258,9 +260,154 @@ void run_test_colmajor() {
        << ", " << kChunkShm << "]";
     LOG(INFO) << std::endl << ss.str() << " passed!" << std::endl;
 }
+
+template <typename Element, typename Global, typename Reg, typename Shared,
+          typename Loader, typename StorerR2S, typename StorerS2G>
+__global__ void swizzled_store(const Element* src, Element* dst, Loader loader,
+                               StorerR2S storer1, StorerS2G storer2) {
+    extern __shared__ __align__(sizeof(double)) unsigned char buf_[];
+    auto* buf = reinterpret_cast<Element*>(buf_);
+
+    Global g_src_tile(src);
+    Reg r_tile;
+
+    Shared s_tile(buf);
+    Global g_dst_tile(dst);
+
+    loader(g_src_tile, r_tile);
+    __syncthreads();
+
+    storer1(r_tile, s_tile);
+    __syncthreads();
+
+    storer2(s_tile, g_dst_tile);
+    __syncthreads();
+
+#ifdef DEBUG
+    if (thread0()) {
+        printf("\nreg tile:\n");
+        r_tile.dump_value();
+
+        printf("\nshared tile:\n");
+        s_tile.dump_value();
+
+        printf("\nglobal tile:\n");
+        g_dst_tile.dump_value();
+    }
+#endif
+}
+
+template <typename Element, typename WarpLayout, const int kRows,
+          const int kCols, const bool kSwizzled>
+void test_row_major_store() {
+    using BaseShape = traits::BaseTileShape<Element>;
+
+    const int kThreads = tl::get_numel<WarpLayout> * 32;
+
+    // define tiles
+    using Global = GlobalTile<Element, tl::RowMajor<kRows, kCols>>;
+    static constexpr int kRowRepeats =
+        kRows / tl::num_rows<WarpLayout> / BaseShape::kTileSize;
+    static constexpr int kColRepeats =
+        kCols / tl::num_cols<WarpLayout> / BaseShape::kTileSize;
+
+    using Reg = RegTile<BaseTileRowMajor<Element>,
+                        tl::RowMajor<kRowRepeats, kColRepeats>>;
+    using Shared = SharedTile<Element, tl::RowMajor<kRows, kCols>, kSwizzled>;
+
+    // define loader and storer
+    using Loader = GlobalToRegLoader<Reg, WarpLayout, copy::WarpReuse::kCont>;
+    using StorerR2S = RegToSharedStorer<Reg, WarpLayout>;
+    using StorerS2G = SharedToGlobalStorer<Shared, WarpLayout>;
+
+    Loader loader;
+    StorerR2S storer1;
+    StorerS2G storer2;
+
+    int numel = kRows * kCols;
+    thrust::host_vector<Element> h_src(numel);
+    for (int i = 0; i < h_src.size(); ++i) {
+        h_src[i] = static_cast<Element>(i);
+    }
+    thrust::device_vector<Element> d_src = h_src;
+
+    thrust::device_vector<Element> d_dst(numel);
+    thrust::fill(d_dst.begin(), d_dst.end(), static_cast<Element>(0.));
+
+    auto test_func = &swizzled_store<Element, Global, Reg, Shared, Loader,
+                                     StorerR2S, StorerS2G>;
+
+    dim3 dim_grid(1, 1, 1);
+    dim3 dim_block(kThreads, 1, 1);
+    int shm_size = Shared::kNumel * sizeof(Element);
+
+    test_func<<<dim_grid, dim_block, shm_size>>>(
+        thrust::raw_pointer_cast(d_src.data()),
+        thrust::raw_pointer_cast(d_dst.data()), loader, storer1, storer2);
+    cudaDeviceSynchronize();
+
+    thrust::host_vector<Element> h_dst = d_dst;
+
+    assert_equal(thrust::raw_pointer_cast(h_src.data()),
+                 thrust::raw_pointer_cast(h_dst.data()), numel, 1e-4);
+};
+
+template <typename Element, typename WarpLayout, const int kRows,
+          const int kCols, const bool kSwizzled>
+void test_col_major_store() {
+    using BaseShape = traits::BaseTileShape<Element>;
+    const int kThreads = tl::get_numel<WarpLayout> * 32;
+
+    // define tiles
+    using Global = GlobalTile<Element, tl::ColMajor<kRows, kCols>>;
+    static constexpr int kRowRepeats =
+        kRows / tl::num_rows<WarpLayout> / BaseShape::kTileSize;
+    static constexpr int kColRepeats =
+        kCols / tl::num_cols<WarpLayout> / BaseShape::kTileSize;
+    using Reg = RegTile<BaseTileColMajor<Element>,
+                        tl::ColMajor<kRowRepeats, kColRepeats>>;
+    using Shared = SharedTile<Element, tl::ColMajor<kRows, kCols>, kSwizzled>;
+
+    // define loader and storer
+    using Loader = GlobalToRegLoader<Reg, WarpLayout, copy::WarpReuse::kCont>;
+    using StorerR2S = RegToSharedStorer<Reg, WarpLayout>;
+    using StorerS2G = SharedToGlobalStorer<Shared, WarpLayout>;
+
+    Loader loader;
+    StorerR2S storer1;
+    StorerS2G storer2;
+
+    int numel = kRows * kCols;
+    thrust::host_vector<Element> h_src(numel);
+    for (int i = 0; i < h_src.size(); ++i) {
+        h_src[i] = static_cast<Element>(i);
+    }
+    thrust::device_vector<Element> d_src = h_src;
+
+    thrust::device_vector<Element> d_dst(numel);
+    thrust::fill(d_dst.begin(), d_dst.end(), static_cast<Element>(0.));
+
+    auto test_func = &swizzled_store<Element, Global, Reg, Shared, Loader,
+                                     StorerR2S, StorerS2G>;
+
+    dim3 dim_grid(1, 1, 1);
+    dim3 dim_block(kThreads, 1, 1);
+    int shm_size = Shared::kNumel * sizeof(Element);
+
+    test_func<<<dim_grid, dim_block, shm_size>>>(
+        thrust::raw_pointer_cast(d_src.data()),
+        thrust::raw_pointer_cast(d_dst.data()), loader, storer1, storer2);
+    cudaDeviceSynchronize();
+
+    thrust::host_vector<Element> h_dst = d_dst;
+
+    assert_equal(thrust::raw_pointer_cast(h_src.data()),
+                 thrust::raw_pointer_cast(h_dst.data()), numel, 1e-4);
+};
+
 }  // namespace
 
-TEST(TestSwizzledLayout, test1) {
+TEST(TestSwizzledLayout, test_load_row_major) {
     run_test_rowmajor<tl::RowMajor<1, 2>, 16, 64, 16, 32, 32>();
     run_test_rowmajor<tl::RowMajor<1, 2>, 16, 128, 16, 64, 32>();
     run_test_rowmajor<tl::RowMajor<1, 2>, 32, 32, 32, 32, 16>();
@@ -281,13 +428,55 @@ TEST(TestSwizzledLayout, test1) {
     run_test_rowmajor<tl::RowMajor<8, 1>, 128, 512, 128, 256, 128>();
 }
 
-TEST(TestSwizzledLayout, test2) {
+TEST(TestSwizzledLayout, test_load_col_major) {
     run_test_colmajor<tl::RowMajor<1, 1>, 16 /*K*/, 16 /*N*/, 16, 16, 16>();
     run_test_colmajor<tl::RowMajor<1, 1>, 64 /*K*/, 64 /*N*/, 32, 64, 16>();
     run_test_colmajor<tl::RowMajor<1, 2>, 128 /*K*/, 32 /*N*/, 64, 32, 32>();
     run_test_colmajor<tl::RowMajor<2, 1>, 256 /*K*/, 64 /*N*/, 128, 64, 32>();
     run_test_colmajor<tl::RowMajor<2, 2>, 256 /*K*/, 128 /*N*/, 64, 128, 32>();
     run_test_colmajor<tl::RowMajor<4, 1>, 128 /*K*/, 64 /*N*/, 64, 64, 64>();
+}
+
+TEST(TestNonSwizzledStore, test_row_major) {
+    static constexpr int kSwizzled = false;
+    test_row_major_store<float, tl::RowMajor<1, 1>, 16, 16, kSwizzled>();
+    test_row_major_store<float, tl::RowMajor<2, 1>, 64, 32, kSwizzled>();
+    test_row_major_store<float, tl::RowMajor<1, 2>, 128, 64, kSwizzled>();
+    test_row_major_store<float, tl::RowMajor<2, 2>, 64, 64, kSwizzled>();
+
+    test_row_major_store<__half, tl::RowMajor<1, 1>, 16, 16, kSwizzled>();
+    test_row_major_store<__half, tl::RowMajor<2, 1>, 64, 32, kSwizzled>();
+    test_row_major_store<__half, tl::RowMajor<1, 2>, 128, 64, kSwizzled>();
+    test_row_major_store<__half, tl::RowMajor<2, 2>, 64, 64, kSwizzled>();
+}
+
+TEST(TestSwizzledStored, test_row_major) {
+    static constexpr int kSwizzled = true;
+    test_row_major_store<float, tl::RowMajor<1, 1>, 16, 16, kSwizzled>();
+    test_row_major_store<float, tl::RowMajor<2, 1>, 64, 32, kSwizzled>();
+    test_row_major_store<float, tl::RowMajor<1, 2>, 128, 64, kSwizzled>();
+    test_row_major_store<float, tl::RowMajor<2, 2>, 64, 64, kSwizzled>();
+}
+
+TEST(TestNonSwizzledStored, test_col_major) {
+    static constexpr int kSwizzled = false;
+    test_col_major_store<__half, tl::RowMajor<1, 1>, 16, 16, kSwizzled>();
+    test_row_major_store<__half, tl::RowMajor<2, 1>, 64, 32, kSwizzled>();
+    test_row_major_store<__half, tl::RowMajor<1, 2>, 128, 64, kSwizzled>();
+    test_row_major_store<__half, tl::RowMajor<2, 2>, 64, 64, kSwizzled>();
+
+    test_col_major_store<float, tl::RowMajor<1, 1>, 16, 16, kSwizzled>();
+    test_col_major_store<float, tl::RowMajor<2, 1>, 64, 32, kSwizzled>();
+    test_col_major_store<float, tl::RowMajor<1, 2>, 128, 64, kSwizzled>();
+    test_col_major_store<float, tl::RowMajor<2, 2>, 64, 64, kSwizzled>();
+}
+
+TEST(TestSwizzledStored, test_col_major) {
+    static constexpr int kSwizzled = true;
+    test_col_major_store<float, tl::RowMajor<1, 1>, 16, 16, kSwizzled>();
+    test_col_major_store<float, tl::RowMajor<2, 1>, 64, 32, kSwizzled>();
+    test_col_major_store<float, tl::RowMajor<1, 2>, 128, 64, kSwizzled>();
+    test_col_major_store<float, tl::RowMajor<2, 2>, 64, 64, kSwizzled>();
 }
 
 }  // namespace tiledcuda::testing

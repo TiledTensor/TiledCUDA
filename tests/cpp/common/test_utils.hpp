@@ -8,6 +8,7 @@
 
 namespace tiledcuda::testing {
 
-void assert_equal(const __half* v1, const __half* v2, int64_t numel);
+template <typename T>
+void assert_equal(const T* v1, const T* v2, int64_t numel, float epsilon);
 
 }  // namespace tiledcuda::testing
