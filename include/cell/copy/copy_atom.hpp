@@ -85,7 +85,7 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 16> {
             row = lane_row + i * tl::num_rows<ThreadLayout>;
 #pragma unroll
             for (int j = 0; j < kSegCols; ++j) {
-                col = (lane_col + j * tl::num_cols<ThreadLayout>)*kElemPerSeg;
+                col = kElemPerSeg * (lane_col + j * tl::num_cols<ThreadLayout>);
                 dst[in_tile_(row, col) / kElemPerSeg] = src[j * kSegCols + i];
             }
         }
@@ -141,7 +141,7 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 32> {
             row = lane_row + i * tl::num_rows<ThreadLayout>;
 #pragma unroll
             for (int j = 0; j < kSegCols; ++j) {
-                col = (lane_col + j * tl::num_cols<ThreadLayout>)*kElemPerSeg;
+                col = kElemPerSeg * (lane_col + j * tl::num_cols<ThreadLayout>);
                 dst[in_tile_(row, col) / kElemPerSeg] = src[j * kSegCols + i];
             }
         }
@@ -194,7 +194,7 @@ struct BaseTileStorer<Shared, tl::Layout::kColMajor, 16> {
         int row = 0, col = 0;
 #pragma unroll
         for (int i = 0; i < kSegRows; ++i) {
-            row = (lane_row + i * tl::num_rows<ThreadLayout>)*kElemPerSeg;
+            row = kElemPerSeg * (lane_row + i * tl::num_rows<ThreadLayout>);
 #pragma unroll
             for (int j = 0; j < kSegCols; ++j) {
                 col = lane_col + j * tl::num_cols<ThreadLayout>;
@@ -251,7 +251,7 @@ struct BaseTileStorer<Shared, tl::Layout::kColMajor, 32> {
         int row = 0, col = 0;
 #pragma unroll
         for (int i = 0; i < kSegRows; ++i) {
-            row = (lane_row + i * tl::num_rows<ThreadLayout>)*kElemPerSeg;
+            row = kElemPerSeg * (lane_row + i * tl::num_rows<ThreadLayout>);
 #pragma unroll
             for (int j = 0; j < kSegCols; ++j) {
                 col = lane_col + j * tl::num_cols<ThreadLayout>;

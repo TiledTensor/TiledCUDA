@@ -17,3 +17,7 @@ IncludeCategories:
     Priority: 2
   - Regex: '"([A-Za-z0-9.\Q/-_\E])+"'
     Priority: 1
+
+AllowShortLoopsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: true
+Cpp11BracedListStyle: true
