@@ -99,20 +99,16 @@ struct SwizzledRowMajor<32, AtomLayout> {
     using BaseShape = traits::BaseTileShape<float>;
 
     static constexpr int kB = 2;
-    static constexpr int kM = 3;
+    static constexpr int kM = 2;
     static constexpr int kS = 3;
 
-    static_assert(
-        BaseShape::kNumel == ((1 << kB) * (1 << kM) * (1 << kS)),
-        "Swizzling is performed based on the BaseTile, and the number of "
-        "elements in a BaseTile should be equal to 2^B x 2^S x 2^M.");
-
-    using BaseTileLayout =
+    using SwizzledAtom =
+        decltype(composition(cute::Swizzle<kB, kM, kS>{},
+                             cute::Layout<Shape<_16, _8>, Stride<_8, _1>>{}));
+    using SwizzledBaseTile = decltype(tile_to_shape(
+        SwizzledAtom{},
         cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
-                     Stride<Int<BaseShape::kCols>, _1>>;
-
-    using SwizzledBaseTile =
-        decltype(composition(cute::Swizzle<kB, kM, kS>{}, BaseTileLayout{}));
+                     Stride<Int<BaseShape::kCols>, _1>>{}));
 
     DEVICE SwizzledRowMajor()
         : swizzled_(SwizzledBaseTile{}), layout_(AtomLayout{}){};
@@ -123,7 +119,6 @@ struct SwizzledRowMajor<32, AtomLayout> {
     }
 
   private:
-    BaseTileLayout base_tile_layout_;
     SwizzledBaseTile swizzled_;
     AtomLayout layout_;
 };
@@ -168,16 +163,15 @@ struct SwizzledColMajor<32, AtomLayout> {
     using BaseShape = traits::BaseTileShape<__half>;
 
     static constexpr int kB = 2;
-    static constexpr int kM = 3;
+    static constexpr int kM = 2;
     static constexpr int kS = 3;
 
-    static_assert(
-        BaseShape::kNumel == ((1 << kB) * (1 << kM) * (1 << kS)),
-        "Swizzling is performed based on the BaseTile, and the number of "
-        "elements in a BaseTile should be equal to 2^B x 2^S x 2^M.");
+    using SwizzledAtom =
+        decltype(composition(cute::Swizzle<kB, kM, kS>{},
+                             cute::Layout<Shape<_16, _8>, Stride<_1, _16>>{}));
 
-    using SwizzledBaseTile = decltype(composition(
-        cute::Swizzle<kB, kM, kS>{},
+    using SwizzledBaseTile = decltype(tile_to_shape(
+        SwizzledAtom{},
         cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
                      Stride<_1, Int<BaseShape::kRows>>>{}));
 
