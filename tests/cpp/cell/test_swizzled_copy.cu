@@ -455,13 +455,20 @@ TEST(TestSwizzledStored, test_row_major) {
     test_row_major_store<float, tl::RowMajor<1, 1>, 16, 16, kSwizzled>();
     // bank conflict free
     test_row_major_store<float, tl::RowMajor<1, 1>, 16, 48, kSwizzled>();
+    // bank conflict free
+    test_row_major_store<float, tl::RowMajor<2, 1>, 32, 48, kSwizzled>();
 
-    // FIXME(haruhi): below cases has bank conflicts
-    // FIXME(haruhi): a single BaseTile read/access shared memory has 8 bank
-    // conflicts, this tese case has 32 bank conflicts in total
+    // FIXME(haruhi): below test cases have bank conflicts. In the current
+    // implementation, a single `BaseTile` store/load shared memory will cause 8
+    // bank conflicts.
+
+    // This test case has 32 bank conflicts in total
     test_row_major_store<float, tl::RowMajor<1, 1>, 16, 32, kSwizzled>();
+    // This test case has 128 bank conflicts in total
     test_row_major_store<float, tl::RowMajor<2, 1>, 64, 32, kSwizzled>();
+    // This test case has 512 bank conflicts in total
     test_row_major_store<float, tl::RowMajor<1, 2>, 128, 64, kSwizzled>();
+    // This test case has 256 bank conflicts in total
     test_row_major_store<float, tl::RowMajor<2, 2>, 64, 64, kSwizzled>();
 }
 
