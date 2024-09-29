@@ -190,11 +190,20 @@ struct SwizzledColMajor<32, AtomLayout> {
 
 template <typename Shared, const bool kSwizzled, const Layout kType,
           const int kSizeOfTypeBits>
-struct SharedLayoutWrapperImpl {};
+struct SharedLayoutWrapperImpl;
 
 /// @brief Shared memory layout for non-swizzled layout with 16-bit data type.
 template <typename Shared, const Layout kType>
 struct SharedLayoutWrapperImpl<Shared, false, kType, 16> {
+    using BaseShape = traits::BaseTileShape<typename Shared::DType>;
+    using Layout =
+        cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
+                     Stride<Int<Shared::kRowStride>, Int<Shared::kColStride>>>;
+};
+
+/// @brief Shared memory layout for non-swizzled layout with 32-bit data type.
+template <typename Shared, const Layout kType>
+struct SharedLayoutWrapperImpl<Shared, false, kType, 32> {
     using BaseShape = traits::BaseTileShape<typename Shared::DType>;
     using Layout =
         cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
@@ -211,6 +220,17 @@ struct SharedLayoutWrapperImpl<Shared, true, Layout::kRowMajor, 16> {
                      Stride<Int<Shared::kRowStride>, Int<Shared::kColStride>>>;
 
     using Layout = SwizzledRowMajor<16, LayoutAtom>;
+};
+
+/// @brief Shared memory layout for swizzled layout with 32-bit data type.
+template <typename Shared>
+struct SharedLayoutWrapperImpl<Shared, true, Layout::kRowMajor, 32> {
+    using BaseShape = traits::BaseTileShape<typename Shared::DType>;
+    using LayoutAtom =
+        cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
+                     Stride<Int<Shared::kRowStride>, Int<Shared::kColStride>>>;
+
+    using Layout = SwizzledRowMajor<32, LayoutAtom>;
 };
 
 /// @brief Shared memory layout for swizzled col-major layout with 16-bit data
@@ -235,26 +255,6 @@ struct SharedLayoutWrapperImpl<Shared, true, Layout::kColMajor, 32> {
                      Stride<Int<Shared::kRowStride>, Int<Shared::kColStride>>>;
 
     using Layout = SwizzledColMajor<32, LayoutAtom>;
-};
-
-/// @brief Shared memory layout for non-swizzled layout with 32-bit data type.
-template <typename Shared, const Layout kType>
-struct SharedLayoutWrapperImpl<Shared, false, kType, 32> {
-    using BaseShape = traits::BaseTileShape<typename Shared::DType>;
-    using Layout =
-        cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
-                     Stride<Int<Shared::kRowStride>, Int<Shared::kColStride>>>;
-};
-
-/// @brief Shared memory layout for swizzled layout with 32-bit data type.
-template <typename Shared>
-struct SharedLayoutWrapperImpl<Shared, true, Layout::kRowMajor, 32> {
-    using BaseShape = traits::BaseTileShape<typename Shared::DType>;
-    using LayoutAtom =
-        cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
-                     Stride<Int<Shared::kRowStride>, Int<Shared::kColStride>>>;
-
-    using Layout = SwizzledRowMajor<32, LayoutAtom>;
 };
 }  // namespace detail
 

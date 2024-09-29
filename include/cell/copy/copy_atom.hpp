@@ -60,7 +60,7 @@ struct LoadMatBase {
     }
 };
 
-template <typename Shared, const tl::Layout kType, const size_t kBitPerAccess>
+template <typename Shared, const tl::Layout kType, const size_t kElemBits>
 struct BaseTileStorer;
 
 /// TODO(haruhi): try to reduece reusable codes.
@@ -148,8 +148,6 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 32> {
     }
 
   private:
-    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
-
     // the thread layout for wmma's output tile.
     using ThreadLayout = tile_layout::RowMajor<8, 4>;
     static constexpr int kWarpSize = 32;
@@ -172,7 +170,7 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 32> {
         return (threadIdx.x % kWarpSize) % tl::num_cols<ThreadLayout>;
     }
 
-    BaseTileSharedLayout in_tile_;
+    typename tl::SharedLayoutWrapper<Shared>::Layout in_tile_;
 };
 
 /// TODO(haruhi): try to reduece reusable codes.
@@ -204,8 +202,6 @@ struct BaseTileStorer<Shared, tl::Layout::kColMajor, 16> {
     }
 
   private:
-    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
-
     // the thread layout for wmma's output tile.
     using ThreadLayout = tile_layout::ColMajor<4, 8>;
 
@@ -229,7 +225,7 @@ struct BaseTileStorer<Shared, tl::Layout::kColMajor, 16> {
         return (threadIdx.x % kWarpSize) / tl::num_rows<ThreadLayout>;
     }
 
-    BaseTileSharedLayout in_tile_;
+    typename tl::SharedLayoutWrapper<Shared>::Layout in_tile_;
 };
 
 /// TODO(haruhi): try to reduece reusable codes.
@@ -261,8 +257,6 @@ struct BaseTileStorer<Shared, tl::Layout::kColMajor, 32> {
     }
 
   private:
-    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
-
     // the thread layout for wmma's output tile.
     using ThreadLayout = tile_layout::ColMajor<4, 8>;
     static constexpr int kWarpSize = 32;
@@ -285,15 +279,11 @@ struct BaseTileStorer<Shared, tl::Layout::kColMajor, 32> {
         return (threadIdx.x % kWarpSize) / tl::num_rows<ThreadLayout>;
     }
 
-    BaseTileSharedLayout in_tile_;
+    typename tl::SharedLayoutWrapper<Shared>::Layout in_tile_;
 };
 
 template <class Global, class Shared, const tl::Layout kType>
-struct GlobalToSharedBaseTileLoader {
-    using DType = Shared::DType;
-
-    DEVICE void copy(const DType* src, DType* dst);
-};
+struct GlobalToSharedBaseTileLoader;
 
 /// @brief  Implement loading a `16x16` BaseTile from global memory to shared
 ///         memory.
