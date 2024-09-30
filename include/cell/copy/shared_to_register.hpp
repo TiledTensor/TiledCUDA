@@ -15,12 +15,7 @@ namespace detail {
 
 template <typename Shared, typename Reg_, const int kRowExec,
           const int kColExec, const tl::Layout kType, CopyInst kCopyInst>
-struct SharedToRegLoaderImpl {
-    using DType = typename Shared::DType;
-    using Reg = Reg_;
-
-    DEVICE void operator()(const DType* src, Reg& dst);
-};
+struct SharedToRegLoaderImpl;
 
 /// @brief partial specialization for row-major shared memory tile.
 template <typename Shared, typename Reg_, const int kRowExec_,
@@ -123,12 +118,7 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
 
 template <typename Shared, typename Reg_, const int kRowExec_,
           const int kColExec_, const tl::Layout kType>
-struct RegToSharedStorerImpl {
-    using DType = typename Shared::DType;
-    using Reg = Reg_;
-
-    DEVICE void operator()(const Reg& src, DType* dst);
-};
+struct RegToSharedStorerImpl;
 
 template <typename Shared, typename Reg_, const int kRowExec_,
           const int kColExec_>
@@ -158,9 +148,9 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
         tl::MatrixLayout<kRowExec, kColExec,
                          BaseShape::kRows * Shared::kRowStride,
                          BaseShape::kCols>;
-    using Storer = BaseTileStorer<Shared, Shared::kType, sizeof(DType) * 8>;
-
     BaseTilesLayout base_tiles_;
+
+    using Storer = BaseTileStorer<Shared, Shared::kType, sizeof(DType) * 8>;
     Storer storer_;
 };
 
@@ -191,10 +181,9 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
     using BaseTilesLayout =
         tl::MatrixLayout<kRowExec, kColExec, BaseShape::kRows,
                          BaseShape::kCols * Shared::kColStride>;
+    BaseTilesLayout base_tiles_;
 
     using Storer = BaseTileStorer<Shared, Shared::kType, sizeof(DType) * 8>;
-
-    BaseTilesLayout base_tiles_;
     Storer storer_;
 };
 }  // namespace  detail
