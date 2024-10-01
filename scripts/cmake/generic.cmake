@@ -17,6 +17,15 @@ find_package(CUDAToolkit QUIET REQUIRED)
 enable_language(CUDA)
 set(CMAKE_CUDA on)
 
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+message(STATUS "Python interpreter path: ${PYTHON_EXECUTABLE}")
+
+set(TORCH_LIB_PREFIX "${Python3_SITEARCH}/torch")
+if(NOT EXISTS ${TORCH_LIB_PREFIX})
+  message(FATAL_ERROR "Torch library is not installed.")
+else()
+  list(APPEND CMAKE_PREFIX_PATH "${TORCH_LIB_PREFIX}/share/cmake/Torch")
+endif()
 find_package(Torch REQUIRED)
 
 # let cmake automatically detect the current CUDA architecture to avoid
@@ -33,9 +42,6 @@ set(CUDA_PROPAGATE_HOST_FLAGS OFF)
 set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} -std=c++20)
 set(CUDA_NVCC_FLAGS_DEBUG ${CUDA_NVCC_FLAGS_DEBUG} -std=c++20 -O0)
 set(CUDA_NVCC_FLAGS_RELEASE ${CUDA_NVCC_FLAGS_RELEASE} -std=c++20 -O3)
-
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
-message(STATUS "Python interpreter path: ${PYTHON_EXECUTABLE}")
 
 message(STATUS "TiledCUDA: CUDA detected: " ${CUDA_VERSION})
 message(STATUS "TiledCUDA: CUDA nvcc is: " ${CUDA_NVCC_EXECUTABLE})

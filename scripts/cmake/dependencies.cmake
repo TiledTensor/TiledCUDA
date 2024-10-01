@@ -1,12 +1,15 @@
 # set the third party directory for dependencies that do not need a build
 set(THIRD_PARTY_DIR
     "${PROJECT_SOURCE_DIR}/3rd-party"
-    CACHE STRING "A path setting third party download directory.")
+    CACHE STRING
+          "A path that specifies the directory for third-party downloads.")
 
 # set the third party build directory for dependencies that need a build
 set(THIRD_PARTY_BUILD_DIR
     "${CMAKE_BINARY_DIR}/3rd-party"
-    CACHE STRING "A path setting third party build & install directories.")
+    CACHE STRING
+          "A path that specifies the directory for third-party build & install."
+)
 
 set(THIRD_PARTY_BUILD_TYPE Release)
 
