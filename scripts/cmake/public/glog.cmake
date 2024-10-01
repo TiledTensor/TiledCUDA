@@ -63,6 +63,6 @@ endif()
 
 if(NOT GLOG_FOUND AND GLOG_FIND_REQUIRED)
   # If glog is not installed locally, download and build it using
-  # ExternalProject. include(external/gflags)
+  # ExternalProject.
   include(external/glog)
 endif()
