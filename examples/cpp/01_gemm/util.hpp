@@ -5,9 +5,6 @@
 
 #include <cfloat>
 
-template <const int kM, const int kN, const int kK>
-using GemmShape = TileShape<kM, kN, kK>;
-
 float rand_float(float a = 1e-3, float b = 1) {
     float random = ((float)rand()) / (float)RAND_MAX;
     float diff = b - a;
