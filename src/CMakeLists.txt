@@ -20,5 +20,4 @@ target_compile_options(
   ${TARGET} PUBLIC $<$<COMPILE_LANGUAGE:CUDA>: -Werror,-Wall -rdc=true
                    -std=c++20 -fconcepts -fpermissive>)
 target_compile_features(${TARGET} PUBLIC cxx_std_20 cuda_std_20)
-
-target_link_libraries(${TARGET} "${TORCH_LIBRARIES}" glog::glog)
+target_link_libraries(${TARGET} "${TORCH_LIBRARIES}")
