@@ -141,13 +141,12 @@ __global__ void gemm(const InType* dA, const InType* dB, AccType* dC) {
         __copy_async();
         __syncthreads();
 
-        for (int k2 = 0; k2 < SIteratorA::sc0; ++k2) {
+        for (int k2 = 0; k2 < SIteratorA::sc1; ++k2) {
             s2r_a(sAs(k2), rA);
             s2r_b(sBs(k2), rB);
-            __syncthreads();
-        }
 
-        compute::gemm_(rA, rB, acc);
+            compute::gemm_(rA, rB, acc);
+        }
     }
     __syncthreads();
 
