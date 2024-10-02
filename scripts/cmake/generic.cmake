@@ -18,7 +18,7 @@ enable_language(CUDA)
 set(CMAKE_CUDA on)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
-message(STATUS "Python interpreter path: ${PYTHON_EXECUTABLE}")
+message(STATUS "Python interpreter path: ${Python3_EXECUTABLE}")
 
 set(TORCH_LIB_PREFIX "${Python3_SITEARCH}/torch")
 if(NOT EXISTS ${TORCH_LIB_PREFIX})
