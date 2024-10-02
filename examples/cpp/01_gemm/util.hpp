@@ -5,9 +5,6 @@
 
 #include <cfloat>
 
-template <const int kM, const int kN, const int kK>
-using GemmShape = TileShape<kM, kN, kK>;
-
 float rand_float(float a = 1e-3, float b = 1) {
     float random = ((float)rand()) / (float)RAND_MAX;
     float diff = b - a;
@@ -37,6 +34,20 @@ bool check_results(const float* values1, const float* values2, int numel) {
     double total_diff = 0.;
     double max_abs_diff = FLT_MIN;
     double diff = 0.;
+
+#ifdef DEBUG
+    int cut_off = 128;
+    printf("ground truth:\n");
+    for (int i = 0; i < cut_off; ++i) {
+        printf("%.3f, ", values2[i]);
+        if (i && (i + 1) % 16 == 0) printf("\n");
+    }
+    printf("\ncomputed values:\n");
+    for (int i = 0; i < cut_off; ++i) {
+        printf("%.3f, ", values1[i]);
+        if (i && (i + 1) % 16 == 0) printf("\n");
+    }
+#endif
 
     for (int i = 0; i < numel; ++i) {
         diff = fabs(values1[i] - values2[i]);

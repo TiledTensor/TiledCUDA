@@ -7,6 +7,9 @@ using namespace tiledcuda;
 using namespace tiledcuda::cell;
 namespace tl = tile_layout;
 
+template <const int kM, const int kN, const int kK>
+using GemmShape = TileShape<kM, kN, kK>;
+
 template <typename InType, typename AccType, typename WholeShape, const int kTM,
           const int kTN, typename WarpLayout>
 struct GemmTraits {
