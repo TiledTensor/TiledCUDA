@@ -71,22 +71,19 @@ int run_test() {
 
     h_c = d_c;
 
-    {  // check correctness
-        thrust::host_vector<AccType> h_c2(kM * kN);
-        thrust::fill(h_c2.begin(), h_c2.end(), 0.);
-        naive_gemm(kM, kN, kK, thrust::raw_pointer_cast(h_a.data()),
-                   thrust::raw_pointer_cast(h_b.data()), h_c2.data());
+    // check correctness
+    thrust::host_vector<AccType> h_c2(kM * kN);
+    thrust::fill(h_c2.begin(), h_c2.end(), 0.);
+    naive_gemm(kM, kN, kK, thrust::raw_pointer_cast(h_a.data()),
+               thrust::raw_pointer_cast(h_b.data()), h_c2.data());
 
-        bool passed =
-            check_results(thrust::raw_pointer_cast(h_c.data()),
-                          thrust::raw_pointer_cast(h_c2.data()), kM * kN);
+    bool passed = check_results(thrust::raw_pointer_cast(h_c.data()),
+                                thrust::raw_pointer_cast(h_c2.data()), kM * kN);
 
-        if (passed) {
-            std::cout << "Test passed." << std::endl;
-        } else {
-            std::cerr << "Test failed." << std::endl;
-        }
-    }
+    if (passed)
+        std::cout << "Test passed." << std::endl;
+    else
+        std::cerr << "Test failed." << std::endl;
 
     return 0;
 }

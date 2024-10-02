@@ -2,11 +2,11 @@
 #include "util.hpp"
 #include "util/cuda_timer.hpp"
 
-int main(int argc, char* argv[]) {
+void run_test() {
     using WholeShape = GemmShape<1024, 1024, 2048>;
-    using CtaTileShape = GemmShape<256, 128, 64>;
+    using CtaTileShape = GemmShape<256, 128, 128>;
     using WarpLayout = tl::RowMajor<2, 2>;
-    static constexpr int kRK = 32;
+    static constexpr int kRK = 64;
 
     using InType = __half;
     using AccType = float;
@@ -70,12 +70,8 @@ int main(int argc, char* argv[]) {
     dim3 dim_grid(block_x, block_y, 1);
     dim3 dim_block(Config::kThreads, 1, 1);
 
-    CudaTimer timer;
-    timer.start();
     kernel<<<dim_grid, dim_block, smem_size>>>(A, B, C);
     cudaDeviceSynchronize();
-    float time = timer.stop();
-    std::cout << "elapsed time: " << time << " ms" << std::endl;
 
     h_c = d_c;
     // check correctness
@@ -87,10 +83,25 @@ int main(int argc, char* argv[]) {
     bool passed = check_results(thrust::raw_pointer_cast(h_c.data()),
                                 thrust::raw_pointer_cast(h_c2.data()), kM * kN);
 
-    if (passed)
+    if (passed) {
         std::cout << "Test passed." << std::endl;
-    else
-        std::cerr << "Test failed." << std::endl;
 
+        CudaTimer timer;
+        timer.start();
+        int iters = 20;
+        for (int i = 0; i < iters; ++i) {
+            kernel<<<dim_grid, dim_block, smem_size>>>(A, B, C);
+        }
+        cudaDeviceSynchronize();
+
+        float time = timer.stop();
+        std::cout << std::setprecision(4) << "elapsed time: " << time / iters
+                  << " ms" << std::endl;
+    } else
+        std::cerr << "Test failed." << std::endl;
+}
+
+int main(int argc, char* argv[]) {
+    run_test();
     return 0;
 }

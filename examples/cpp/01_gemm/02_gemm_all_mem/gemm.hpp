@@ -106,10 +106,11 @@ __global__ void gemm(const InType* dA, const InType* dB, AccType* dC) {
     int offset_c = blockIdx.x * kTM * kN + blockIdx.y * kTN;
 
     extern __shared__ __align__(sizeof(double)) unsigned char buf[];
-    auto* sA_ptr = reinterpret_cast<InType*>(buf);
-    auto* sB_ptr = sA_ptr + SIteratorA::Tile::kNumel;
-    auto* sC_ptr = reinterpret_cast<AccType*>(buf);
+    InType* sA_ptr = reinterpret_cast<InType*>(buf);
+    InType* sB_ptr = sA_ptr + SIteratorA::Tile::kNumel;
+    AccType* sC_ptr = reinterpret_cast<AccType*>(buf);
 
+    // declare tiles, iterators and loaders
     GIteratorA gAs(dA + offset_a);
     SIteratorA sAs(sA_ptr);
 
