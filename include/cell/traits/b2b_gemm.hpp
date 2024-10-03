@@ -9,7 +9,7 @@ using namespace cute;
 namespace tl = tile_layout;
 
 template <typename Element_, typename CtaTileShape,
-          typename WarpShape = tiledcuda::cell::TileShape<1, 1>,
+          typename WarpShape = tiledcuda::cell::TileShape<4, 1>,
           typename Base = TraitsBase<Element_>>
 struct DynBack2BackGemmTraits : public Base {
     using Element = Element_;
@@ -31,9 +31,10 @@ struct DynBack2BackGemmTraits : public Base {
     // instruction which requires the TileMMA configuration to be
     // fixed as follows. Make it able to be tuned by policy in
     // future implementation.
-    using TiledMma = TiledMMA<MMA_Atom<SM80_16x8x16_F32F16F16F32_TN>,
-                              Layout<Shape<_1, _1, _1>>,
-                              Tile<Int<32 * kWarpPerRow>, _16, _32>>;
+    using TiledMma =
+        TiledMMA<MMA_Atom<SM80_16x8x16_F32F16F16F32_TN>,  // for ampere
+                 Layout<Shape<Int<kWarpPerRow>, Int<kWarpPerCol>, _1>>,
+                 Tile<Int<16 * kWarpPerRow>, Int<16 * kWarpPerCol>, _16>>;
     static constexpr int kThreads = size(TiledMma{});
     static_assert(kThreads == kWarpPerRow * kWarpPerCol * 32);
 

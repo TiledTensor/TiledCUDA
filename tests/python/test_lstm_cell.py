@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 
 import context
+
 from pytiledcuda import lstm_cell
 
 
@@ -49,32 +50,33 @@ class TestLstmCell(unittest.TestCase):
         torch.manual_seed(1234)
 
     def test_lstm_cell(self):
+        device = torch.device("cuda")
+        dtype = torch.float16
 
         hidden = 256
         batch = 256
 
-        w = torch.randn(4, hidden, hidden, device='cuda')
-        x = torch.randn(hidden, batch, device='cuda')
-        u = torch.randn(4, hidden, hidden, device='cuda')
-        c0 = torch.randn(hidden, batch, device='cuda')
-        h0 = torch.randn(hidden, batch, device='cuda')
-        c1 = torch.empty(hidden, batch, device='cuda')
-        h1 = torch.empty(hidden, batch, device='cuda')
+        w = torch.randn(4, hidden, hidden, device=device, dtype=dtype)
+        x = torch.randn(hidden, batch, device=device, dtype=dtype)
+        u = torch.randn(4, hidden, hidden, device=device, dtype=dtype)
+        c0 = torch.randn(hidden, batch, device=device, dtype=dtype)
+        h0 = torch.randn(hidden, batch, device=device, dtype=dtype)
+        c1 = torch.empty(hidden, batch, device=device, dtype=dtype)
+        h1 = torch.empty(hidden, batch, device=device, dtype=dtype)
 
-        w_data = w.flatten().half()
-        x_data = x.T.flatten().half()
-        u_data = u.flatten().half()
-        c0_data = c0.flatten().half()
-        h0_data = h0.T.flatten().half()
-        c1_data = c1.flatten().half()
-        h1_data = h1.flatten().half()
+        w_data = w.flatten()
+        x_data = x.T.flatten()
+        u_data = u.flatten()
+        c0_data = c0.flatten()
+        h0_data = h0.T.flatten()
+        c1_data = c1.flatten()
+        h1_data = h1.flatten()
 
         lstm_cell(w_data, x_data, u_data, c0_data, h0_data, c1_data, h1_data,
                   hidden, batch)
 
-        ref_lstm = FineGrainedOpLstmCell(w.half(), x.half(), u.half(),
-                                         c0.half(), h0.half(), c1.half(),
-                                         h1.half(), batch, hidden)
+        ref_lstm = FineGrainedOpLstmCell(w, x, u, c0, h0, c1, h1, batch,
+                                         hidden)
         ref_c, ref_h = ref_lstm.forward()
 
         ref_c = ref_c.flatten()
