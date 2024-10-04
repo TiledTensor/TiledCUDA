@@ -6,7 +6,6 @@
 
 #include <cute/tensor.hpp>
 #include <cutlass/numeric_conversion.h>
-#include <cutlass/numeric_types.h>
 
 namespace tiledcuda::cell::copy {
 

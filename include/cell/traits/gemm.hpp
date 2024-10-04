@@ -8,7 +8,7 @@ using namespace cute;
 namespace tl = tile_layout;
 
 template <typename Element_, typename CtaTileShape,
-          typename WarpArrangement = tiledcuda::cell::TileShape<1, 2>,
+          typename WarpArrangement = tiledcuda::cell::TileShape<2, 2>,
           typename Base = TraitsBase<Element_>>
 struct DynGemmTraits : public Base {
     using Element = Element_;
@@ -34,13 +34,12 @@ struct DynGemmTraits : public Base {
     // future implementation.
     using TiledMma =
         TiledMMA<MMA_Atom<SM80_16x8x16_F32F16F16F32_TN>,  // for ampere
-                 Layout<Shape<_1, _2, _1>>,
+                 Layout<Shape<Int<kWarpPerRow>, Int<kWarpPerCol>, _1>>,
                  Tile<Int<16 * kWarpPerRow>, Int<16 * kWarpPerCol>, _16>>;
     static constexpr int kThreads = size(TiledMma{});
     static_assert(kThreads == kWarpPerRow * kWarpPerCol * 32);
 
     static constexpr int kNumPerAccess = Base::kNumPerAccess;
-
     static constexpr int kThreadsPerCol = CeilDiv<kTK, Base::kNumPerAccess>;
     static constexpr int kThreadsPerRow = CeilDiv<kThreads, kThreadsPerCol>;
 

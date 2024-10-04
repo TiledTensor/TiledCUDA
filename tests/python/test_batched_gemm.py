@@ -17,22 +17,22 @@ class TestBatchedGemm(unittest.TestCase):
         k = 256
         batch_count = 10
 
-        a = torch.randn(batch_count, m, k, device='cuda')
-        b = torch.randn(batch_count, k, n, device='cuda')
-        c = torch.empty(batch_count, m, n, device='cuda')
+        device = torch.device("cuda")
+        dtype = torch.float16
 
-        a_data = a.flatten().half()
-        b_data = b.transpose(1, 2).flatten().half()
-        c_data = c.flatten().half()
+        a = torch.randn(batch_count, m, k, device=device, dtype=dtype)
+        b = torch.randn(batch_count, k, n, device=device, dtype=dtype)
+        c = torch.empty(batch_count, m, n, device=device, dtype=dtype)
 
-        batched_gemm(a_data, b_data, c_data, m, n, k, batch_count)
-        ref_c = torch.bmm(a.half().view(batch_count, m, k),
-                          b.half().view(batch_count, k, n)).flatten()
+        b = b.transpose(1, 2)
 
-        print(c_data)
+        batched_gemm(a, b, c, m, n, k, batch_count)
+        ref_c = torch.bmm(a.view(batch_count, m, k), b.view(batch_count, k, n))
+
+        print(c)
         print(ref_c)
 
-        assert torch.allclose(c_data, ref_c, atol=1e-3)
+        assert torch.allclose(c, ref_c, atol=1e-3)
 
 
 if __name__ == "__main__":
