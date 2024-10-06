@@ -3,10 +3,10 @@
 #include "util/cuda_timer.hpp"
 
 void run_test() {
-    using WholeShape = GemmShape<1024, 1024, 2048>;
-    using CtaTileShape = GemmShape<256, 128, 128>;
+    using WholeShape = GemmShape<512, 512, 512>;
+    using CtaTileShape = GemmShape<64, 64, 64>;
     using WarpLayout = tl::RowMajor<2, 2>;
-    static constexpr int kRK = 64;
+    static constexpr int kRK = 32;
 
     using InType = __half;
     using AccType = float;
@@ -27,16 +27,16 @@ void run_test() {
     for (int i = 0; i < h_b.size(); ++i)
         h_b[i] = static_cast<InType>(rand_float());
 
-    thrust::host_vector<AccType> h_c(kM * kN);
+    thrust::host_vector<InType> h_c(kM * kN);
     thrust::fill(h_c.begin(), h_c.end(), 0.);
 
     thrust::device_vector<InType> d_a = h_a;
     thrust::device_vector<InType> d_b = h_b;
-    thrust::device_vector<AccType> d_c = h_c;
+    thrust::device_vector<InType> d_c = h_c;
 
     const InType* A = thrust::raw_pointer_cast(d_a.data());
     const InType* B = thrust::raw_pointer_cast(d_b.data());
-    AccType* C = thrust::raw_pointer_cast(d_c.data());
+    InType* C = thrust::raw_pointer_cast(d_c.data());
 
     using Config = KeGemmTraits<InType, AccType, WholeShape, CtaTileShape, kRK,
                                 WarpLayout>;
@@ -49,7 +49,8 @@ void run_test() {
               typename Config::SharedB, typename Config::RegB,
               typename Config::G2SLoaderB, typename Config::S2RLoaderB,
               typename Config::GlobalC, typename Config::SharedC,
-              typename Config::RegC, typename Config::R2SStorerC,
+              typename Config::RegC, typename Config::RegCHalf,
+              typename Config::ConvertHalf, typename Config::R2SStorerC,
               typename Config::S2GStorerC>;
 
     static constexpr int smem_size_inputs = kTK * (kTN + kTM) * sizeof(InType);
@@ -72,13 +73,16 @@ void run_test() {
 
     kernel<<<dim_grid, dim_block, smem_size>>>(A, B, C);
     cudaDeviceSynchronize();
-
     h_c = d_c;
+
     // check correctness
-    thrust::host_vector<AccType> h_c2(kM * kN);
-    thrust::fill(h_c2.begin(), h_c2.end(), 0.);
-    naive_gemm(kM, kN, kK, thrust::raw_pointer_cast(h_a.data()),
-               thrust::raw_pointer_cast(h_b.data()), h_c2.data());
+    thrust::device_vector<InType> d_c2(kM * kN);
+    thrust::fill(d_c2.begin(), d_c2.end(), 0.);
+
+    cublas_hgemm(kM, kN, kK, thrust::raw_pointer_cast(d_a.data()),
+                 thrust::raw_pointer_cast(d_b.data()),
+                 thrust::raw_pointer_cast(d_c2.data()), false /*timeit*/);
+    thrust::host_vector<InType> h_c2 = d_c2;
 
     bool passed = check_results(thrust::raw_pointer_cast(h_c.data()),
                                 thrust::raw_pointer_cast(h_c2.data()), kM * kN);
@@ -94,11 +98,18 @@ void run_test() {
         }
         cudaDeviceSynchronize();
 
-        float time = timer.stop();
-        std::cout << std::setprecision(4) << "elapsed time: " << time / iters
-                  << " ms" << std::endl;
-    } else
+        float time1 = cublas_hgemm(
+            kM, kN, kK, thrust::raw_pointer_cast(d_a.data()),
+            thrust::raw_pointer_cast(d_b.data()),
+            thrust::raw_pointer_cast(d_c2.data()), true /*timeit*/);
+
+        float time2 = timer.stop() / iters;
+        std::cout << "cuBLAS\tTiledCUDA\tRatio" << std::endl;
+        std::cout << std::setprecision(4) << time1 << "\t" << time2 << "\t"
+                  << time2 / time1 << std::endl;
+    } else {
         std::cerr << "Test failed." << std::endl;
+    }
 }
 
 int main(int argc, char* argv[]) {

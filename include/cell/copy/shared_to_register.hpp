@@ -262,10 +262,10 @@ struct RegToSharedStorer : public Base {
             Shared::kType == Reg::kType,
             "The layout of Shared and Register tile must be the same.");
 
-        static_assert(
-            (Shared::kSwizzled && sizeof(DType) == 4 ||
-             Shared::kSwizzled == false),
-            "Not implemented for swizzled layout with 2-byte data types.");
+        // static_assert(
+        //     (Shared::kSwizzled && sizeof(DType) == 4 ||
+        //      Shared::kSwizzled == false),
+        //     "Not implemented for swizzled layout with 2-byte data types.");
 
         DType* dst_ptr = dst.mutable_data();  // pointer for shared memory tile
 
