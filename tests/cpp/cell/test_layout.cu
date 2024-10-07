@@ -72,8 +72,7 @@ void test_swizzled_function<float>() {
     RowMajor layout1;
 
     // only siwizzle the first [16x16] half of the [kRows, kCols] matrix
-    using LayoutAtom = cute::Layout<Shape<_16, _16>, Stride<Int<kCols>, _1>>;
-    using Swizzled = tl::detail::SwizzledRowMajorStorer<kBits, LayoutAtom>;
+    using Swizzled = tl::detail::SwizzledRowMajorStorer<kBits>;
     Swizzled layout2;
 
     for (int i = 0; i < RowMajor::kRows; ++i) {

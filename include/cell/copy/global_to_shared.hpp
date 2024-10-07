@@ -178,16 +178,15 @@ struct SharedToGlobalStorerImpl<Shared_, Global_, kRowExec_, kColExec_,
     static constexpr int kColExec = kColExec_;
 
     // strides to iterate over each 16x16 `BaseTile` in the shared memory
-    static constexpr int kDstRstride = BaseShape::kRows * Global::kRowStride;
-
-    static constexpr int kCstride = BaseShape::kCols;
+    static constexpr int kDstRowStride = BaseShape::kRows * Global::kRowStride;
+    static constexpr int kDstColStride = BaseShape::kCols;
 
     DEVICE void operator()(const DType* src, DType* dst) {
         int src_offset = 0, dst_offset = 0;
         for (int i = 0; i < kRowExec; ++i) {
             for (int j = 0; j < kColExec; ++j) {
-                src_offset = (i * kColExec + j) * BaseShape::kNumel;
-                dst_offset = i * kDstRstride + j * kCstride;
+                src_offset = (i * kColExec + j) * BaseShape::kNumel;  // shared
+                dst_offset = i * kDstRowStride + j * kDstColStride;   // global
 
                 this->copy(src + src_offset, dst + dst_offset);
             }
@@ -224,17 +223,16 @@ struct SharedToGlobalStorerImpl<Shared_, Global_, kRowExec_, kColExec_,
     static constexpr int kColExec = kColExec_;
 
     // strides to iterate over each 16x16 `BaseTile` in the shared memory
-    static constexpr int kSrcCstride = BaseShape::kCols * Shared::kColStride;
-    static constexpr int kDstCstride = BaseShape::kCols * Global::kColStride;
-
-    static constexpr int kRstride = BaseShape::kRows;
+    // static constexpr int kSrcCstride = BaseShape::kCols * Shared::kColStride;
+    static constexpr int kDstRowStride = BaseShape::kRows;
+    static constexpr int kDstColStride = BaseShape::kCols * Global::kColStride;
 
     DEVICE void operator()(const DType* src, DType* dst) {
         int src_offset = 0, dst_offset = 0;
         for (int i = 0; i < kRowExec; ++i) {
             for (int j = 0; j < kColExec; ++j) {
-                src_offset = i * kRstride + j * kSrcCstride;
-                dst_offset = i * kRstride + j * kDstCstride;
+                src_offset = (i * kColExec + j) * BaseShape::kNumel;  // shared
+                dst_offset = i * kDstRowStride + j * kDstColStride;   // global
 
                 this->copy(src + src_offset, dst + dst_offset);
             }
@@ -291,6 +289,10 @@ struct SharedToGlobalStorer : public Base {
     using Shared = Shared_;
     using DType = Shared::DType;
     using WarpLayout = WarpLayout_;
+
+    static_assert(
+        (Shared::kSwizzled && sizeof(DType) == 4 || Shared::kSwizzled == false),
+        "Not implemented for swizzled layout with 2-byte data types.");
 
     using BaseShape = traits::BaseTileShape<DType>;
 

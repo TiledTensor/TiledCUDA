@@ -1,6 +1,5 @@
 #include "gemm.hpp"
 #include "util.hpp"
-#include "util/cuda_timer.hpp"
 
 template <typename WholeShape, typename CtaTileShape, typename WarpLayout>
 int run_test() {
@@ -57,32 +56,46 @@ int run_test() {
 
     dim3 dim_grid(block_x, block_y, 1);
     dim3 dim_block(Config::kThreads, 1, 1);
-
-    CudaTimer timer;
-    timer.start();
     simple_gemm<InType, AccType, kM, kN, kK, kTM, kTN, IteratorA, RegA,
                 typename Config::ALoader, IteratorB, RegB,
                 typename Config::BLoader, typename Config::GlobalC,
                 typename Config::RegC, typename Config::CStorer>
         <<<dim_grid, dim_block>>>(A, B, C);
     cudaDeviceSynchronize();
-    float time = timer.stop();
-    std::cout << "elapsed time: " << time << " ms" << std::endl;
-
     h_c = d_c;
 
     // check correctness
-    thrust::host_vector<AccType> h_c2(kM * kN);
-    thrust::fill(h_c2.begin(), h_c2.end(), 0.);
-    naive_gemm(kM, kN, kK, thrust::raw_pointer_cast(h_a.data()),
-               thrust::raw_pointer_cast(h_b.data()), h_c2.data());
+    thrust::device_vector<InType> d_c2(kM * kN);
+    thrust::fill(d_c2.begin(), d_c2.end(), 0.);
+
+    cublas_hgemm(kM, kN, kK, thrust::raw_pointer_cast(d_a.data()),
+                 thrust::raw_pointer_cast(d_b.data()),
+                 thrust::raw_pointer_cast(d_c2.data()), false /*timeit*/);
+    thrust::host_vector<InType> h_c2 = d_c2;
 
     bool passed = check_results(thrust::raw_pointer_cast(h_c.data()),
                                 thrust::raw_pointer_cast(h_c2.data()), kM * kN);
 
-    if (passed)
+    if (passed) {
         std::cout << "Test passed." << std::endl;
-    else
+
+        CudaTimer timer;
+        timer.start();
+        int iters = 20;
+        for (int i = 0; i < iters; ++i) {
+            simple_gemm<InType, AccType, kM, kN, kK, kTM, kTN, IteratorA, RegA,
+                        typename Config::ALoader, IteratorB, RegB,
+                        typename Config::BLoader, typename Config::GlobalC,
+                        typename Config::RegC, typename Config::CStorer>
+                <<<dim_grid, dim_block>>>(A, B, C);
+        }
+        cudaDeviceSynchronize();
+
+        float time = timer.stop();
+        std::cout << std::setprecision(4) << "elapsed time: " << time / iters
+                  << " ms" << std::endl;
+
+    } else
         std::cerr << "Test failed." << std::endl;
 
     return 0;

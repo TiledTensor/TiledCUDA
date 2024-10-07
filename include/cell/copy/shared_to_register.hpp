@@ -114,65 +114,6 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
     BaseTilesLayout base_tiles_;
     BaseTileSharedLayout in_base_tile_;
 };
-
-template <typename Shared, typename Reg_, const int kRowExec_,
-          const int kColExec_, const tl::Layout kType>
-struct RegToSharedStorerImpl;
-
-template <typename Shared, typename Reg_, const int kRowExec_,
-          const int kColExec_>
-struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
-                             tl::Layout::kRowMajor> {
-    using Reg = Reg_;
-    using DType = typename Shared::DType;
-
-    static constexpr int kRowExec = kRowExec_;
-    static constexpr int kColExec = kColExec_;
-
-    DEVICE void operator()(const Reg& src, DType* dst) {
-#pragma unroll
-        for (int i = 0; i < kRowExec; ++i) {
-#pragma unroll
-            for (int j = 0; j < kColExec; ++j) {
-                int offset = (i * kColExec + j) * BaseShape::kNumel;
-
-                storer_(src(i, j).data(), dst + offset);
-            }
-        }
-    }
-
-  private:
-    using BaseShape = BaseTileShape<DType>;
-
-    using Storer = BaseTileStorer<Shared, Shared::kType, sizeof(DType) * 8>;
-    Storer storer_;
-};
-
-template <typename Shared, typename Reg_, const int kRowExec_,
-          const int kColExec_>
-struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
-                             tl::Layout::kColMajor> {
-    using Reg = Reg_;
-    using DType = typename Shared::DType;
-
-    static constexpr int kRowExec = kRowExec_;
-    static constexpr int kColExec = kColExec_;
-
-    DEVICE void operator()(const Reg& src, DType* dst) {
-#pragma unroll
-        for (int i = 0; i < kRowExec; ++i) {
-#pragma unroll
-            for (int j = 0; j < kColExec; ++j) {
-                storer_(src(i, j).data(), dst);
-            }
-        }
-    }
-
-  private:
-    using Storer = BaseTileStorer<Shared, Shared::kType, sizeof(DType) * 8>;
-    Storer storer_;
-};
-
 }  // namespace  detail
 
 /// @brief partial specialization for loading data from shared memory to
@@ -233,7 +174,7 @@ struct RegToSharedStorer {
     ///        is the current thread's local register tile, and the destination
     ///        is shared memory.
     template <typename Shared>
-    DEVICE void operator()(const Reg& src, Shared& dst) {
+    DEVICE void operator()(const Reg& src, Shared& dst_) {
         static_assert(std::is_same_v<typename Shared::DType, DType>,
                       "The element data type of Shared and Register tile must "
                       "be the same.");
@@ -245,13 +186,17 @@ struct RegToSharedStorer {
         static_assert(
             Shared::kType == Reg::kType,
             "The layout of Shared and Register tile must be the same.");
-
         static_assert(Shared::kRows % BaseShape::kRows == 0,
                       "The number of shared memory rows must be divisible by "
                       "the base tile row.");
         static_assert(Shared::kCols % BaseShape::kCols == 0,
                       "The number of shared memory columns must be divisible "
                       "by the base tile column.");
+        static_assert(
+            (Shared::kSwizzled && sizeof(DType) == 4 ||
+             Shared::kSwizzled == false),
+            "Not implemented for swizzled layout with 2-byte data types.");
+
         // how many times the 16x16 `BaseTile` is executed along the row and
         // column direction.
         static constexpr int kRowExec =
@@ -259,18 +204,24 @@ struct RegToSharedStorer {
         static constexpr int kColExec =
             Shared::kCols / BaseShape::kCols / tl::num_cols<WarpLayout>;
 
-        DType* dst_ptr = dst.mutable_data();  // pointer for shared memory tile
-
         // 1. advance the pointer to input data to the current warp according to
         // warp reuse mode. During the store process, threads do not write to
         // the same shared memory location, thus the warp reuse mode is set to
         // `Cont`.
-        int offset = offset_helper_.get_warp_offset();
+        DType* dst = dst_.mutable_data() + offset_helper_.get_warp_offset();
 
-        using Storer = detail::RegToSharedStorerImpl<Shared, Reg, kRowExec,
-                                                     kColExec, Shared::kType>;
+        using Storer = BaseTileStorer<Shared, Shared::kType, sizeof(DType) * 8>;
         Storer storer;
-        storer(src, dst_ptr + offset);
+
+        int offset = 0;
+#pragma unroll
+        for (int i = 0; i < kRowExec; ++i) {
+#pragma unroll
+            for (int j = 0; j < kColExec; ++j) {
+                offset = (i * kColExec + j) * BaseShape::kNumel;
+                storer(src(i, j).data(), dst + offset);
+            }
+        }
     }
 
   private:

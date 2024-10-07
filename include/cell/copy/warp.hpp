@@ -261,11 +261,6 @@ struct SharedOffsetHelper<WarpLayout, tl::Layout::kColMajor, kWarpTileNumel_> {
                        warp_col * WarpLayout::kColStride;
         int offset = warp_num * kWarpTileNumel;
 
-        if (thread0()) {
-            printf("warp_row: %d, warp_col: %d, warp_num: %d, offset: %d\n",
-                   warp_row, warp_col, warp_num, offset);
-        }
-
         return offset;
     }
 };

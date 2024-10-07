@@ -51,8 +51,6 @@ float cublas_hgemm(int64_t kM, int64_t kN, int64_t kK,  // problem shape
     return elapsed;
 }
 
-#define DEBUG
-
 bool check_results(const float* values1, const __half* values2, int numel) {
     bool passed = true;
     const float epsilon = 1e-3;
