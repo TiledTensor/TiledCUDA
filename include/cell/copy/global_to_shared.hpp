@@ -178,7 +178,7 @@ struct SharedToGlobalStorerImpl<Shared_, Global_, kRowExec_, kColExec_,
     static constexpr int kColExec = kColExec_;
 
     // strides to iterate over each 16x16 `BaseTile` in the shared memory
-    static constexpr int kSrcRstride = BaseShape::kRows * Shared::kRowStride;
+    // static constexpr int kSrcRstride = BaseShape::kRows * Shared::kRowStride;
     static constexpr int kDstRstride = BaseShape::kRows * Global::kRowStride;
 
     static constexpr int kCstride = BaseShape::kCols;
@@ -187,7 +187,9 @@ struct SharedToGlobalStorerImpl<Shared_, Global_, kRowExec_, kColExec_,
         int src_offset = 0, dst_offset = 0;
         for (int i = 0; i < kRowExec; ++i) {
             for (int j = 0; j < kColExec; ++j) {
-                src_offset = i * kSrcRstride + j * kCstride;
+                // src_offset = i * kSrcRstride + j * kCstride;
+
+                src_offset = (i * kColExec + j) * BaseShape::kNumel;
                 dst_offset = i * kDstRstride + j * kCstride;
 
                 this->copy(src + src_offset, dst + dst_offset);
@@ -293,35 +295,53 @@ struct SharedToGlobalStorer : public Base {
     using DType = Shared::DType;
     using WarpLayout = WarpLayout_;
 
-    // static_assert(
-    //     (Shared::kSwizzled && sizeof(DType) == 4 || Shared::kSwizzled ==
-    //     false), "Not implemented for swizzled layout with 2-byte data
-    //     types.");
-
     using BaseShape = traits::BaseTileShape<DType>;
 
-    static constexpr int kRowExec =
-        Base::template row_exec_count<BaseShape, Shared::kRows>();
-    static constexpr int kColExec =
-        Base::template col_exec_count<BaseShape, Shared::kCols>();
+    static_assert(Shared::kRows % BaseShape::kRows == 0,
+                  "Shared::kRows must be divisible by BaseShape::kRows.");
+    static_assert(Shared::kCols % BaseShape::kCols == 0,
+                  "Shared::kCols must be divisible by BaseShape::kCols.");
+
+    static constexpr int kRowExec = Shared::kRows / BaseShape::kRows;
+    static constexpr int kColExec = Shared::kCols / BaseShape::kCols;
 
     static_assert(kRowExec && kColExec,
                   "Execution count should be greater than 0.");
 
     template <typename Global>
-    DEVICE void operator()(const Shared& src, Global& dst) {
-        const DType* src_ptr = src.data();
-        DType* dst_ptr = dst.mutable_data();
+    DEVICE void operator()(const Shared& src_, Global& dst_) {
+        if (thread0()) {
+            printf("1\n");
+        }
 
-        int offset_src = Base::template get_warp_offset<Shared>();
+        const DType* src = src_.data();
+        DType* dst = dst_.mutable_data();
+
+        if (thread0()) {
+            printf("2\n");
+        }
+
+        int offset_src = offset_helper_.get_warp_offset();
+
+        if (thread0()) {
+            printf("3\n");
+        }
+
         int offset_dst = Base::template get_warp_offset<Global>();
 
         using Storer = SharedToGlobalStorerImpl<Shared, Global, kRowExec,
                                                 kColExec, Shared::kType>;
 
         Storer storer;
-        storer(src_ptr + offset_src, dst_ptr + offset_dst);
+        storer(src + offset_src, dst + offset_dst);
     }
+
+  private:
+    constexpr static int kWarpTileNumel = Shared::kNumel / WarpLayout::kNumel;
+    using OffsetHelper =
+        warp::SharedOffsetHelper<WarpLayout, WarpLayout::layout_type,
+                                 kWarpTileNumel>;
+    OffsetHelper offset_helper_;
 };
 
 }  // namespace tiledcuda::cell::copy

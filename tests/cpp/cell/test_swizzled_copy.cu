@@ -261,7 +261,7 @@ void run_test_colmajor() {
     LOG(INFO) << std::endl << ss.str() << " passed!" << std::endl;
 }
 
-#define DEBUG
+// #define DEBUG
 
 template <typename Element, typename Global, typename Reg, typename Shared,
           typename Loader, typename StorerR2S, typename StorerS2G>
@@ -279,11 +279,22 @@ __global__ void swizzled_store(const Element* src, Element* dst, Loader loader,
     loader(g_src_tile, r_tile);
     __syncthreads();
 
+    if (thread0()) {
+        printf("\ns-1:\n");
+    }
+
     storer1(r_tile, s_tile);
     __syncthreads();
+    if (thread0()) {
+        printf("\ns-2:\n");
+    }
 
-    // storer2(s_tile, g_dst_tile);
-    // __syncthreads();
+    storer2(s_tile, g_dst_tile);
+    __syncthreads();
+
+    if (thread0()) {
+        printf("\ns-3:\n");
+    }
 
 #ifdef DEBUG
     if (thread0()) {
@@ -455,7 +466,7 @@ void test_col_major_store() {
 TEST(TestSwizzledStored, test_row_major) {
     static constexpr int kSwizzled = true;
 
-    test_row_major_store<float, tl::RowMajor<1, 1>, 16, 16, kSwizzled>();
+    test_row_major_store<float, tl::RowMajor<2, 1>, 32, 32, kSwizzled>();
 
     // test_row_major_store<float, tl::RowMajor<1, 1>, 16, 48, kSwizzled>();
     // test_row_major_store<float, tl::RowMajor<2, 1>, 32, 48, kSwizzled>();

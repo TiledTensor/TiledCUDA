@@ -129,9 +129,6 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 32> {
         int lane_row = lane_row_id();
         int lane_col = lane_col_id();
 
-        if (thread(1)) {
-            printf("lane_row: %d, lane_col: %d\n", lane_row, lane_col);
-        }
         // A base tile has a fixed shape of 16x16 (a 16x16 2D coordinate space
         // with integer indices ranging from 0 to 255). `row` and `col` are used
         // to calculate the index of an element within this 16x16 coordinate
@@ -143,7 +140,6 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 32> {
 #pragma unroll
             for (int j = 0; j < kSegCols; ++j) {
                 col = kElemPerSeg * (lane_col + j * tl::num_cols<ThreadLayout>);
-
                 dst[in_tile_(row, col) / kElemPerSeg] = src[j * kSegCols + i];
             }
         }

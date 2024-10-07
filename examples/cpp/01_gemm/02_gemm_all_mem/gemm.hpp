@@ -78,7 +78,7 @@ struct KeGemmTraits {
     // Global Tile for output C
     using GlobalC = GlobalTile<AccType, tl::RowMajor<kTM, kTN, kN>>;
     // Shared Tile for output C
-    using SharedC = SharedTile<AccType, tl::RowMajor<kTM, kTN>, true>;
+    using SharedC = SharedTile<AccType, tl::RowMajor<kTM, kTN>, kSwizzled>;
 
     // Register Tile for output C
     static constexpr int kCMs = kTM / kWarpPerRow / BaseShape::kTileSize;
@@ -98,7 +98,7 @@ template <typename InType, typename AccType,                  //
           typename GIteratorB, typename SIteratorB,           //
           typename SharedB, typename RegB,                    //
           typename G2SLoaderB, typename S2RLoaderB,           //
-          typename GlobalC, typename SharedC, typename RegC,  //          //
+          typename GlobalC, typename SharedC, typename RegC,  //
           typename R2SStorerC, typename S2GStorerC>
 __global__ void gemm(const InType* dA, const InType* dB, AccType* dC) {
     int offset_a = blockIdx.x * kTM * kK;
@@ -151,6 +151,5 @@ __global__ void gemm(const InType* dA, const InType* dB, AccType* dC) {
     }
     r2s_c(acc, sC);
     __syncthreads();
-
     s2g_c(sC, gC);
 }

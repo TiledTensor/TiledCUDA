@@ -194,7 +194,8 @@ struct SwizzledRowMajorStorer<32, AtomLayout> {
 
     DEVICE int operator()(int i, int j) const {
         int s = swizzled_(i, j);
-        return layout_(s / BaseShape::kCols, s % BaseShape::kCols);
+        return s;
+        // return layout_(s / BaseShape::kCols, s % BaseShape::kCols);
     }
 
   private:

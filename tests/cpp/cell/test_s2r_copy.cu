@@ -146,7 +146,6 @@ __global__ void run_test_store_float(ConvertHalf& convert, Loader& loader,
         assert(check_results(store_buf, SharedFloat::kNumel));
     }
 }
-
 }  // namespace
 
 TEST(TestShared2Reg, operand_A) {  // load mode for loading operand A in gemm
