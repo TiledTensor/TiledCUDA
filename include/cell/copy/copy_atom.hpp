@@ -114,8 +114,7 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 16> {
         return (threadIdx.x % kWarpSize) % tl::num_cols<ThreadLayout>;
     }
 
-    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
-    BaseTileSharedLayout in_tile_;
+    typename tl::SharedStorerLayoutWrapper<Shared>::Layout in_tile_;
 };
 
 /// TODO(haruhi): try to reduece reusable codes.
@@ -130,6 +129,9 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 32> {
         int lane_row = lane_row_id();
         int lane_col = lane_col_id();
 
+        if (thread(1)) {
+            printf("lane_row: %d, lane_col: %d\n", lane_row, lane_col);
+        }
         // A base tile has a fixed shape of 16x16 (a 16x16 2D coordinate space
         // with integer indices ranging from 0 to 255). `row` and `col` are used
         // to calculate the index of an element within this 16x16 coordinate
@@ -141,12 +143,15 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 32> {
 #pragma unroll
             for (int j = 0; j < kSegCols; ++j) {
                 col = kElemPerSeg * (lane_col + j * tl::num_cols<ThreadLayout>);
+
                 dst[in_tile_(row, col) / kElemPerSeg] = src[j * kSegCols + i];
             }
         }
     }
 
   private:
+    typename tl::SharedStorerLayoutWrapper<Shared>::Layout in_tile_;
+
     // the thread layout for wmma's output tile.
     using ThreadLayout = tile_layout::RowMajor<8, 4>;
     static constexpr int kWarpSize = 32;
@@ -168,8 +173,6 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 32> {
     DEVICE int lane_col_id() {
         return (threadIdx.x % kWarpSize) % tl::num_cols<ThreadLayout>;
     }
-
-    typename tl::SharedLayoutWrapper<Shared>::Layout in_tile_;
 };
 
 /// TODO(haruhi): try to reduece reusable codes.
@@ -224,7 +227,7 @@ struct BaseTileStorer<Shared, tl::Layout::kColMajor, 16> {
         return (threadIdx.x % kWarpSize) / tl::num_rows<ThreadLayout>;
     }
 
-    typename tl::SharedLayoutWrapper<Shared>::Layout in_tile_;
+    typename tl::SharedStorerLayoutWrapper<Shared>::Layout in_tile_;
 };
 
 /// TODO(haruhi): try to reduece reusable codes.
@@ -278,7 +281,7 @@ struct BaseTileStorer<Shared, tl::Layout::kColMajor, 32> {
         return (threadIdx.x % kWarpSize) / tl::num_rows<ThreadLayout>;
     }
 
-    typename tl::SharedLayoutWrapper<Shared>::Layout in_tile_;
+    typename tl::SharedStorerLayoutWrapper<Shared>::Layout in_tile_;
 };
 
 template <class Global, class Shared, const tl::Layout kType>
@@ -464,7 +467,8 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kRowMajor> {
     static constexpr int kColStride = kThreadsPerCol * kNumPerAccess;
     static constexpr int kExecCount = BaseShape::kCols / kColStride;
 
-    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
+    using BaseTileSharedLayout = tl::SharedStorerLayoutWrapper<Shared>::Layout;
+
     using BaseTileGlobalLayout =
         cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
                      Stride<Int<Global::kRowStride>, _1>>;
@@ -534,7 +538,7 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kColMajor> {
     static constexpr int kRowStride = kThreadsPerRow * kNumPerAccess;
     static constexpr int kExecCount = BaseShape::kRows / kRowStride;
 
-    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
+    using BaseTileSharedLayout = tl::SharedStorerLayoutWrapper<Shared>::Layout;
     using BaseTileGlobalLayout =
         cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
                      Stride<_1, Int<Global::kColStride>>>;

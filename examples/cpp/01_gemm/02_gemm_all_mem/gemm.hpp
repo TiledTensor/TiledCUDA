@@ -76,20 +76,16 @@ struct KeGemmTraits {
         SharedToRegLoader<RegB, WarpLayout, WarpReuse::kColReuseCont>;
 
     // Global Tile for output C
-    using GlobalC = GlobalTile<InType, tl::RowMajor<kTM, kTN, kN>>;
+    using GlobalC = GlobalTile<AccType, tl::RowMajor<kTM, kTN, kN>>;
     // Shared Tile for output C
-    using SharedC = SharedTile<InType, tl::RowMajor<kTM, kTN>, true>;
+    using SharedC = SharedTile<AccType, tl::RowMajor<kTM, kTN>, true>;
 
     // Register Tile for output C
     static constexpr int kCMs = kTM / kWarpPerRow / BaseShape::kTileSize;
     static constexpr int kCNs = kTN / kWarpPerCol / BaseShape::kTileSize;
     using RegC = RegTile<BaseTileRowMajor<AccType>, tl::RowMajor<kCMs, kCNs>>;
 
-    using RegCHalf =
-        RegTile<BaseTileRowMajor<InType>, tl::RowMajor<kCMs, kCNs>>;
-    using ConvertHalf = compute::RegTileConvert<RegC, RegCHalf>;
-
-    using R2SStorerC = RegToSharedStorer<RegCHalf, WarpLayout>;
+    using R2SStorerC = RegToSharedStorer<RegC, WarpLayout>;
     using S2GStorerC = SharedToGlobalStorer<SharedC, WarpLayout>;
 };
 
@@ -153,7 +149,6 @@ __global__ void gemm(const InType* dA, const InType* dB, AccType* dC) {
             compute::gemm_(rA, rB, acc);
         }
     }
-    // cast(acc, acc_half);
     r2s_c(acc, sC);
     __syncthreads();
 

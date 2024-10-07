@@ -136,20 +136,12 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
         for (int i = 0; i < kRowExec; ++i) {
 #pragma unroll
             for (int j = 0; j < kColExec; ++j) {
-                storer_(src(i, j).data(), dst + base_tiles_(i, j));
+                storer_(src(i, j).data(), dst);
             }
         }
     }
 
   private:
-    // layout to address the start position of an individual `BaseTile` in the
-    // whole shared memory tile.
-    using BaseTilesLayout =
-        tl::MatrixLayout<kRowExec, kColExec,
-                         BaseShape::kRows * Shared::kRowStride,
-                         BaseShape::kCols>;
-    BaseTilesLayout base_tiles_;
-
     using Storer = BaseTileStorer<Shared, Shared::kType, sizeof(DType) * 8>;
     Storer storer_;
 };
@@ -160,7 +152,6 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
                              tl::Layout::kColMajor> {
     using Reg = Reg_;
     using DType = typename Shared::DType;
-    using BaseShape = BaseTileShape<DType>;
 
     static constexpr int kRowExec = kRowExec_;
     static constexpr int kColExec = kColExec_;
@@ -176,13 +167,11 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
     }
 
   private:
-    // layout to address the start position of an individual `BaseTile` in the
-    // whole shared memory tile.
+    using BaseShape = traits::BaseTileShape<DType>;
     using BaseTilesLayout =
         tl::MatrixLayout<kRowExec, kColExec, BaseShape::kRows,
                          BaseShape::kCols * Shared::kColStride>;
     BaseTilesLayout base_tiles_;
-
     using Storer = BaseTileStorer<Shared, Shared::kType, sizeof(DType) * 8>;
     Storer storer_;
 };
@@ -261,11 +250,6 @@ struct RegToSharedStorer : public Base {
         static_assert(
             Shared::kType == Reg::kType,
             "The layout of Shared and Register tile must be the same.");
-
-        // static_assert(
-        //     (Shared::kSwizzled && sizeof(DType) == 4 ||
-        //      Shared::kSwizzled == false),
-        //     "Not implemented for swizzled layout with 2-byte data types.");
 
         DType* dst_ptr = dst.mutable_data();  // pointer for shared memory tile
 

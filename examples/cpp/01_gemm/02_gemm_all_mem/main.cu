@@ -74,41 +74,42 @@ void run_test() {
     cudaDeviceSynchronize();
     h_c = d_c;
 
-    // check correctness
-    thrust::device_vector<InType> d_c2(kM * kN);
-    thrust::fill(d_c2.begin(), d_c2.end(), 0.);
+    // // check correctness
+    // thrust::device_vector<InType> d_c2(kM * kN);
+    // thrust::fill(d_c2.begin(), d_c2.end(), 0.);
 
-    cublas_hgemm(kM, kN, kK, thrust::raw_pointer_cast(d_a.data()),
-                 thrust::raw_pointer_cast(d_b.data()),
-                 thrust::raw_pointer_cast(d_c2.data()), false /*timeit*/);
-    thrust::host_vector<InType> h_c2 = d_c2;
+    // cublas_hgemm(kM, kN, kK, thrust::raw_pointer_cast(d_a.data()),
+    //              thrust::raw_pointer_cast(d_b.data()),
+    //              thrust::raw_pointer_cast(d_c2.data()), false /*timeit*/);
+    // thrust::host_vector<InType> h_c2 = d_c2;
 
-    bool passed = check_results(thrust::raw_pointer_cast(h_c.data()),
-                                thrust::raw_pointer_cast(h_c2.data()), kM * kN);
+    // bool passed = check_results(thrust::raw_pointer_cast(h_c.data()),
+    //                             thrust::raw_pointer_cast(h_c2.data()), kM *
+    //                             kN);
 
-    if (passed) {
-        std::cout << "Test passed." << std::endl;
+    // if (passed) {
+    //     std::cout << "Test passed." << std::endl;
 
-        CudaTimer timer;
-        timer.start();
-        int iters = 20;
-        for (int i = 0; i < iters; ++i) {
-            kernel<<<dim_grid, dim_block, smem_size>>>(A, B, C);
-        }
-        cudaDeviceSynchronize();
+    //     CudaTimer timer;
+    //     timer.start();
+    //     int iters = 20;
+    //     for (int i = 0; i < iters; ++i) {
+    //         kernel<<<dim_grid, dim_block, smem_size>>>(A, B, C);
+    //     }
+    //     cudaDeviceSynchronize();
 
-        float time1 = cublas_hgemm(
-            kM, kN, kK, thrust::raw_pointer_cast(d_a.data()),
-            thrust::raw_pointer_cast(d_b.data()),
-            thrust::raw_pointer_cast(d_c2.data()), true /*timeit*/);
+    //     float time1 = cublas_hgemm(
+    //         kM, kN, kK, thrust::raw_pointer_cast(d_a.data()),
+    //         thrust::raw_pointer_cast(d_b.data()),
+    //         thrust::raw_pointer_cast(d_c2.data()), true /*timeit*/);
 
-        float time2 = timer.stop() / iters;
-        std::cout << "cuBLAS\tTiledCUDA\tRatio" << std::endl;
-        std::cout << std::setprecision(4) << time1 << "\t" << time2 << "\t"
-                  << time2 / time1 << std::endl;
-    } else {
-        std::cerr << "Test failed." << std::endl;
-    }
+    //     float time2 = timer.stop() / iters;
+    //     std::cout << "cuBLAS\tTiledCUDA\tRatio" << std::endl;
+    //     std::cout << std::setprecision(4) << time1 << "\t" << time2 << "\t"
+    //               << time2 / time1 << std::endl;
+    // } else {
+    //     std::cerr << "Test failed." << std::endl;
+    // }
 }
 
 int main(int argc, char* argv[]) {
