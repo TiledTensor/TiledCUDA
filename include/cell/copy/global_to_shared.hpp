@@ -178,7 +178,6 @@ struct SharedToGlobalStorerImpl<Shared_, Global_, kRowExec_, kColExec_,
     static constexpr int kColExec = kColExec_;
 
     // strides to iterate over each 16x16 `BaseTile` in the shared memory
-    // static constexpr int kSrcRstride = BaseShape::kRows * Shared::kRowStride;
     static constexpr int kDstRstride = BaseShape::kRows * Global::kRowStride;
 
     static constexpr int kCstride = BaseShape::kCols;
@@ -187,8 +186,6 @@ struct SharedToGlobalStorerImpl<Shared_, Global_, kRowExec_, kColExec_,
         int src_offset = 0, dst_offset = 0;
         for (int i = 0; i < kRowExec; ++i) {
             for (int j = 0; j < kColExec; ++j) {
-                // src_offset = i * kSrcRstride + j * kCstride;
-
                 src_offset = (i * kColExec + j) * BaseShape::kNumel;
                 dst_offset = i * kDstRstride + j * kCstride;
 
@@ -302,30 +299,20 @@ struct SharedToGlobalStorer : public Base {
     static_assert(Shared::kCols % BaseShape::kCols == 0,
                   "Shared::kCols must be divisible by BaseShape::kCols.");
 
-    static constexpr int kRowExec = Shared::kRows / BaseShape::kRows;
-    static constexpr int kColExec = Shared::kCols / BaseShape::kCols;
+    static constexpr int kRowExec =
+        Shared::kRows / BaseShape::kRows / tl::num_rows<WarpLayout>;
+    static constexpr int kColExec =
+        Shared::kCols / BaseShape::kCols / tl::num_cols<WarpLayout>;
 
     static_assert(kRowExec && kColExec,
                   "Execution count should be greater than 0.");
 
     template <typename Global>
     DEVICE void operator()(const Shared& src_, Global& dst_) {
-        if (thread0()) {
-            printf("1\n");
-        }
-
         const DType* src = src_.data();
         DType* dst = dst_.mutable_data();
 
-        if (thread0()) {
-            printf("2\n");
-        }
-
         int offset_src = offset_helper_.get_warp_offset();
-
-        if (thread0()) {
-            printf("3\n");
-        }
 
         int offset_dst = Base::template get_warp_offset<Global>();
 

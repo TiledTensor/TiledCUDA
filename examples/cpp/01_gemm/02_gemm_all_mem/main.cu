@@ -3,10 +3,10 @@
 #include "util/cuda_timer.hpp"
 
 void run_test() {
-    using WholeShape = GemmShape<512, 512, 512>;
-    using CtaTileShape = GemmShape<64, 64, 64>;
+    using WholeShape = GemmShape<32, 32, 32>;
+    using CtaTileShape = GemmShape<32, 32, 32>;
     using WarpLayout = tl::RowMajor<2, 2>;
-    static constexpr int kRK = 32;
+    static constexpr int kRK = 16;
 
     using InType = __half;
     using AccType = float;
@@ -72,7 +72,7 @@ void run_test() {
 
     kernel<<<dim_grid, dim_block, smem_size>>>(A, B, C);
     cudaDeviceSynchronize();
-    h_c = d_c;
+    // h_c = d_c;
 
     // // check correctness
     // thrust::device_vector<InType> d_c2(kM * kN);

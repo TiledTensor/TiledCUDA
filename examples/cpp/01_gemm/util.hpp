@@ -55,7 +55,7 @@ float cublas_hgemm(int64_t kM, int64_t kN, int64_t kK,  // problem shape
 
 bool check_results(const float* values1, const __half* values2, int numel) {
     bool passed = true;
-    const float epsilon = 1e-1;
+    const float epsilon = 1e-3;
 
     double total_diff = 0.;
     double max_abs_diff = FLT_MIN;

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "cell/copy/mod.hpp"
-// #include "cell/copy/warp.hpp"
 #include "cell/traits/base.hpp"
 #include "types/mod.hpp"
 
@@ -136,6 +135,7 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
 #pragma unroll
             for (int j = 0; j < kColExec; ++j) {
                 int offset = (i * kColExec + j) * BaseShape::kNumel;
+
                 storer_(src(i, j).data(), dst + offset);
             }
         }
@@ -254,8 +254,10 @@ struct RegToSharedStorer {
                       "by the base tile column.");
         // how many times the 16x16 `BaseTile` is executed along the row and
         // column direction.
-        static constexpr int kRowExec = Shared::kRows / BaseShape::kRows;
-        static constexpr int kColExec = Shared::kCols / BaseShape::kCols;
+        static constexpr int kRowExec =
+            Shared::kRows / BaseShape::kRows / tl::num_rows<WarpLayout>;
+        static constexpr int kColExec =
+            Shared::kCols / BaseShape::kCols / tl::num_cols<WarpLayout>;
 
         DType* dst_ptr = dst.mutable_data();  // pointer for shared memory tile
 
