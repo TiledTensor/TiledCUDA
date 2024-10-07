@@ -147,11 +147,7 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
 
 template <typename Shared, typename Global, const int kRowExec_,
           const int kColExec_, const tl::Layout kType>
-struct SharedToGlobalStorerImpl {
-    using DType = Global::DType;
-
-    DEVICE void operator()(const DType* src, DType* dst);
-};
+struct SharedToGlobalStorerImpl;
 
 template <typename Shared_, typename Global_, const int kRowExec_,
           const int kColExec_>

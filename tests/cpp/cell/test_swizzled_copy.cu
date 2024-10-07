@@ -261,7 +261,7 @@ void run_test_colmajor() {
     LOG(INFO) << std::endl << ss.str() << " passed!" << std::endl;
 }
 
-#define DEBUG
+// #define DEBUG
 
 template <typename Element, typename Global, typename Reg, typename Shared,
           typename Loader, typename StorerR2S, typename StorerS2G>

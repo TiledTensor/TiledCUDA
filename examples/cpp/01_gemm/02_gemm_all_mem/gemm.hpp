@@ -78,7 +78,7 @@ struct KeGemmTraits {
     // Global Tile for output C
     using GlobalC = GlobalTile<InType, tl::RowMajor<kTM, kTN, kN>>;
     // Shared Tile for output C
-    using SharedC = SharedTile<InType, tl::RowMajor<kTM, kTN>, false>;
+    using SharedC = SharedTile<InType, tl::RowMajor<kTM, kTN>, true>;
 
     // Register Tile for output C
     static constexpr int kCMs = kTM / kWarpPerRow / BaseShape::kTileSize;
@@ -102,10 +102,9 @@ template <typename InType, typename AccType,                  //
           typename GIteratorB, typename SIteratorB,           //
           typename SharedB, typename RegB,                    //
           typename G2SLoaderB, typename S2RLoaderB,           //
-          typename GlobalC, typename SharedC, typename RegC,  //
-          typename RegCHalf, typename ConvertHalf,            //
+          typename GlobalC, typename SharedC, typename RegC,  //          //
           typename R2SStorerC, typename S2GStorerC>
-__global__ void gemm(const InType* dA, const InType* dB, InType* dC) {
+__global__ void gemm(const InType* dA, const InType* dB, AccType* dC) {
     int offset_a = blockIdx.x * kTM * kK;
     int offset_b = blockIdx.y * kTN * kK;
     int offset_c = blockIdx.x * kTM * kN + blockIdx.y * kTN;
@@ -113,7 +112,7 @@ __global__ void gemm(const InType* dA, const InType* dB, InType* dC) {
     extern __shared__ __align__(sizeof(double)) unsigned char buf[];
     InType* sA_ptr = reinterpret_cast<InType*>(buf);
     InType* sB_ptr = sA_ptr + SIteratorA::Tile::kNumel;
-    InType* sC_ptr = reinterpret_cast<InType*>(buf);
+    AccType* sC_ptr = reinterpret_cast<AccType*>(buf);
 
     // declare tiles, iterators and loaders
     GIteratorA gAs(dA + offset_a);
@@ -129,7 +128,6 @@ __global__ void gemm(const InType* dA, const InType* dB, InType* dC) {
     RegB rB;
 
     RegC acc;
-    RegCHalf acc_half;
     SharedC sC(sC_ptr);
     GlobalC gC(dC + offset_c);
 
@@ -141,8 +139,6 @@ __global__ void gemm(const InType* dA, const InType* dB, InType* dC) {
 
     R2SStorerC r2s_c;
     S2GStorerC s2g_c;
-
-    ConvertHalf cast;
 
     for (int k1 = 0; k1 < GIteratorA::sc1; ++k1) {
         g2s_a(gAs(k1), sA);
@@ -157,8 +153,8 @@ __global__ void gemm(const InType* dA, const InType* dB, InType* dC) {
             compute::gemm_(rA, rB, acc);
         }
     }
-    cast(acc, acc_half);
-    r2s_c(acc_half, sC);
+    // cast(acc, acc_half);
+    r2s_c(acc, sC);
     __syncthreads();
 
     s2g_c(sC, gC);

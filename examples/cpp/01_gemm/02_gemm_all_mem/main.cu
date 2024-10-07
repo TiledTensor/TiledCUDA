@@ -27,16 +27,16 @@ void run_test() {
     for (int i = 0; i < h_b.size(); ++i)
         h_b[i] = static_cast<InType>(rand_float());
 
-    thrust::host_vector<InType> h_c(kM * kN);
+    thrust::host_vector<AccType> h_c(kM * kN);
     thrust::fill(h_c.begin(), h_c.end(), 0.);
 
     thrust::device_vector<InType> d_a = h_a;
     thrust::device_vector<InType> d_b = h_b;
-    thrust::device_vector<InType> d_c = h_c;
+    thrust::device_vector<AccType> d_c = h_c;
 
     const InType* A = thrust::raw_pointer_cast(d_a.data());
     const InType* B = thrust::raw_pointer_cast(d_b.data());
-    InType* C = thrust::raw_pointer_cast(d_c.data());
+    AccType* C = thrust::raw_pointer_cast(d_c.data());
 
     using Config = KeGemmTraits<InType, AccType, WholeShape, CtaTileShape, kRK,
                                 WarpLayout>;
@@ -49,8 +49,7 @@ void run_test() {
               typename Config::SharedB, typename Config::RegB,
               typename Config::G2SLoaderB, typename Config::S2RLoaderB,
               typename Config::GlobalC, typename Config::SharedC,
-              typename Config::RegC, typename Config::RegCHalf,
-              typename Config::ConvertHalf, typename Config::R2SStorerC,
+              typename Config::RegC, typename Config::R2SStorerC,
               typename Config::S2GStorerC>;
 
     static constexpr int smem_size_inputs = kTK * (kTN + kTM) * sizeof(InType);

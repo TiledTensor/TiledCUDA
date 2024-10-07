@@ -53,7 +53,7 @@ float cublas_hgemm(int64_t kM, int64_t kN, int64_t kK,  // problem shape
 
 #define DEBUG
 
-bool check_results(const __half* values1, const __half* values2, int numel) {
+bool check_results(const float* values1, const __half* values2, int numel) {
     bool passed = true;
     const float epsilon = 1e-1;
 
@@ -70,13 +70,13 @@ bool check_results(const __half* values1, const __half* values2, int numel) {
     }
     printf("\ncomputed values:\n");
     for (int i = 0; i < cut_off; ++i) {
-        printf("%.3f, ", __half2float(values1[i]));
+        printf("%.3f, ", values1[i]);
         if (i && (i + 1) % 16 == 0) printf("\n");
     }
 #endif
 
     for (int i = 0; i < numel; ++i) {
-        float v1 = __half2float(values1[i]);
+        float v1 = values1[i];
         float v2 = __half2float(values2[i]);
         diff = fabs(v1 - v2);
         max_abs_diff = max_abs_diff < diff ? diff : max_abs_diff;

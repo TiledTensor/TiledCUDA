@@ -92,8 +92,6 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 16> {
     }
 
   private:
-    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
-
     // the thread layout for wmma's output tile.
     using ThreadLayout = tile_layout::RowMajor<8, 4>;
     static constexpr int kWarpSize = 32;
@@ -116,6 +114,7 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 16> {
         return (threadIdx.x % kWarpSize) % tl::num_cols<ThreadLayout>;
     }
 
+    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
     BaseTileSharedLayout in_tile_;
 };
 
