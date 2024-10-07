@@ -126,7 +126,6 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
                              tl::Layout::kRowMajor> {
     using Reg = Reg_;
     using DType = typename Shared::DType;
-    using BaseShape = BaseTileShape<DType>;
 
     static constexpr int kRowExec = kRowExec_;
     static constexpr int kColExec = kColExec_;
@@ -136,12 +135,19 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
         for (int i = 0; i < kRowExec; ++i) {
 #pragma unroll
             for (int j = 0; j < kColExec; ++j) {
-                storer_(src(i, j).data(), dst);
+                storer_(src(i, j).data(), dst + base_tiles_(i, j));
             }
         }
     }
 
   private:
+    using BaseShape = BaseTileShape<DType>;
+    using BaseTilesLayout =
+        tl::MatrixLayout<kRowExec, kColExec,
+                         BaseShape::kRows * Shared::kRowStride,
+                         BaseShape::kCols>;
+    BaseTilesLayout base_tiles_;
+
     using Storer = BaseTileStorer<Shared, Shared::kType, sizeof(DType) * 8>;
     Storer storer_;
 };
@@ -167,11 +173,12 @@ struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
     }
 
   private:
-    using BaseShape = traits::BaseTileShape<DType>;
+    using BaseShape = BaseTileShape<DType>;
     using BaseTilesLayout =
         tl::MatrixLayout<kRowExec, kColExec, BaseShape::kRows,
                          BaseShape::kCols * Shared::kColStride>;
     BaseTilesLayout base_tiles_;
+
     using Storer = BaseTileStorer<Shared, Shared::kType, sizeof(DType) * 8>;
     Storer storer_;
 };
