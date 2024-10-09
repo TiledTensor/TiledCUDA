@@ -10,11 +10,7 @@ namespace tl = tile_layout;
 
 template <typename Global, typename Shared, const int kRowExec,
           const int kColExec, const tl::Layout kType>
-struct GlobalToSharedLoaderImpl {
-    using DType = Global::DType;
-
-    DEVICE void operator()(const DType* src, DType* dst);
-};
+struct GlobalToSharedLoaderImpl;
 
 template <typename Global_, typename Shared_, const int kRowExec_,
           const int kColExec_>
@@ -50,9 +46,9 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
     static constexpr int kNumPerAccess = LoadBase::kNumPerAccess;
 
     // strides to iterate over each 16x16 `BaseTile` in the shared memory
-    static constexpr int kSrcRstride = BaseShape::kRows * Global::kRowStride;
-    static constexpr int kDstRstride = BaseShape::kRows * Shared::kRowStride;
-    static constexpr int kCstride = BaseShape::kCols;
+    static constexpr int kSrcRowStride = BaseShape::kRows * Global::kRowStride;
+    // static constexpr int kDstRstride = BaseShape::kRows * Shared::kRowStride;
+    static constexpr int kSrcColStride = BaseShape::kCols;
 
     DEVICE void operator()(const DType* src, DType* dst) {
         int lane_row = this->lane_row_id();
@@ -66,8 +62,10 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
         for (int i = 0; i < kRowExec; ++i) {
 #pragma unroll
             for (int j = 0; j < kColExec; ++j) {
-                src_offset = i * kSrcRstride + j * kCstride + src_lane_offset;
-                dst_offset = i * kDstRstride + j * kCstride + dst_lane_offset;
+                src_offset =
+                    i * kSrcRowStride + j * kSrcColStride + src_lane_offset;
+                dst_offset =
+                    (i * kColExec + j) * BaseShape::kNumel + dst_lane_offset;
 
                 this->copy(src + src_offset, dst + dst_offset);
             }
@@ -271,8 +269,8 @@ struct GlobalToSharedLoader : public Base {
         const DType* src_ptr = src.data();
         DType* dst_ptr = dst.mutable_data();
 
-        int offset_src = Base::template get_warp_offset<Global>();
-        int offset_dst = Base::template get_warp_offset<Shared>();
+        int offset_src = Base::template get_warp_offset<Global>();  // global
+        int offset_dst = offset_helper_.get_warp_offset();          // shared
 
         using Loader = GlobalToSharedLoaderImpl<Global, Shared, kRowExec,
                                                 kColExec, Shared::kType>;
@@ -280,6 +278,13 @@ struct GlobalToSharedLoader : public Base {
         Loader loader;
         loader(src_ptr + offset_src, dst_ptr + offset_dst);
     }
+
+  private:
+    constexpr static int kWarpTileNumel = Shared::kNumel / WarpLayout::kNumel;
+    using OffsetHelper =
+        warp::SharedOffsetHelper<WarpLayout, WarpReuse::kCont,
+                                 WarpLayout::layout_type, kWarpTileNumel>;
+    OffsetHelper offset_helper_;
 };
 
 template <typename Shared_, typename WarpLayout_,
@@ -327,8 +332,8 @@ struct SharedToGlobalStorer : public Base {
   private:
     constexpr static int kWarpTileNumel = Shared::kNumel / WarpLayout::kNumel;
     using OffsetHelper =
-        warp::SharedOffsetHelper<WarpLayout, WarpLayout::layout_type,
-                                 kWarpTileNumel>;
+        warp::SharedOffsetHelper<WarpLayout, WarpReuse::kCont,
+                                 WarpLayout::layout_type, kWarpTileNumel>;
     OffsetHelper offset_helper_;
 };
 

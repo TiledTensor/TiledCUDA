@@ -18,7 +18,7 @@ void test_swizzled_function();
 template <>
 void test_swizzled_function<__half>() {
     using Element = __half;
-    static constexpr int kBits = 16;
+    static constexpr int kBits = 16 * 8;
 
     const int kRows = 16;
     const int kCols = 32;
@@ -28,12 +28,11 @@ void test_swizzled_function<__half>() {
         data[i] = static_cast<Element>(i % 2048);
     }
 
-    using RowMajor = tl::RowMajor<kRows, 16, kCols>;
+    using RowMajor = tl::RowMajor<kRows, kCols, kCols>;
     RowMajor layout1;
 
     // only siwizzle the first [16x16] half of the [kRows, kCols] matrix
-    using LayoutAtom = cute::Layout<Shape<_16, _16>, Stride<Int<kCols>, _1>>;
-    using Swizzled = tl::detail::SwizzledRowMajor<kBits, LayoutAtom>;
+    using Swizzled = tl::detail::SwizzledRowMajor<kBits>;
     Swizzled layout2;
 
     Element* ptr = thrust::raw_pointer_cast(data.data());
@@ -58,7 +57,7 @@ void test_swizzled_function<__half>() {
 template <>
 void test_swizzled_function<float>() {
     using Element = float;
-    static constexpr int kBits = 32;
+    static constexpr int kBits = 32 * 2;
 
     const int kRows = 16;
     const int kCols = 16;
@@ -72,7 +71,7 @@ void test_swizzled_function<float>() {
     RowMajor layout1;
 
     // only siwizzle the first [16x16] half of the [kRows, kCols] matrix
-    using Swizzled = tl::detail::SwizzledRowMajorStorer<kBits>;
+    using Swizzled = tl::detail::SwizzledRowMajor<kBits>;
     Swizzled layout2;
 
     for (int i = 0; i < RowMajor::kRows; ++i) {

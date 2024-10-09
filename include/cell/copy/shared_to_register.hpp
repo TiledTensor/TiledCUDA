@@ -35,7 +35,8 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
                          BaseShape::kRows * Shared::kRowStride,
                          BaseShape::kCols>;
 
-    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
+    using BaseTileSharedLayout =
+        tl::SharedLayoutWrapper<Shared, LoadMat::kAccessInBits>::Layout;
 
     DEVICE SharedToRegLoaderImpl()
         : base_tiles_(BaseTilesLayout{}),
@@ -83,7 +84,8 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
         tl::MatrixLayout<kRowExec, kColExec, BaseShape::kRows,
                          BaseShape::kCols * Shared::kColStride>;
 
-    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
+    using BaseTileSharedLayout =
+        tl::SharedLayoutWrapper<Shared, LoadMat::kAccessInBits>::Layout;
 
     DEVICE SharedToRegLoaderImpl()
         : base_tiles_(BaseTilesLayout{}),
@@ -129,7 +131,7 @@ struct SharedToRegLoader : public Base {
     static constexpr WarpReuse kMode = kMode_;
 
     template <typename Shared>
-    DEVICE void operator()(const Shared& src, Reg& dst) {
+    DEVICE void operator()(const Shared& src_, Reg& dst) {
         static_assert(std::is_same_v<typename Shared::DType, DType>,
                       "The data type of Shared and Reg must be the same.");
         static_assert(Shared::kRows % tl::num_rows<WarpLayout> == 0,
@@ -148,20 +150,32 @@ struct SharedToRegLoader : public Base {
 
         // advance the pointer to input data to the current warp according to
         // warp reuse mode.
-        const DType* src_ptr = src.data();
-        int offset = Base::template get_warp_offset<Shared>();
+        const DType* src = src_.data();
+        int offset = offset_helper_.get_warp_offset();
+
+        if (thread0()) {
+            printf("offset: %d\n", offset);
+        }
 
         using Loader =
             detail::SharedToRegLoaderImpl<Shared, Reg, kRowExec, kColExec,
                                           Shared::kType, CopyInst::kLoadMat>;
         Loader loader;
-        loader(src_ptr + offset, dst);
+        loader(src + offset, dst);
     }
+
+  private:
+    static constexpr int kWarpTileNumel = Reg::kNumel * Reg::DType::kNumel * 32;
+    using OffsetHelper =
+        warp::SharedOffsetHelper<WarpLayout, kMode, WarpLayout::layout_type,
+                                 kWarpTileNumel>;
+    OffsetHelper offset_helper_;
 };
 
-/// @brief partial specialization for 16x16x16 wmma's output, and st.shared.f32
-///        to revert the data distrubution into an comphrehensive row-major
-///        matrix.
+/// @brief partial specialization for 16x16x16 wmma's output, and
+/// st.shared.f32
+///        to revert the data distrubution into an comphrehensive
+///        row-major matrix.
 template <typename Reg_, typename WarpLayout_>
 struct RegToSharedStorer {
     using Reg = Reg_;
@@ -170,9 +184,10 @@ struct RegToSharedStorer {
     using BaseShape = BaseTileShape<DType>;
     using WarpLayout = WarpLayout_;
 
-    /// @brief Store the WMMA output register tile to shared memory. The source
-    ///        is the current thread's local register tile, and the destination
-    ///        is shared memory.
+    /// @brief Store the WMMA output register tile to shared memory. The
+    /// source
+    ///        is the current thread's local register tile, and the
+    ///        destination is shared memory.
     template <typename Shared>
     DEVICE void operator()(const Reg& src, Shared& dst_) {
         static_assert(std::is_same_v<typename Shared::DType, DType>,
@@ -204,10 +219,10 @@ struct RegToSharedStorer {
         static constexpr int kColExec =
             Shared::kCols / BaseShape::kCols / tl::num_cols<WarpLayout>;
 
-        // 1. advance the pointer to input data to the current warp according to
-        // warp reuse mode. During the store process, threads do not write to
-        // the same shared memory location, thus the warp reuse mode is set to
-        // `Cont`.
+        // 1. advance the pointer to input data to the current warp
+        // according to warp reuse mode. During the store process, threads
+        // do not write to the same shared memory location, thus the warp
+        // reuse mode is set to `Cont`.
         DType* dst = dst_.mutable_data() + offset_helper_.get_warp_offset();
 
         using Storer = BaseTileStorer<Shared, Shared::kType, sizeof(DType) * 8>;
@@ -225,10 +240,10 @@ struct RegToSharedStorer {
     }
 
   private:
-    static const int kWarpTileNumel = Reg::kNumel * Reg::DType::kNumel * 32;
+    static constexpr int kWarpTileNumel = Reg::kNumel * Reg::DType::kNumel * 32;
     using OffsetHelper =
-        warp::SharedOffsetHelper<WarpLayout, WarpLayout::layout_type,
-                                 kWarpTileNumel>;
+        warp::SharedOffsetHelper<WarpLayout, WarpReuse::kCont,
+                                 WarpLayout::layout_type, kWarpTileNumel>;
     OffsetHelper offset_helper_;
 };
 

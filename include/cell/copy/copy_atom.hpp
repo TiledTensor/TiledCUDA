@@ -92,7 +92,6 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 16> {
     }
 
   private:
-    typename tl::SharedStorerLayoutWrapper<Shared>::Layout in_tile_;
     // the thread layout for wmma's output tile.
     using ThreadLayout = tile_layout::RowMajor<8, 4>;
     static constexpr int kWarpSize = 32;
@@ -106,6 +105,9 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 16> {
     // the number of elements per segment, vectorized instruction are used to
     // access `kElemPerSeg` elements.
     static constexpr int kElemPerSeg = 2;
+
+    static constexpr int kAccessInBits = kElemPerSeg * int(sizeof(DType) * 8);
+    typename tl::SharedLayoutWrapper<Shared, kAccessInBits>::Layout in_tile_;
 
     DEVICE int lane_row_id() {
         return (threadIdx.x % kWarpSize) / tl::num_cols<ThreadLayout>;
@@ -145,8 +147,6 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 32> {
     }
 
   private:
-    typename tl::SharedStorerLayoutWrapper<Shared>::Layout in_tile_;
-
     // the thread layout for wmma's output tile.
     using ThreadLayout = tile_layout::RowMajor<8, 4>;
     static constexpr int kWarpSize = 32;
@@ -160,6 +160,9 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 32> {
     // the number of elements per segment, vectorized instruction are used to
     // access `kElemPerSeg` elements.
     static constexpr int kElemPerSeg = 2;
+
+    static constexpr int kAccessInBits = kElemPerSeg * int(sizeof(DType) * 8);
+    typename tl::SharedLayoutWrapper<Shared, kAccessInBits>::Layout in_tile_;
 
     DEVICE int lane_row_id() {
         return (threadIdx.x % kWarpSize) / tl::num_cols<ThreadLayout>;
@@ -199,7 +202,6 @@ struct BaseTileStorer<Shared, tl::Layout::kColMajor, 16> {
     }
 
   private:
-    typename tl::SharedStorerLayoutWrapper<Shared>::Layout in_tile_;
     // the thread layout for wmma's output tile.
     using ThreadLayout = tile_layout::ColMajor<4, 8>;
     static constexpr int kWarpSize = 32;
@@ -213,6 +215,9 @@ struct BaseTileStorer<Shared, tl::Layout::kColMajor, 16> {
     // the number of elements per segment, vectorized instruction are used to
     // access `kElemPerSeg` elements.
     static constexpr int kElemPerSeg = 2;
+
+    static constexpr int kAccessInBits = kElemPerSeg * int(sizeof(DType) * 8);
+    typename tl::SharedLayoutWrapper<Shared, kAccessInBits>::Layout in_tile_;
 
     DEVICE int lane_row_id() {
         return (threadIdx.x % kWarpSize) % tl::num_rows<ThreadLayout>;
@@ -252,7 +257,6 @@ struct BaseTileStorer<Shared, tl::Layout::kColMajor, 32> {
     }
 
   private:
-    typename tl::SharedStorerLayoutWrapper<Shared>::Layout in_tile_;
     // the thread layout for wmma's output tile.
     using ThreadLayout = tile_layout::ColMajor<4, 8>;
     static constexpr int kWarpSize = 32;
@@ -266,6 +270,9 @@ struct BaseTileStorer<Shared, tl::Layout::kColMajor, 32> {
     // the number of elements per segment, vectorized instruction are used to
     // access `kElemPerSeg` elements.
     static constexpr int kElemPerSeg = 2;
+
+    static constexpr int kAccessInBits = kElemPerSeg * int(sizeof(DType) * 8);
+    typename tl::SharedLayoutWrapper<Shared, kAccessInBits>::Layout in_tile_;
 
     DEVICE int lane_row_id() {
         return (threadIdx.x % kWarpSize) % tl::num_rows<ThreadLayout>;
@@ -309,7 +316,8 @@ struct GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kRowMajor> {
         cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
                      Stride<Int<Global::kRowStride>, _1>>;
 
-    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
+    using BaseTileSharedLayout = tl::SharedLayoutWrapper<
+        Shared, traits::TraitsBase<DType>::kAccessInBits>::Layout;
 
 #ifdef CP_ASYNC_SM80_ENABLED
     using CopyInst =
@@ -388,7 +396,8 @@ struct GlobalToSharedBaseTileLoader<Global, Shared, tl::Layout::kColMajor> {
         cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
                      Stride<_1, Int<Global::kColStride>>>;
 
-    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
+    using BaseTileSharedLayout = tl::SharedLayoutWrapper<
+        Shared, traits::TraitsBase<DType>::kAccessInBits>::Layout;
 
 #ifdef CP_ASYNC_SM80_ENABLED
     using CopyInst =
@@ -459,7 +468,13 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kRowMajor> {
     static constexpr int kColStride = kThreadsPerCol * kNumPerAccess;
     static constexpr int kExecCount = BaseShape::kCols / kColStride;
 
-    using BaseTileSharedLayout = tl::SharedStorerLayoutWrapper<Shared>::Layout;
+    // NOTE: Do not modify `kAccessInBits` here to ensure the parameters remain
+    // consistent with those used in `SharedLayoutWrapper` within
+    // register-to-shared-storer.
+    static constexpr int kAccessInBits = 2 * int(sizeof(DType) * 8);
+    typename tl::SharedLayoutWrapper<Shared, kAccessInBits>::Layout in_tile_;
+    using BaseTileSharedLayout =
+        tl::SharedLayoutWrapper<Shared, kAccessInBits>::Layout;
 
     using BaseTileGlobalLayout =
         cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
@@ -530,7 +545,17 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kColMajor> {
     static constexpr int kRowStride = kThreadsPerRow * kNumPerAccess;
     static constexpr int kExecCount = BaseShape::kRows / kRowStride;
 
-    using BaseTileSharedLayout = tl::SharedStorerLayoutWrapper<Shared>::Layout;
+    // using BaseTileSharedLayout =
+    // tl::SharedStorerLayoutWrapper<Shared>::Layout;
+
+    // NOTE: Do not modify `kAccessInBits` here to ensure the parameters remain
+    // consistent with those used in `SharedLayoutWrapper` within
+    // register-to-shared-storer.
+    static constexpr int kAccessInBits = 2 * int(sizeof(DType) * 8);
+    typename tl::SharedLayoutWrapper<Shared, kAccessInBits>::Layout in_tile_;
+    using BaseTileSharedLayout =
+        tl::SharedLayoutWrapper<Shared, kAccessInBits>::Layout;
+
     using BaseTileGlobalLayout =
         cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
                      Stride<_1, Int<Global::kColStride>>>;
