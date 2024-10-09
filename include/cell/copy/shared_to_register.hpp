@@ -1,7 +1,6 @@
 #pragma once
 
 #include "cell/copy/mod.hpp"
-#include "cell/copy/warp.hpp"
 #include "cell/traits/base.hpp"
 #include "types/mod.hpp"
 
@@ -115,77 +114,6 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
     BaseTilesLayout base_tiles_;
     BaseTileSharedLayout in_base_tile_;
 };
-
-template <typename Shared, typename Reg_, const int kRowExec_,
-          const int kColExec_, const tl::Layout kType>
-struct RegToSharedStorerImpl;
-
-template <typename Shared, typename Reg_, const int kRowExec_,
-          const int kColExec_>
-struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
-                             tl::Layout::kRowMajor> {
-    using Reg = Reg_;
-    using DType = typename Shared::DType;
-    using BaseShape = BaseTileShape<DType>;
-
-    static constexpr int kRowExec = kRowExec_;
-    static constexpr int kColExec = kColExec_;
-
-    DEVICE void operator()(const Reg& src, DType* dst) {
-#pragma unroll
-        for (int i = 0; i < kRowExec; ++i) {
-#pragma unroll
-            for (int j = 0; j < kColExec; ++j) {
-                storer_(src(i, j).data(), dst + base_tiles_(i, j));
-            }
-        }
-    }
-
-  private:
-    // layout to address the start position of an individual `BaseTile` in the
-    // whole shared memory tile.
-    using BaseTilesLayout =
-        tl::MatrixLayout<kRowExec, kColExec,
-                         BaseShape::kRows * Shared::kRowStride,
-                         BaseShape::kCols>;
-    BaseTilesLayout base_tiles_;
-
-    using Storer = BaseTileStorer<Shared, Shared::kType, sizeof(DType) * 8>;
-    Storer storer_;
-};
-
-template <typename Shared, typename Reg_, const int kRowExec_,
-          const int kColExec_>
-struct RegToSharedStorerImpl<Shared, Reg_, kRowExec_, kColExec_,
-                             tl::Layout::kColMajor> {
-    using Reg = Reg_;
-    using DType = typename Shared::DType;
-    using BaseShape = BaseTileShape<DType>;
-
-    static constexpr int kRowExec = kRowExec_;
-    static constexpr int kColExec = kColExec_;
-
-    DEVICE void operator()(const Reg& src, DType* dst) {
-#pragma unroll
-        for (int i = 0; i < kRowExec; ++i) {
-#pragma unroll
-            for (int j = 0; j < kColExec; ++j) {
-                storer_(src(i, j).data(), dst + base_tiles_(i, j));
-            }
-        }
-    }
-
-  private:
-    // layout to address the start position of an individual `BaseTile` in the
-    // whole shared memory tile.
-    using BaseTilesLayout =
-        tl::MatrixLayout<kRowExec, kColExec, BaseShape::kRows,
-                         BaseShape::kCols * Shared::kColStride>;
-    BaseTilesLayout base_tiles_;
-
-    using Storer = BaseTileStorer<Shared, Shared::kType, sizeof(DType) * 8>;
-    Storer storer_;
-};
 }  // namespace  detail
 
 /// @brief partial specialization for loading data from shared memory to
@@ -234,22 +162,19 @@ struct SharedToRegLoader : public Base {
 /// @brief partial specialization for 16x16x16 wmma's output, and st.shared.f32
 ///        to revert the data distrubution into an comphrehensive row-major
 ///        matrix.
-template <typename Reg_, typename WarpLayout_,
-          typename Base = warp::CopyBase<WarpLayout_, WarpReuse::kCont>>
-struct RegToSharedStorer : public Base {
+template <typename Reg_, typename WarpLayout_>
+struct RegToSharedStorer {
     using Reg = Reg_;
     // elementary data type stored in the register tile.
     using DType = typename Reg::DType::DType;
-
     using BaseShape = BaseTileShape<DType>;
-
     using WarpLayout = WarpLayout_;
 
     /// @brief Store the WMMA output register tile to shared memory. The source
     ///        is the current thread's local register tile, and the destination
     ///        is shared memory.
     template <typename Shared>
-    DEVICE void operator()(const Reg& src, Shared& dst) {
+    DEVICE void operator()(const Reg& src, Shared& dst_) {
         static_assert(std::is_same_v<typename Shared::DType, DType>,
                       "The element data type of Shared and Register tile must "
                       "be the same.");
@@ -261,32 +186,50 @@ struct RegToSharedStorer : public Base {
         static_assert(
             Shared::kType == Reg::kType,
             "The layout of Shared and Register tile must be the same.");
-
+        static_assert(Shared::kRows % BaseShape::kRows == 0,
+                      "The number of shared memory rows must be divisible by "
+                      "the base tile row.");
+        static_assert(Shared::kCols % BaseShape::kCols == 0,
+                      "The number of shared memory columns must be divisible "
+                      "by the base tile column.");
         static_assert(
             (Shared::kSwizzled && sizeof(DType) == 4 ||
              Shared::kSwizzled == false),
             "Not implemented for swizzled layout with 2-byte data types.");
 
-        DType* dst_ptr = dst.mutable_data();  // pointer for shared memory tile
-
         // how many times the 16x16 `BaseTile` is executed along the row and
         // column direction.
         static constexpr int kRowExec =
-            Base::template row_exec_count<BaseShape, Shared::kRows>();
+            Shared::kRows / BaseShape::kRows / tl::num_rows<WarpLayout>;
         static constexpr int kColExec =
-            Base::template col_exec_count<BaseShape, Shared::kCols>();
+            Shared::kCols / BaseShape::kCols / tl::num_cols<WarpLayout>;
 
         // 1. advance the pointer to input data to the current warp according to
         // warp reuse mode. During the store process, threads do not write to
         // the same shared memory location, thus the warp reuse mode is set to
         // `Cont`.
-        int offset = Base::template get_warp_offset<Shared>();
+        DType* dst = dst_.mutable_data() + offset_helper_.get_warp_offset();
 
-        using Storer = detail::RegToSharedStorerImpl<Shared, Reg, kRowExec,
-                                                     kColExec, Shared::kType>;
+        using Storer = BaseTileStorer<Shared, Shared::kType, sizeof(DType) * 8>;
         Storer storer;
-        storer(src, dst_ptr + offset);
+
+        int offset = 0;
+#pragma unroll
+        for (int i = 0; i < kRowExec; ++i) {
+#pragma unroll
+            for (int j = 0; j < kColExec; ++j) {
+                offset = (i * kColExec + j) * BaseShape::kNumel;
+                storer(src(i, j).data(), dst + offset);
+            }
+        }
     }
+
+  private:
+    static const int kWarpTileNumel = Reg::kNumel * Reg::DType::kNumel * 32;
+    using OffsetHelper =
+        warp::SharedOffsetHelper<WarpLayout, WarpLayout::layout_type,
+                                 kWarpTileNumel>;
+    OffsetHelper offset_helper_;
 };
 
 }  // namespace tiledcuda::cell::copy

@@ -209,4 +209,60 @@ struct CopyBase {
     }
 };
 
+template <typename WarpLayout, const tl::Layout kType,
+          const int kWarpTileNumel_>
+struct SharedOffsetHelper;
+
+template <typename WarpLayout, const int kWarpTileNumel_>
+struct SharedOffsetHelper<WarpLayout, tl::Layout::kRowMajor, kWarpTileNumel_> {
+    static constexpr int kWarpSize = 32;
+    static constexpr int kWarpTileNumel = kWarpTileNumel_;
+
+    DEVICE int warp_row_id() {
+        return threadIdx.x / kWarpSize / tl::num_cols<WarpLayout>;
+    }
+
+    // @brief: Returns the warp col that the current thread belongs to, based on
+    //         the warp layout.
+    DEVICE int warp_col_id() {
+        return threadIdx.x / kWarpSize % tl::num_cols<WarpLayout>;
+    }
+
+    DEVICE int get_warp_offset() {
+        int warp_row = warp_row_id();
+        int warp_col = warp_col_id();
+
+        int warp_num = warp_row * WarpLayout::kRowStride +
+                       warp_col * WarpLayout::kColStride;
+        return warp_num * kWarpTileNumel;
+    }
+};
+
+template <typename WarpLayout, const int kWarpTileNumel_>
+struct SharedOffsetHelper<WarpLayout, tl::Layout::kColMajor, kWarpTileNumel_> {
+    static constexpr int kWarpSize = 32;
+    static constexpr int kWarpTileNumel = kWarpTileNumel_;
+
+    DEVICE int warp_row_id() {
+        return (threadIdx.x / kWarpSize) % tl::num_rows<WarpLayout>;
+    }
+
+    // @brief: Returns the warp col that the current thread belongs to, based on
+    //         the warp layout.
+    DEVICE int warp_col_id() {
+        return (threadIdx.x / kWarpSize) / tl::num_rows<WarpLayout>;
+    }
+
+    DEVICE int get_warp_offset() {
+        int warp_row = warp_row_id();
+        int warp_col = warp_col_id();
+
+        int warp_num = warp_row * WarpLayout::kRowStride +
+                       warp_col * WarpLayout::kColStride;
+        int offset = warp_num * kWarpTileNumel;
+
+        return offset;
+    }
+};
+
 }  // namespace tiledcuda::cell::copy::warp

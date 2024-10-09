@@ -1,35 +1,58 @@
 #pragma once
 
+#include "util/cuda_timer.hpp"
+
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
 #include <cfloat>
 
-float rand_float(float a = 1e-3, float b = 1) {
+float rand_float(float a = 1e-4, float b = 1e-2) {
     float random = ((float)rand()) / (float)RAND_MAX;
     float diff = b - a;
     float r = random * diff;
     return a + r;
 }
 
-// In this implementation, A and C are interpreted as being laid out in
-// row-major, and B is interpreted as being laid out in column-major.
-void naive_gemm(int kM, int kN, int kK,  //
-                const __half* A, const __half* B, float* C) {
-    for (int i = 0; i < kM; ++i) {
-        for (int j = 0; j < kN; ++j) {
-            float s = 0.;
-            for (int k = 0; k < kK; ++k) {
-                s += __half2float(A[i * kK + k]) * __half2float(B[k + kK * j]);
-            }
-            C[i * kN + j] = s;
+float cublas_hgemm(int64_t kM, int64_t kN, int64_t kK,  // problem shape
+                   const __half* A, const __half* B, __half* C,
+                   bool timeit = false, int warm_up = 5, int iters = 20) {
+    cublasHandle_t handle;
+    cublasCreate(&handle);
+
+    __half alf = static_cast<__half>(1.);
+    __half bet = static_cast<__half>(0.);
+
+    float elapsed = 0.;
+
+    if (timeit) {
+        for (int i = 0; i < warm_up; ++i) {
+            cublasHgemm(handle, CUBLAS_OP_T /* transb*/, CUBLAS_OP_N, kN, kM,
+                        kK, &alf, B, kK, A, kK, &bet, C, kN);
         }
+        cudaDeviceSynchronize();
+
+        CudaTimer timer;
+        timer.start();
+        for (int i = 0; i < iters; ++i) {
+            cublasHgemm(handle, CUBLAS_OP_T /* transb*/, CUBLAS_OP_N, kN, kM,
+                        kK, &alf, B, kK, A, kK, &bet, C, kN);
+        }
+        cudaDeviceSynchronize();
+        elapsed = timer.stop() / iters;
+    } else {
+        cublasHgemm(handle, CUBLAS_OP_T /* transb*/, CUBLAS_OP_N, kN, kM, kK,
+                    &alf, B, kK, A, kK, &bet, C, kN);
     }
+    cudaDeviceSynchronize();
+
+    cublasDestroy(handle);
+    return elapsed;
 }
 
-bool check_results(const float* values1, const float* values2, int numel) {
+bool check_results(const float* values1, const __half* values2, int numel) {
     bool passed = true;
-    const float epsilon = 5e-2;
+    const float epsilon = 1e-3;
 
     double total_diff = 0.;
     double max_abs_diff = FLT_MIN;
@@ -39,7 +62,7 @@ bool check_results(const float* values1, const float* values2, int numel) {
     int cut_off = 128;
     printf("ground truth:\n");
     for (int i = 0; i < cut_off; ++i) {
-        printf("%.3f, ", values2[i]);
+        printf("%.3f, ", __half2float(values2[i]));
         if (i && (i + 1) % 16 == 0) printf("\n");
     }
     printf("\ncomputed values:\n");
@@ -50,14 +73,16 @@ bool check_results(const float* values1, const float* values2, int numel) {
 #endif
 
     for (int i = 0; i < numel; ++i) {
-        diff = fabs(values1[i] - values2[i]);
+        float v1 = values1[i];
+        float v2 = __half2float(values2[i]);
+        diff = fabs(v1 - v2);
         max_abs_diff = max_abs_diff < diff ? diff : max_abs_diff;
         total_diff += diff;
 
 #ifdef DEBUG
         if (diff > epsilon) {
-            printf("the %d-th value differs: %.2f vs. %.2f\n", i, values1[i],
-                   values2[i]);
+            printf("the %d-th value differs (%.4f): %.4f vs. %.4f\n", i, diff,
+                   v1, v2);
         }
 #endif
     }

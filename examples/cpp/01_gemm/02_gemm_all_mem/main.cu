@@ -1,6 +1,5 @@
 #include "gemm.hpp"
 #include "util.hpp"
-#include "util/cuda_timer.hpp"
 
 void run_test() {
     using WholeShape = GemmShape<1024, 1024, 2048>;
@@ -72,13 +71,16 @@ void run_test() {
 
     kernel<<<dim_grid, dim_block, smem_size>>>(A, B, C);
     cudaDeviceSynchronize();
-
     h_c = d_c;
+
     // check correctness
-    thrust::host_vector<AccType> h_c2(kM * kN);
-    thrust::fill(h_c2.begin(), h_c2.end(), 0.);
-    naive_gemm(kM, kN, kK, thrust::raw_pointer_cast(h_a.data()),
-               thrust::raw_pointer_cast(h_b.data()), h_c2.data());
+    thrust::device_vector<InType> d_c2(kM * kN);
+    thrust::fill(d_c2.begin(), d_c2.end(), 0.);
+
+    cublas_hgemm(kM, kN, kK, thrust::raw_pointer_cast(d_a.data()),
+                 thrust::raw_pointer_cast(d_b.data()),
+                 thrust::raw_pointer_cast(d_c2.data()), false /*timeit*/);
+    thrust::host_vector<InType> h_c2 = d_c2;
 
     bool passed = check_results(thrust::raw_pointer_cast(h_c.data()),
                                 thrust::raw_pointer_cast(h_c2.data()), kM * kN);
@@ -94,11 +96,18 @@ void run_test() {
         }
         cudaDeviceSynchronize();
 
-        float time = timer.stop();
-        std::cout << std::setprecision(4) << "elapsed time: " << time / iters
-                  << " ms" << std::endl;
-    } else
+        float time1 = cublas_hgemm(
+            kM, kN, kK, thrust::raw_pointer_cast(d_a.data()),
+            thrust::raw_pointer_cast(d_b.data()),
+            thrust::raw_pointer_cast(d_c2.data()), true /*timeit*/);
+
+        float time2 = timer.stop() / iters;
+        std::cout << "cuBLAS\tTiledCUDA\tRatio" << std::endl;
+        std::cout << std::setprecision(4) << time1 << "\t" << time2 << "\t"
+                  << time2 / time1 << std::endl;
+    } else {
         std::cerr << "Test failed." << std::endl;
+    }
 }
 
 int main(int argc, char* argv[]) {

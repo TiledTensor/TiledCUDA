@@ -92,8 +92,7 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 16> {
     }
 
   private:
-    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
-
+    typename tl::SharedStorerLayoutWrapper<Shared>::Layout in_tile_;
     // the thread layout for wmma's output tile.
     using ThreadLayout = tile_layout::RowMajor<8, 4>;
     static constexpr int kWarpSize = 32;
@@ -115,8 +114,6 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 16> {
     DEVICE int lane_col_id() {
         return (threadIdx.x % kWarpSize) % tl::num_cols<ThreadLayout>;
     }
-
-    BaseTileSharedLayout in_tile_;
 };
 
 /// TODO(haruhi): try to reduece reusable codes.
@@ -148,6 +145,8 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 32> {
     }
 
   private:
+    typename tl::SharedStorerLayoutWrapper<Shared>::Layout in_tile_;
+
     // the thread layout for wmma's output tile.
     using ThreadLayout = tile_layout::RowMajor<8, 4>;
     static constexpr int kWarpSize = 32;
@@ -169,8 +168,6 @@ struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 32> {
     DEVICE int lane_col_id() {
         return (threadIdx.x % kWarpSize) % tl::num_cols<ThreadLayout>;
     }
-
-    typename tl::SharedLayoutWrapper<Shared>::Layout in_tile_;
 };
 
 /// TODO(haruhi): try to reduece reusable codes.
@@ -202,9 +199,9 @@ struct BaseTileStorer<Shared, tl::Layout::kColMajor, 16> {
     }
 
   private:
+    typename tl::SharedStorerLayoutWrapper<Shared>::Layout in_tile_;
     // the thread layout for wmma's output tile.
     using ThreadLayout = tile_layout::ColMajor<4, 8>;
-
     static constexpr int kWarpSize = 32;
 
     // in the output of a wmma tile, each thread stores four segments in 2x2
@@ -224,8 +221,6 @@ struct BaseTileStorer<Shared, tl::Layout::kColMajor, 16> {
     DEVICE int lane_col_id() {
         return (threadIdx.x % kWarpSize) / tl::num_rows<ThreadLayout>;
     }
-
-    typename tl::SharedLayoutWrapper<Shared>::Layout in_tile_;
 };
 
 /// TODO(haruhi): try to reduece reusable codes.
@@ -257,6 +252,7 @@ struct BaseTileStorer<Shared, tl::Layout::kColMajor, 32> {
     }
 
   private:
+    typename tl::SharedStorerLayoutWrapper<Shared>::Layout in_tile_;
     // the thread layout for wmma's output tile.
     using ThreadLayout = tile_layout::ColMajor<4, 8>;
     static constexpr int kWarpSize = 32;
@@ -278,8 +274,6 @@ struct BaseTileStorer<Shared, tl::Layout::kColMajor, 32> {
     DEVICE int lane_col_id() {
         return (threadIdx.x % kWarpSize) / tl::num_rows<ThreadLayout>;
     }
-
-    typename tl::SharedLayoutWrapper<Shared>::Layout in_tile_;
 };
 
 template <class Global, class Shared, const tl::Layout kType>
@@ -465,7 +459,8 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kRowMajor> {
     static constexpr int kColStride = kThreadsPerCol * kNumPerAccess;
     static constexpr int kExecCount = BaseShape::kCols / kColStride;
 
-    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
+    using BaseTileSharedLayout = tl::SharedStorerLayoutWrapper<Shared>::Layout;
+
     using BaseTileGlobalLayout =
         cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
                      Stride<Int<Global::kRowStride>, _1>>;
@@ -535,7 +530,7 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kColMajor> {
     static constexpr int kRowStride = kThreadsPerRow * kNumPerAccess;
     static constexpr int kExecCount = BaseShape::kRows / kRowStride;
 
-    using BaseTileSharedLayout = tl::SharedLayoutWrapper<Shared>::Layout;
+    using BaseTileSharedLayout = tl::SharedStorerLayoutWrapper<Shared>::Layout;
     using BaseTileGlobalLayout =
         cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
                      Stride<_1, Int<Global::kColStride>>>;

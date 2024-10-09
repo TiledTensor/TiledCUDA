@@ -149,8 +149,6 @@ __global__ void gemm(const InType* dA, const InType* dB, AccType* dC) {
             compute::gemm_(rA, rB, acc);
         }
     }
-    __syncthreads();
-
     r2s_c(acc, sC);
     __syncthreads();
     s2g_c(sC, gC);

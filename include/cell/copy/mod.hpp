@@ -9,3 +9,4 @@
 #include "cell/copy/register.hpp"
 #include "cell/copy/shared_to_register.hpp"
 #include "cell/copy/static_copy.hpp"
+#include "cell/copy/warp.hpp"
