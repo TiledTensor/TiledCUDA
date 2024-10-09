@@ -43,33 +43,31 @@ DEVICE int warp_offset_impl<WarpReuse::kRowReuseCont>(int warp_row,
     return warp_row * warp_rstride;
 }
 
+/// for access shared memory
 template <const WarpReuse kMode>
-DEVICE int warp_shared_offset_impl(int warp_row, int warp_col, int warp_rstride,
-                                   int warp_cstride) {
+DEVICE int warp_index_1d(int warp_row, int warp_col, int warp_rstride,
+                         int warp_cstride) {
     assert(false && "Not implemented yet.");
     return -1;
 };
 
 template <>
-DEVICE int warp_shared_offset_impl<WarpReuse::kCont>(int warp_row, int warp_col,
-                                                     int warp_rstride,
-                                                     int warp_cstride) {
+DEVICE int warp_index_1d<WarpReuse::kCont>(int warp_row, int warp_col,
+                                           int warp_rstride, int warp_cstride) {
     return warp_row * warp_rstride + warp_col * warp_cstride;
 }
 
 template <>
-DEVICE int warp_shared_offset_impl<WarpReuse::kColReuseCont>(int warp_row,
-                                                             int warp_col,
-                                                             int warp_rstride,
-                                                             int warp_cstride) {
+DEVICE int warp_index_1d<WarpReuse::kColReuseCont>(int warp_row, int warp_col,
+                                                   int warp_rstride,
+                                                   int warp_cstride) {
     return warp_col * warp_cstride;
 }
 
 template <>
-DEVICE int warp_shared_offset_impl<WarpReuse::kRowReuseCont>(int warp_row,
-                                                             int warp_col,
-                                                             int warp_rstride,
-                                                             int warp_cstride) {
+DEVICE int warp_index_1d<WarpReuse::kRowReuseCont>(int warp_row, int warp_col,
+                                                   int warp_rstride,
+                                                   int warp_cstride) {
     return warp_row * warp_rstride;
 }
 }  // namespace detail
@@ -247,27 +245,15 @@ template <typename WarpLayout, const WarpReuse kMode_,
           const int kWarpTileNumel_>
 struct SharedOffsetHelper<WarpLayout, kMode_, tl::Layout::kRowMajor,
                           kWarpTileNumel_> {
-    // @brief: Returns the warp col that the current thread belongs to, based on
-    //         the warp layout.
-    DEVICE int warp_row_id() {
-        return threadIdx.x / kWarpSize / tl::num_cols<WarpLayout>;
+    DEVICE int warp_index_1d() {
+        int warp_row = threadIdx.x / kWarpSize / tl::num_cols<WarpLayout>;
+        int warp_col = threadIdx.x / kWarpSize % tl::num_cols<WarpLayout>;
+
+        return detail::warp_index_1d<kMode>(
+            warp_row, warp_col, WarpLayout::kRowStride, WarpLayout::kColStride);
     }
 
-    // @brief: Returns the warp col that the current thread belongs to, based on
-    //         the warp layout.
-    DEVICE int warp_col_id() {
-        return threadIdx.x / kWarpSize % tl::num_cols<WarpLayout>;
-    }
-
-    DEVICE int get_warp_offset() {
-        int warp_row = warp_row_id();
-        int warp_col = warp_col_id();
-
-        return kWarpTileNumel * detail::warp_shared_offset_impl<kMode>(
-                                    warp_row_id(), warp_col_id(),
-                                    WarpLayout::kRowStride,
-                                    WarpLayout::kColStride);
-    }
+    DEVICE int get_warp_offset() { return kWarpTileNumel * warp_index_1d(); }
 
   private:
     static constexpr int kWarpSize = 32;
@@ -281,25 +267,15 @@ struct SharedOffsetHelper<WarpLayout, kMode_, tl::Layout::kColMajor,
                           kWarpTileNumel_> {
     // @brief: Returns the warp col that the current thread belongs to, based on
     //         the warp layout.
-    DEVICE int warp_row_id() {
-        return (threadIdx.x / kWarpSize) % tl::num_rows<WarpLayout>;
+    DEVICE int warp_index_1d() {
+        int warp_row = (threadIdx.x / kWarpSize) % tl::num_rows<WarpLayout>;
+        int warp_col = (threadIdx.x / kWarpSize) / tl::num_rows<WarpLayout>;
+
+        return detail::warp_index_1d<kMode>(
+            warp_row, warp_col, WarpLayout::kRowStride, WarpLayout::kColStride);
     }
 
-    // @brief: Returns the warp col that the current thread belongs to, based on
-    //         the warp layout.
-    DEVICE int warp_col_id() {
-        return (threadIdx.x / kWarpSize) / tl::num_rows<WarpLayout>;
-    }
-
-    DEVICE int get_warp_offset() {
-        int warp_row = warp_row_id();
-        int warp_col = warp_col_id();
-
-        return kWarpTileNumel * detail::warp_shared_offset_impl<kMode>(
-                                    warp_row_id(), warp_col_id(),
-                                    WarpLayout::kRowStride,
-                                    WarpLayout::kColStride);
-    }
+    DEVICE int get_warp_offset() { return kWarpTileNumel * warp_index_1d(); }
 
   private:
     static constexpr int kWarpSize = 32;

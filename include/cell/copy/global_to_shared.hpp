@@ -47,7 +47,6 @@ struct GlobalToSharedLoaderImpl<Global_, Shared_, kRowExec_, kColExec_,
 
     // strides to iterate over each 16x16 `BaseTile` in the shared memory
     static constexpr int kSrcRowStride = BaseShape::kRows * Global::kRowStride;
-    // static constexpr int kDstRstride = BaseShape::kRows * Shared::kRowStride;
     static constexpr int kSrcColStride = BaseShape::kCols;
 
     DEVICE void operator()(const DType* src, DType* dst) {

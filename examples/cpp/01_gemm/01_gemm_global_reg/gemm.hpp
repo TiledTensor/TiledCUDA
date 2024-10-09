@@ -3,8 +3,8 @@
 #include "cell/mod.hpp"
 #include "types/mod.hpp"
 
-using namespace tiledcuda;
-using namespace tiledcuda::cell;
+using namespace tilefusion;
+using namespace tilefusion::cell;
 namespace tl = tile_layout;
 
 template <const int kM, const int kN, const int kK>
@@ -26,7 +26,7 @@ struct GemmTraits {
 
     // operand A
     using GlobalA = GlobalTile<InType, tl::RowMajor<kTM, kK, kK>>;
-    using IteratorA = TileIterator<GlobalA, TileShape<kTM, kChunkK>>;
+    using IteratorA = GTileIterator<GlobalA, TileShape<kTM, kChunkK>>;
 
     static constexpr int kAMs = kTM / kWarpPerRow / BaseShape::kTileSize;
     static constexpr int kAKs = kChunkK / BaseShape::kTileSize;
@@ -37,7 +37,7 @@ struct GemmTraits {
 
     // operand B
     using GlobalB = GlobalTile<InType, tl::ColMajor<kK, kTN, kK>>;
-    using IteratorB = TileIterator<GlobalB, TileShape<kChunkK, kTN>>;
+    using IteratorB = GTileIterator<GlobalB, TileShape<kChunkK, kTN>>;
 
     static constexpr int kBKs = kChunkK / BaseShape::kTileSize;
     static constexpr int kBNs = kTN / kWarpPerCol / BaseShape::kTileSize;
@@ -84,7 +84,7 @@ __global__ void simple_gemm(const InType* dA, const InType* dB, AccType* dC) {
         loader_b(gBs(k), rB);
         __syncthreads();
 
-        compute::gemm_(rA, rB, acc);
+        compute::gemm(rA, rB, acc);
     }
     __syncthreads();
 

@@ -153,10 +153,6 @@ struct SharedToRegLoader : public Base {
         const DType* src = src_.data();
         int offset = offset_helper_.get_warp_offset();
 
-        if (thread0()) {
-            printf("offset: %d\n", offset);
-        }
-
         using Loader =
             detail::SharedToRegLoaderImpl<Shared, Reg, kRowExec, kColExec,
                                           Shared::kType, CopyInst::kLoadMat>;
