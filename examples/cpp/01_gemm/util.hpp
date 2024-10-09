@@ -16,7 +16,7 @@ float rand_float(float a = 1e-4, float b = 1e-2) {
 
 float cublas_hgemm(int64_t kM, int64_t kN, int64_t kK,  // problem shape
                    const __half* A, const __half* B, __half* C,
-                   bool timeit = false) {
+                   bool timeit = false, int warm_up = 5, int iters = 20) {
     cublasHandle_t handle;
     cublasCreate(&handle);
 
@@ -26,13 +26,12 @@ float cublas_hgemm(int64_t kM, int64_t kN, int64_t kK,  // problem shape
     float elapsed = 0.;
 
     if (timeit) {
-        for (int i = 0; i < 5; ++i) {
+        for (int i = 0; i < warm_up; ++i) {
             cublasHgemm(handle, CUBLAS_OP_T /* transb*/, CUBLAS_OP_N, kN, kM,
                         kK, &alf, B, kK, A, kK, &bet, C, kN);
         }
         cudaDeviceSynchronize();
 
-        int iters = 20;
         CudaTimer timer;
         timer.start();
         for (int i = 0; i < iters; ++i) {

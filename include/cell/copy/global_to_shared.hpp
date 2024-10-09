@@ -223,7 +223,6 @@ struct SharedToGlobalStorerImpl<Shared_, Global_, kRowExec_, kColExec_,
     static constexpr int kColExec = kColExec_;
 
     // strides to iterate over each 16x16 `BaseTile` in the shared memory
-    // static constexpr int kSrcCstride = BaseShape::kCols * Shared::kColStride;
     static constexpr int kDstRowStride = BaseShape::kRows;
     static constexpr int kDstColStride = BaseShape::kCols * Global::kColStride;
 
