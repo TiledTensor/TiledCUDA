@@ -2,10 +2,10 @@
 #include "util.hpp"
 
 void run_test() {
-    using WholeShape = GemmShape<1024, 1024, 2048>;
-    using CtaTileShape = GemmShape<256, 128, 128>;
+    using WholeShape = GemmShape<4096, 4096, 4096>;
+    using CtaTileShape = GemmShape<64, 256, 32>;
     using WarpLayout = tl::RowMajor<2, 2>;
-    static constexpr int kRK = 64;
+    static constexpr int kRK = 32;
 
     using InType = __half;
     using AccType = float;
@@ -88,6 +88,11 @@ void run_test() {
     if (passed) {
         std::cout << "Test passed." << std::endl;
 
+        int warm_up = 10;
+        for (int i = 0; i < warm_up; ++i)
+            kernel<<<dim_grid, dim_block, smem_size>>>(A, B, C);
+        cudaDeviceSynchronize();
+
         CudaTimer timer;
         timer.start();
         int iters = 20;
@@ -95,13 +100,13 @@ void run_test() {
             kernel<<<dim_grid, dim_block, smem_size>>>(A, B, C);
         }
         cudaDeviceSynchronize();
+        float time2 = timer.stop() / iters;
 
         float time1 = cublas_hgemm(
             kM, kN, kK, thrust::raw_pointer_cast(d_a.data()),
             thrust::raw_pointer_cast(d_b.data()),
             thrust::raw_pointer_cast(d_c2.data()), true /*timeit*/);
 
-        float time2 = timer.stop() / iters;
         std::cout << "cuBLAS\tTiledCUDA\tRatio" << std::endl;
         std::cout << std::setprecision(4) << time1 << "\t" << time2 << "\t"
                   << time2 / time1 << std::endl;
