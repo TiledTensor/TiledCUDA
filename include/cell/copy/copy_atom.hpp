@@ -8,8 +8,12 @@
 #include "cell/traits/base.hpp"
 #include "types/layout.hpp"
 
+#include <cute/tensor.hpp>
+
 namespace tiledcuda::cell::copy::atom {
 namespace tl = tile_layout;
+
+using namespace cute;
 
 template <typename Element>
 requires std::is_same_v<Element, __half> ||
@@ -68,7 +72,7 @@ template <typename Shared>
 struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 16> {
     using DType = Shared::DType;
 
-    DEVICE void operator()(const DType* src_, DType* dst_) {
+    DEVICE void store(const DType* src_, DType* dst_) {
         const int* src = reinterpret_cast<const int*>(src_);
         int* dst = reinterpret_cast<int*>(dst_);
 
@@ -123,7 +127,7 @@ template <typename Shared>
 struct BaseTileStorer<Shared, tl::Layout::kRowMajor, 32> {
     using DType = Shared::DType;
 
-    DEVICE void operator()(const DType* src_, DType* dst_) {
+    DEVICE void store(const DType* src_, DType* dst_) {
         const int2* src = reinterpret_cast<const int2*>(src_);
         int2* dst = reinterpret_cast<int2*>(dst_);
 
@@ -178,7 +182,7 @@ template <typename Shared>
 struct BaseTileStorer<Shared, tl::Layout::kColMajor, 16> {
     using DType = Shared::DType;
 
-    DEVICE void operator()(const DType* src_, DType* dst_) {
+    DEVICE void store(const DType* src_, DType* dst_) {
         const int* src = reinterpret_cast<const int*>(src_);
         int* dst = reinterpret_cast<int*>(dst_);
 
@@ -233,7 +237,7 @@ template <typename Shared>
 struct BaseTileStorer<Shared, tl::Layout::kColMajor, 32> {
     using DType = Shared::DType;
 
-    DEVICE void operator()(const DType* src_, DType* dst_) {
+    DEVICE void store(const DType* src_, DType* dst_) {
         const int2* src = reinterpret_cast<const int2*>(src_);
         int2* dst = reinterpret_cast<int2*>(dst_);
 
@@ -545,9 +549,6 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kColMajor> {
     static constexpr int kRowStride = kThreadsPerRow * kNumPerAccess;
     static constexpr int kExecCount = BaseShape::kRows / kRowStride;
 
-    // using BaseTileSharedLayout =
-    // tl::SharedStorerLayoutWrapper<Shared>::Layout;
-
     // NOTE: Do not modify `kAccessInBits` here to ensure the parameters remain
     // consistent with those used in `SharedLayoutWrapper` within
     // register-to-shared-storer.
@@ -607,5 +608,4 @@ struct SharedToGlobalBaseTileStorer<Shared, Global, tl::Layout::kColMajor> {
     DataLayoutPerThread data_layout_;
     TiledCopy tiled_copy_;
 };
-
 }  // namespace tiledcuda::cell::copy::atom

@@ -3,8 +3,8 @@
 #include "cell/mod.hpp"
 #include "types/mod.hpp"
 
-using namespace tilefusion;
-using namespace tilefusion::cell;
+using namespace tiledcuda;
+using namespace tiledcuda::cell;
 namespace tl = tile_layout;
 
 template <const int kM, const int kN, const int kK>
@@ -84,7 +84,7 @@ __global__ void simple_gemm(const InType* dA, const InType* dB, AccType* dC) {
         loader_b(gBs(k), rB);
         __syncthreads();
 
-        compute::gemm(rA, rB, acc);
+        compute::gemm_(rA, rB, acc);
     }
     __syncthreads();
 

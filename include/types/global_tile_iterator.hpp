@@ -1,6 +1,7 @@
+
 #pragma once
 
-#include "types/shared.hpp"
+#include "types/global.hpp"
 #include "types/tile_shape.hpp"
 
 namespace tiledcuda::cell {
@@ -9,7 +10,7 @@ namespace tl = tile_layout;
 namespace detail {
 /// @brief Helper for pretty printing a tile iterator's static shape-related
 ///        information. This printer works ONLY on the host.
-struct TileIteratorPrettyPrinter {
+struct GTileIteratorPrettyPrinter {
     template <typename TileIterator>
     static HOST void print(std::ostream& out, const TileIterator& itr) {
         out << "numel = " << TileIterator::Tile::kNumel << ", ChunkShape["
@@ -20,16 +21,13 @@ struct TileIteratorPrettyPrinter {
 };
 }  // namespace detail
 
-struct Underscore {};                  // dummy type for underscore
-static const __device__ Underscore _;  // for slicing
-
 /// @brief `SharedTileIterator` chunks a shared memory tile into smaller tiles
 ///         and iterates over these smaller sub-tiles.
 /// @tparam Tile_: The type of the large tile to chunk.
 /// @tparam ChunkShape_: The shape of the smaller tiles into which the large
 ///                      tile is partitioned (chunk shape).
 template <class Tile_, class ChunkShape_>
-class TileIterator {
+class GTileIterator {
   public:
     using Tile = Tile_;
     using DType = Tile::DType;
@@ -46,11 +44,11 @@ class TileIterator {
     static constexpr int sc0 = Tile::kRows / kStride0;
     static constexpr int sc1 = Tile::kCols / kStride1;
 
-    HOST_DEVICE TileIterator() : data_(nullptr) {}
+    HOST_DEVICE GTileIterator() : data_(nullptr) {}
 
-    DEVICE TileIterator(DType* data) : data_(data) {}
+    DEVICE GTileIterator(DType* data) : data_(data) {}
 
-    DEVICE TileIterator(const DType* data) : data_(const_cast<DType*>(data)) {}
+    DEVICE GTileIterator(const DType* data) : data_(const_cast<DType*>(data)) {}
 
     // Since a Tile is considered to be at most a 2D array, the iterator
     // traverses over these two dimensions. The current rules are:
@@ -70,7 +68,7 @@ class TileIterator {
         using TileLayout =
             decltype(tl::make_tile_layout<kStride0, kStride1, Tile::kRowStride,
                                           Tile::kColStride>());
-        using NewTile = SharedTile<DType, TileLayout, Tile::kSwizzled>;
+        using NewTile = GlobalTile<DType, TileLayout>;
 
         int offset = Tile::kType == tl::Layout::kRowMajor
                          ? x * (kStride0 * Tile::kRowStride) + y * kStride1
@@ -88,7 +86,7 @@ class TileIterator {
         using TileLayout =
             decltype(tl::make_tile_layout<kStride0, kStride1, Tile::kRowStride,
                                           Tile::kColStride>());
-        using NewTile = SharedTile<DType, TileLayout, Tile::kSwizzled>;
+        using NewTile = GlobalTile<DType, TileLayout>;
 
         int offset = Tile::kType == tl::Layout::kRowMajor
                          ? x * (kStride0 * Tile::kCols) + y * kStride1
@@ -108,8 +106,8 @@ class TileIterator {
                                                          Tile::kRowStride,
                                                          Tile::kColStride>());
 
-        using NewTile = SharedTile<DType, TileLayout, Tile::kSwizzled>;
-        using Iter = TileIterator<NewTile, ChunkShape>;
+        using NewTile = GlobalTile<DType, TileLayout>;
+        using Iter = GTileIterator<NewTile, ChunkShape>;
         static_assert(Iter::sc0 == 1);
 
         // advance pointer to the correct start position
@@ -131,8 +129,8 @@ class TileIterator {
                                                          Tile::kRowStride,
                                                          Tile::kColStride>());
 
-        using NewTile = SharedTile<DType, TileLayout, Tile::kSwizzled>;
-        using Iter = TileIterator<NewTile, ChunkShape>;
+        using NewTile = GlobalTile<DType, TileLayout>;
+        using Iter = GTileIterator<NewTile, ChunkShape>;
         static_assert(Iter::sc1 == 1);
 
         // advance pointer to the correct start position
@@ -157,8 +155,8 @@ class TileIterator {
 ///        Note: This printer function works ONLY on the host.
 template <typename TileShape, typename ChunkShape>
 static HOST std::ostream& operator<<(
-    std::ostream& out, const TileIterator<TileShape, ChunkShape>& itr) {
-    detail::TileIteratorPrettyPrinter::print(out, itr);
+    std::ostream& out, const GTileIterator<TileShape, ChunkShape>& itr) {
+    detail::GTileIteratorPrettyPrinter::print(out, itr);
     return out;
 }
 

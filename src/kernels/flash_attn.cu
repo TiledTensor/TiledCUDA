@@ -41,7 +41,7 @@ struct FlashAttentionTraits {
     // operand A
     using GlobalA = GlobalTile<InType, tl::RowMajor<kTM, kK>>;
     // chunk the K dimension to fit into shared memory
-    using GIteratorA = TileIterator<GlobalA, TileShape<kTM, kTK>>;
+    using GIteratorA = GTileIterator<GlobalA, TileShape<kTM, kTK>>;
 
     using SharedA = SharedTile<InType, tl::RowMajor<kTM, kTK>, true>;
 
@@ -55,7 +55,7 @@ struct FlashAttentionTraits {
 
     // operand B
     using GlobalB = GlobalTile<InType, tl::ColMajor<kK, kN>>;
-    using GIteratorB = TileIterator<GlobalB, TileShape<kTK, kTN>>;
+    using GIteratorB = GTileIterator<GlobalB, TileShape<kTK, kTN>>;
     using SharedB = SharedTile<InType, tl::ColMajor<kTK, kTN>, true>;
 
     static constexpr int kBKs = kTK / BaseShape::kTileSize;
@@ -69,7 +69,7 @@ struct FlashAttentionTraits {
     // operand C
     using GlobalC = GlobalTile<InType, tl::ColMajor<kN, kTP>>;
     // chunk the N dimension to fit into shared memory
-    using GIteratorC = TileIterator<GlobalC, TileShape<kTN, kTP>>;
+    using GIteratorC = GTileIterator<GlobalC, TileShape<kTN, kTP>>;
     using SharedC = SharedTile<InType, tl::ColMajor<kTN, kTP>, true>;
 
     static constexpr int kCNs = kTN / BaseShape::kTileSize;
@@ -256,20 +256,6 @@ __global__ void flash_attention(const InType* dQ, const InType* dK,
 
         // Compute row max.
         row_max(attn_block, cur_max_vec);
-
-#ifdef DEBUG
-        int tid = threadIdx.x;
-        if (tid < 32) {
-            print_vec(cur_max_vec, tid);
-        }
-#endif
-
-#ifdef DEBUG
-        int tid = threadIdx.x;
-        if (tid < 32) {
-            print_acc(attn_block, tid);
-        }
-#endif
 
         // Broadcast subtract from `attn_block`.
         broadcast_sub(cur_max_vec, attn_block);
@@ -468,5 +454,4 @@ void custom_flash_attention_op(const torch::Tensor& Q, const torch::Tensor& K,
         throw std::runtime_error("Unsupported shape");
     }
 }
-
 }  // namespace tiledcuda::kernels

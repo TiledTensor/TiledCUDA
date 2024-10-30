@@ -3,9 +3,9 @@
 #include "cell/mod.hpp"
 #include "types/mod.hpp"
 
-using namespace tilefusion;
-using namespace tilefusion::cell;
-using namespace tilefusion::cell::copy;
+using namespace tiledcuda;
+using namespace tiledcuda::cell;
+using namespace tiledcuda::cell::copy;
 
 namespace tl = tile_layout;
 
@@ -146,7 +146,7 @@ __global__ void gemm(const InType* dA, const InType* dB, AccType* dC) {
             s2r_a(sAs(k2), rA);
             s2r_b(sBs(k2), rB);
 
-            compute::gemm(rA, rB, acc);
+            compute::gemm_(rA, rB, acc);
         }
     }
     r2s_c(acc, sC);

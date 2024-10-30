@@ -30,14 +30,6 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
     static constexpr int kRowExec = kRowExec_;
     static constexpr int kColExec = kColExec_;
 
-    using BaseTilesLayout =
-        tl::MatrixLayout<kRowExec, kColExec,
-                         BaseShape::kRows * Shared::kRowStride,
-                         BaseShape::kCols>;
-
-    using BaseTileSharedLayout =
-        tl::SharedLayoutWrapper<Shared, LoadMat::kAccessInBits>::Layout;
-
     DEVICE SharedToRegLoaderImpl()
         : base_tiles_(BaseTilesLayout{}),
           in_base_tile_(BaseTileSharedLayout{}) {}
@@ -56,13 +48,20 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
                 // advance pointer to the 16x16 `BaseTile` indexed by(i, j).
                 offset = base_tiles_(i, j) + lane_offset;
                 // issue the hardware-backed memory access instruction.
-                this->ldmatrix(&src[offset], dst(i, j).mutable_data());
+                this->ldmatrix(src + offset, dst(i, j).mutable_data());
             }
         }
     }
 
   private:
+    using BaseTilesLayout =
+        tl::MatrixLayout<kRowExec, kColExec,
+                         BaseShape::kRows * Shared::kRowStride,
+                         BaseShape::kNumel>;
     BaseTilesLayout base_tiles_;
+
+    using BaseTileSharedLayout =
+        tl::SharedLayoutWrapper<Shared, LoadMat::kAccessInBits>::Layout;
     BaseTileSharedLayout in_base_tile_;
 };
 
@@ -79,13 +78,6 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
 
     static constexpr int kRowExec = kRowExec_;
     static constexpr int kColExec = kColExec_;
-
-    using BaseTilesLayout =
-        tl::MatrixLayout<kRowExec, kColExec, BaseShape::kRows,
-                         BaseShape::kCols * Shared::kColStride>;
-
-    using BaseTileSharedLayout =
-        tl::SharedLayoutWrapper<Shared, LoadMat::kAccessInBits>::Layout;
 
     DEVICE SharedToRegLoaderImpl()
         : base_tiles_(BaseTilesLayout{}),
@@ -107,16 +99,92 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
                 offset = base_tiles_(j, i) + lane_offset;
 
                 // issue the hardware-backed memory access instruction
-                this->ldmatrix(&src[offset], dst(j, i).mutable_data());
+                this->ldmatrix(src + offset, dst(j, i).mutable_data());
             }
         }
     }
 
   private:
+    using BaseTilesLayout =
+        tl::MatrixLayout<kRowExec, kColExec, BaseShape::kNumel,
+                         BaseShape::kCols * Shared::kColStride>;
     BaseTilesLayout base_tiles_;
+
+    using BaseTileSharedLayout =
+        tl::SharedLayoutWrapper<Shared, LoadMat::kAccessInBits>::Layout;
     BaseTileSharedLayout in_base_tile_;
 };
-}  // namespace  detail
+
+template <typename Reg, typename Shared, const int kRowExec, const int kColExec,
+          const tl::Layout kType>
+struct RegToSharedStorerImpl;
+
+template <typename Reg_, typename Shared_, const int kRowExec_,
+          const int kColExec_>
+struct RegToSharedStorerImpl<Reg_, Shared_, kRowExec_, kColExec_,
+                             tl::Layout::kRowMajor>
+    : public BaseTileStorer<Shared_, tl::Layout::kRowMajor,
+                            sizeof(Shared_::DType) * 8> {
+    using Reg = Reg_;
+    using Shared = Shared_;
+    using DType = Shared::DType;
+
+    static constexpr int kRowExec = kRowExec_;
+    static constexpr int kColExec = kColExec_;
+
+    DEVICE void operator()(const Reg& src, DType* dst) {
+        int offset = 0;
+#pragma unroll
+        for (int i = 0; i < kRowExec; ++i) {
+#pragma unroll
+            for (int j = 0; j < kColExec; ++j) {
+                offset = i * kRowStride + j * kColStride;
+
+                this->store(src(i, j).data(), dst + offset);
+            }
+        }
+    }
+
+  private:
+    using BaseShape = BaseTileShape<DType>;
+
+    static constexpr int kRowStride = BaseShape::kRows * Shared::kRowStride;
+    static constexpr int kColStride = BaseShape::kNumel;
+};
+
+template <typename Reg_, typename Shared_, const int kRowExec_,
+          const int kColExec_>
+struct RegToSharedStorerImpl<Reg_, Shared_, kRowExec_, kColExec_,
+                             tl::Layout::kColMajor>
+    : public BaseTileStorer<Shared_, tl::Layout::kColMajor,
+                            sizeof(Shared_::DType) * 8> {
+    using Reg = Reg_;
+    using Shared = Shared_;
+    using DType = Shared::DType;
+
+    static constexpr int kRowExec = kRowExec_;
+    static constexpr int kColExec = kColExec_;
+
+    DEVICE void operator()(const Reg& src, DType* dst) {
+        int offset = 0;
+#pragma unroll
+        for (int i = 0; i < kColExec; ++i) {
+#pragma unroll
+            for (int j = 0; j < kRowExec; ++j) {
+                offset = j * kRowStride + i * kColStride;
+
+                this->store(src(j, i).data(), dst + offset);
+            }
+        }
+    }
+
+  private:
+    using BaseShape = BaseTileShape<DType>;
+
+    static constexpr int kRowStride = BaseShape::kNumel;
+    static constexpr int kColStride = BaseShape::kCols * Shared::kColStride;
+};
+}  // namespace detail
 
 /// @brief partial specialization for loading data from shared memory to
 ///        register file using `ldmatrix`.
@@ -151,6 +219,11 @@ struct SharedToRegLoader : public Base {
         // advance the pointer to input data to the current warp according to
         // warp reuse mode.
         const DType* src = src_.data();
+
+        using OffsetHelper =
+            warp::SharedOffsetHelper<WarpLayout, kMode, WarpLayout::kType,
+                                     Shared>;
+        OffsetHelper offset_helper_;
         int offset = offset_helper_.get_warp_offset();
 
         using Loader =
@@ -159,13 +232,6 @@ struct SharedToRegLoader : public Base {
         Loader loader;
         loader(src + offset, dst);
     }
-
-  private:
-    static constexpr int kWarpTileNumel = Reg::kNumel * Reg::DType::kNumel * 32;
-    using OffsetHelper =
-        warp::SharedOffsetHelper<WarpLayout, kMode, WarpLayout::layout_type,
-                                 kWarpTileNumel>;
-    OffsetHelper offset_helper_;
 };
 
 /// @brief partial specialization for 16x16x16 wmma's output, and
@@ -219,28 +285,17 @@ struct RegToSharedStorer {
         // according to warp reuse mode. During the store process, threads
         // do not write to the same shared memory location, thus the warp
         // reuse mode is set to `Cont`.
-        DType* dst = dst_.mutable_data() + offset_helper_.get_warp_offset();
+        using OffsetHelper =
+            warp::SharedOffsetHelper<WarpLayout, WarpReuse::kCont,
+                                     WarpLayout::kType, Shared>;
+        OffsetHelper offset_helper_;
+        int offset = offset_helper_.get_warp_offset();
 
-        using Storer = BaseTileStorer<Shared, Shared::kType, sizeof(DType) * 8>;
+        using Storer = detail::RegToSharedStorerImpl<Reg, Shared, kRowExec,
+                                                     kColExec, Reg::kType>;
         Storer storer;
 
-        int offset = 0;
-#pragma unroll
-        for (int i = 0; i < kRowExec; ++i) {
-#pragma unroll
-            for (int j = 0; j < kColExec; ++j) {
-                offset = (i * kColExec + j) * BaseShape::kNumel;
-                storer(src(i, j).data(), dst + offset);
-            }
-        }
+        storer(src, dst_.mutable_data() + offset);
     }
-
-  private:
-    static constexpr int kWarpTileNumel = Reg::kNumel * Reg::DType::kNumel * 32;
-    using OffsetHelper =
-        warp::SharedOffsetHelper<WarpLayout, WarpReuse::kCont,
-                                 WarpLayout::layout_type, kWarpTileNumel>;
-    OffsetHelper offset_helper_;
 };
-
 }  // namespace tiledcuda::cell::copy
