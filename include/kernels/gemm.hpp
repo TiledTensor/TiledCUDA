@@ -5,14 +5,6 @@
 
 namespace tiledcuda::kernels {
 
-// template <typename Element, typename KeTraits>
-// __global__ void dyn_cute_gemm_kernel(const Element* dA, const Element* dB,
-//                                      Element* dC, int m, int n, int k);
-
-// template <typename Element, typename InstructionShape, typename ValueMnk,
-//           typename WarpArrangement, typename CtaTileShape>
-// void cute_gemm(const Element* a, const Element* b, Element* c, int m, int n,
-//                int k);
 
 template <typename InType, typename AccType,                  //
           const int kM, const int kN, const int kK,           //
