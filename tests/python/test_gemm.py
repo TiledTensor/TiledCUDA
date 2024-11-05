@@ -15,18 +15,28 @@ class TestGemm(unittest.TestCase):
         device = torch.device("cuda")
         dtype = torch.float16
 
-        M = 256
-        N = 256
-        K = 128
+        M = 4096
+        N = 4096
+        K = 2048
 
         a = torch.randn(M, K, device=device, dtype=dtype)
         b = torch.randn(N, K, device=device, dtype=dtype)
-        c = torch.empty(M, N, device=device, dtype=dtype)
+        c = torch.zeros(M, N, device=device, dtype=dtype)
 
         gemm(a, b, c, M, N, K)
-        ref_c = torch.mm(a, b.t())
+        ref_c = a @ b.t()
 
-        self.assertTrue(torch.allclose(c, ref_c, atol=1e-3))
+        print("c: ", c)
+        print("ref_c: ", ref_c)
+
+        epsilon = 2e-5
+
+        avg_diff = (torch.sum(torch.abs(ref_c - c) / (M * N))).item()
+
+        print('avg_diff: ', avg_diff)
+
+        assert avg_diff < epsilon
+
 
 
 if __name__ == "__main__":

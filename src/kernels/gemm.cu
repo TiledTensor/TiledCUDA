@@ -335,8 +335,8 @@ void custom_gemm_op(const torch::Tensor& A, const torch::Tensor& B,
     using AccType = float;
 
     // TODO(Kuangjux): Fixed WholeShape and CtaTileShape.
-    using WholeShape = GemmShape<4096, 4096, 4096>;
-    using CtaTileShape = GemmShape<64, 256, 32>;
+    using WholeShape = GemmShape<4096, 4096, 2048>;
+    using CtaTileShape = GemmShape<128, 128, 128>;
 
     auto dA = reinterpret_cast<const InType*>(A.data_ptr());
     auto dB = reinterpret_cast<const InType*>(B.data_ptr());
