@@ -5,6 +5,8 @@
 #include "types/layout.hpp"
 #include "types/tile_shape.hpp"
 
+#include <cute/tensor.hpp>
+
 namespace tiledcuda::cell::compute {
 namespace tl = tile_layout;
 
