@@ -22,7 +22,7 @@ static constexpr int kWarpPerRow = tl::num_rows<WarpLayout>;
 static constexpr int kWarpPerCol = tl::num_cols<WarpLayout>;
 
 using GlobalA = GlobalTile<InType, tl::RowMajor<kTM, kK, kK>>;
-using IteratorA = TileIterator<GlobalA, TileShape<kTM, kChunkK>>;
+using IteratorA = GTileIterator<GlobalA, TileShape<kTM, kChunkK>>;
 
 static constexpr int kAMs = kTM / kWarpPerRow / BaseShape::kTileSize;
 static constexpr int kAKs = kChunkK / BaseShape::kTileSize;
@@ -32,7 +32,7 @@ using ALoader = copy::GlobalToRegLoader<RegA, WarpLayout,
                                         copy::WarpReuse::kRowReuseCont>;
 
 using GlobalB = GlobalTile<InType, tl::ColMajor<kK, kTN, kK>>;
-using IteratorB = TileIterator<GlobalB, TileShape<kChunkK, kTN>>;
+using IteratorB = GTileIterator<GlobalB, TileShape<kChunkK, kTN>>;
 
 static constexpr int kBKs = kChunkK / BaseShape::kTileSize;
 static constexpr int kBNs = kTN / kWarpPerCol / BaseShape::kTileSize;

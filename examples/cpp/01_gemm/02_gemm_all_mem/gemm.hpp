@@ -34,12 +34,12 @@ struct KeGemmTraits {
     // Total data access for operand A in global memory
     using GlobalA = GlobalTile<InType, tl::RowMajor<kTM, kK, kK>>;
     // Access a single global tile for operand A
-    using GIteratorA = TileIterator<GlobalA, TileShape<kTM, kTK>>;
+    using GIteratorA = GTileIterator<GlobalA, TileShape<kTM, kTK>>;
 
     // Shared Tile for operand A
     using SharedA = SharedTile<InType, tl::RowMajor<kTM, kTK>, kSwizzled>;
     // Access a single register tile for operand A
-    using SIteratorA = TileIterator<SharedA, TileShape<kTM, kRK>>;
+    using SIteratorA = STileIterator<SharedA, TileShape<kTM, kRK>>;
 
     // Register tile for a single thread of operand A
     static constexpr int kAMs = kTM / kWarpPerRow / BaseShape::kTileSize;
@@ -54,12 +54,12 @@ struct KeGemmTraits {
     // Total data access for operand B in global memory
     using GlobalB = GlobalTile<InType, tl::ColMajor<kK, kTN, kK>>;
     // Access a single global tile for operand B
-    using GIteratorB = TileIterator<GlobalB, TileShape<kTK, kTN>>;
+    using GIteratorB = GTileIterator<GlobalB, TileShape<kTK, kTN>>;
 
     // Shared Tile for operand B
     using SharedB = SharedTile<InType, tl::ColMajor<kTK, kTN>, kSwizzled>;
     // Access a single register tile for operand B
-    using SIteratorB = TileIterator<SharedB, TileShape<kRK, kTN>>;
+    using SIteratorB = STileIterator<SharedB, TileShape<kRK, kTN>>;
 
     static_assert(GIteratorA::sc1 == GIteratorB::sc0,
                   "mismatched K dimension!");

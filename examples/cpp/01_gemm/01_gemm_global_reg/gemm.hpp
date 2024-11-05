@@ -26,7 +26,7 @@ struct GemmTraits {
 
     // operand A
     using GlobalA = GlobalTile<InType, tl::RowMajor<kTM, kK, kK>>;
-    using IteratorA = TileIterator<GlobalA, TileShape<kTM, kChunkK>>;
+    using IteratorA = GTileIterator<GlobalA, TileShape<kTM, kChunkK>>;
 
     static constexpr int kAMs = kTM / kWarpPerRow / BaseShape::kTileSize;
     static constexpr int kAKs = kChunkK / BaseShape::kTileSize;
@@ -37,7 +37,7 @@ struct GemmTraits {
 
     // operand B
     using GlobalB = GlobalTile<InType, tl::ColMajor<kK, kTN, kK>>;
-    using IteratorB = TileIterator<GlobalB, TileShape<kChunkK, kTN>>;
+    using IteratorB = GTileIterator<GlobalB, TileShape<kChunkK, kTN>>;
 
     static constexpr int kBKs = kChunkK / BaseShape::kTileSize;
     static constexpr int kBNs = kTN / kWarpPerCol / BaseShape::kTileSize;

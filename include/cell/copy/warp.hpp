@@ -209,60 +209,87 @@ struct CopyBase {
     }
 };
 
-template <typename WarpLayout, const tl::Layout kType,
-          const int kWarpTileNumel_>
+template <typename WarpLayout, const WarpReuse kMode_, const tl::Layout kType,
+          typename Shared_>
 struct SharedOffsetHelper;
 
-template <typename WarpLayout, const int kWarpTileNumel_>
-struct SharedOffsetHelper<WarpLayout, tl::Layout::kRowMajor, kWarpTileNumel_> {
-    static constexpr int kWarpSize = 32;
-    static constexpr int kWarpTileNumel = kWarpTileNumel_;
-
+template <typename WarpLayout, const WarpReuse kMode_, typename Shared_>
+struct SharedOffsetHelper<WarpLayout, kMode_, tl::Layout::kRowMajor, Shared_> {
+    template <const WarpReuse kMode>
     DEVICE int warp_row_id() {
-        return threadIdx.x / kWarpSize / tl::num_cols<WarpLayout>;
+        int warp_row = 0;
+        switch (kMode) {
+            case WarpReuse::kCont:
+            case WarpReuse::kCir:
+            case WarpReuse::kRowReuseCont:
+            case WarpReuse::kRowReuseCir:
+                warp_row = threadIdx.x / kWarpSize / tl::num_cols<WarpLayout>;
+                break;
+            case WarpReuse::kColReuseCont:
+            case WarpReuse::kColReuseCir:
+                break;
+            default:
+                assert(false && "Not implemented yet.");
+        }
+        return warp_row;
     }
 
-    // @brief: Returns the warp col that the current thread belongs to, based on
-    //         the warp layout.
+    template <const WarpReuse kMode>
     DEVICE int warp_col_id() {
-        return threadIdx.x / kWarpSize % tl::num_cols<WarpLayout>;
+        int warp_col = 0;
+        switch (kMode) {
+            case WarpReuse::kCont:
+            case WarpReuse::kCir:
+            case WarpReuse::kColReuseCont:
+            case WarpReuse::kColReuseCir:
+                warp_col = threadIdx.x / kWarpSize % tl::num_cols<WarpLayout>;
+                break;
+            case WarpReuse::kRowReuseCont:
+            case WarpReuse::kRowReuseCir:
+                break;
+            default:
+                assert(false && "Not implemented yet.");
+        }
+        return warp_col;
     }
 
     DEVICE int get_warp_offset() {
-        int warp_row = warp_row_id();
-        int warp_col = warp_col_id();
-
-        int warp_num = warp_row * WarpLayout::kRowStride +
-                       warp_col * WarpLayout::kColStride;
-        return warp_num * kWarpTileNumel;
+        int tile_id = Shared::kType == tl::Layout::kRowMajor
+                          ? base_tiles_row_major_(warp_row_id<kMode>(),
+                                                  warp_col_id<kMode>())
+                          : base_tiles_col_major_(warp_row_id<kMode>(),
+                                                  warp_col_id<kMode>());
+        return tile_id * BaseShape::kNumel;
     }
-};
 
-template <typename WarpLayout, const int kWarpTileNumel_>
-struct SharedOffsetHelper<WarpLayout, tl::Layout::kColMajor, kWarpTileNumel_> {
+  private:
+    using Shared = Shared_;
+    using BaseShape = traits::BaseTileShape<__half>;
+
     static constexpr int kWarpSize = 32;
-    static constexpr int kWarpTileNumel = kWarpTileNumel_;
+    static constexpr WarpReuse kMode = kMode_;
 
-    DEVICE int warp_row_id() {
-        return (threadIdx.x / kWarpSize) % tl::num_rows<WarpLayout>;
-    }
+    constexpr static int kBaseTilePerRow = Shared::kRows / BaseShape::kRows;
+    constexpr static int kBaseTilePerCol = Shared::kCols / BaseShape::kCols;
 
-    // @brief: Returns the warp col that the current thread belongs to, based on
-    //         the warp layout.
-    DEVICE int warp_col_id() {
-        return (threadIdx.x / kWarpSize) / tl::num_rows<WarpLayout>;
-    }
+    constexpr static int kRowStride1 =
+        kBaseTilePerRow / tl::num_rows<WarpLayout> * kBaseTilePerCol;
+    constexpr static int kColStride1 =
+        kBaseTilePerCol / tl::num_cols<WarpLayout>;
 
-    DEVICE int get_warp_offset() {
-        int warp_row = warp_row_id();
-        int warp_col = warp_col_id();
+    using BaseTilesRowMajorLayout =
+        cute::Layout<Shape<Int<kBaseTilePerRow>, Int<kBaseTilePerCol>>,
+                     Stride<Int<kRowStride1>, Int<kColStride1>>>;
+    BaseTilesRowMajorLayout base_tiles_row_major_;
 
-        int warp_num = warp_row * WarpLayout::kRowStride +
-                       warp_col * WarpLayout::kColStride;
-        int offset = warp_num * kWarpTileNumel;
-
-        return offset;
-    }
+    constexpr static int kRowStride2 =
+        kBaseTilePerRow / tl::num_rows<WarpLayout>;
+    constexpr static int kColStride2 =
+        kBaseTilePerCol / tl::num_cols<WarpLayout> * kBaseTilePerRow;
+    using BaseTilesColMajorLayout =
+        cute::Layout<Shape<Int<kBaseTilePerRow>, Int<kBaseTilePerCol>>,
+                     Stride<Int<kRowStride2>, Int<kColStride2>>>;
+    BaseTilesColMajorLayout base_tiles_col_major_;
 };
 
 }  // namespace tiledcuda::cell::copy::warp
