@@ -6,7 +6,7 @@
 #include <thrust/host_vector.h>
 
 template <const int kM, const int kN, const int kK, const int kP>
-using B2BGemmShape = TileShape<kM, kN, kK, kP>;
+using FusedGemmShape = TileShape<kM, kN, kK, kP>;
 
 float rand_float(float a = 1e-1, float b = 5e-2) {
     float random = ((float)rand()) / (float)RAND_MAX;

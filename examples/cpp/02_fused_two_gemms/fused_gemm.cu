@@ -1,4 +1,4 @@
-#include "b2b_gemm.hpp"
+#include "fused_gemm.hpp"
 #include "util.hpp"
 
 template <typename WholeShape, typename CtaTileShape, typename WarpLayout,
@@ -50,7 +50,7 @@ void run(float epsilon = 1e-3) {
     AccType* D = thrust::raw_pointer_cast(d_d.data());
 
     using Config =
-        B2BGemmTraits<InType, AccType, WholeShape, CtaTileShape, WarpLayout>;
+        FusedGemmTraits<InType, AccType, WholeShape, CtaTileShape, WarpLayout>;
 
     using RegA = typename Config::RegA;
     using RegB = typename Config::RegB;
@@ -90,15 +90,15 @@ void run(float epsilon = 1e-3) {
     int shm_size = shm_input < shm_output ? shm_output * sizeof(InType)
                                           : shm_input * sizeof(InType);
 
-    auto kernel = &KeBack2BackGemm<InType, AccType,            //
-                                   GIteratorA, SharedA, RegA,  //
-                                   SharedALoader, RegALoader,  //
-                                   GIteratorB, SharedB, RegB,  //
-                                   SharedBLoader, RegBLoader,  //
-                                   GIteratorC, SharedC, RegC,  //
-                                   SharedCLoader, RegCLoader,  //
-                                   RegAcc, RegAccCast, typename Config::GlobalD,
-                                   RegD, DStorer, ConvertAcc>;
+    auto kernel = &KeFusedGemm<InType, AccType,            //
+                               GIteratorA, SharedA, RegA,  //
+                               SharedALoader, RegALoader,  //
+                               GIteratorB, SharedB, RegB,  //
+                               SharedBLoader, RegBLoader,  //
+                               GIteratorC, SharedC, RegC,  //
+                               SharedCLoader, RegCLoader,  //
+                               RegAcc, RegAccCast, typename Config::GlobalD,
+                               RegD, DStorer, ConvertAcc>;
 
     if (shm_size > 48 * 1024) {
         cudaFuncSetAttribute(
@@ -153,43 +153,43 @@ void run(float epsilon = 1e-3) {
 
 int main() {
     using WarpLayout0 = tl::RowMajor<1, 1>;
-    run<B2BGemmShape<16 /*M*/, 16 /*N*/, 16 /*K*/, 16 /*P*/>,
-        B2BGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 16 /*kTP*/>,
+    run<FusedGemmShape<16 /*M*/, 16 /*N*/, 16 /*K*/, 16 /*P*/>,
+        FusedGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 16 /*kTP*/>,
         WarpLayout0, 1>();
 
-    run<B2BGemmShape<16 /*M*/, 32 /*N*/, 16 /*K*/, 32 /*P*/>,
-        B2BGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 32 /*kTP*/>,
+    run<FusedGemmShape<16 /*M*/, 32 /*N*/, 16 /*K*/, 32 /*P*/>,
+        FusedGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 32 /*kTP*/>,
         WarpLayout0, 1>();
 
     using WarpLayout1 = tl::RowMajor<2, 1>;
-    run<B2BGemmShape<32 /*M*/, 64 /*N*/, 32 /*K*/, 64 /*P*/>,
-        B2BGemmShape<32 /*kTM*/, 32 /*kTN*/, 32 /*kTK*/, 64 /*kTP*/>,
+    run<FusedGemmShape<32 /*M*/, 64 /*N*/, 32 /*K*/, 64 /*P*/>,
+        FusedGemmShape<32 /*kTM*/, 32 /*kTN*/, 32 /*kTK*/, 64 /*kTP*/>,
         WarpLayout1, 1>();
 
-    run<B2BGemmShape<64 /*M*/, 64 /*N*/, 32 /*K*/, 64 /*P*/>,
-        B2BGemmShape<32 /*kTM*/, 32 /*kTN*/, 32 /*kTK*/, 64 /*kTP*/>,
+    run<FusedGemmShape<64 /*M*/, 64 /*N*/, 32 /*K*/, 64 /*P*/>,
+        FusedGemmShape<32 /*kTM*/, 32 /*kTN*/, 32 /*kTK*/, 64 /*kTP*/>,
         WarpLayout1, 1>();
 
     using WarpLayout2 = tl::RowMajor<4, 1>;
-    run<B2BGemmShape<256 /*M*/, 128 /*N*/, 64 /*K*/, 64 /*P*/>,
-        B2BGemmShape<64 /*kTM*/, 32 /*kTN*/, 64 /*kTK*/, 64 /*kTP*/>,
+    run<FusedGemmShape<256 /*M*/, 128 /*N*/, 64 /*K*/, 64 /*P*/>,
+        FusedGemmShape<64 /*kTM*/, 32 /*kTN*/, 64 /*kTK*/, 64 /*kTP*/>,
         WarpLayout1, 1>(5e-3);
 
-    run<B2BGemmShape<1024 /*M*/, 1024 /*N*/, 128 /*K*/, 128 /*P*/>,
-        B2BGemmShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
+    run<FusedGemmShape<1024 /*M*/, 1024 /*N*/, 128 /*K*/, 128 /*P*/>,
+        FusedGemmShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
         WarpLayout2, 1>(8e-2 /*epsilon*/);
 
     // batched
-    run<B2BGemmShape<16 /*M*/, 16 /*N*/, 16 /*K*/, 16 /*P*/>,
-        B2BGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 16 /*kTP*/>,
+    run<FusedGemmShape<16 /*M*/, 16 /*N*/, 16 /*K*/, 16 /*P*/>,
+        FusedGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 16 /*kTP*/>,
         WarpLayout0, 2>();
 
-    run<B2BGemmShape<1024 /*M*/, 1024 /*N*/, 128 /*K*/, 128 /*P*/>,
-        B2BGemmShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
+    run<FusedGemmShape<1024 /*M*/, 1024 /*N*/, 128 /*K*/, 128 /*P*/>,
+        FusedGemmShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
         WarpLayout2, 5>(8e-2 /*epsilon*/);
 
-    run<B2BGemmShape<64 /*M*/, 256 /*N*/, 128 /*K*/, 128 /*P*/>,
-        B2BGemmShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
+    run<FusedGemmShape<64 /*M*/, 256 /*N*/, 128 /*K*/, 128 /*P*/>,
+        FusedGemmShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
         WarpLayout2, 1>(8e-2 /*epsilon*/);
 
     return 0;

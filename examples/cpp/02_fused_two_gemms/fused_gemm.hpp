@@ -11,7 +11,7 @@ namespace tl = tile_layout;
 
 template <typename InType, typename AccType, typename WholeShape,
           typename CtaTileShape, typename WarpLayout>
-struct B2BGemmTraits {
+struct FusedGemmTraits {
     using BaseShape = traits::BaseTileShape<InType>;
 
     static constexpr int kWarpPerRow = tl::num_rows<WarpLayout>;
@@ -104,10 +104,10 @@ template <typename InType, typename AccType,                     //
           typename SharedCLoader, typename RegCLoader,           //
           typename RegAcc, typename RegAccCast, typename GlobalD, typename RegD,
           typename DStorer, typename ConvertAcc>
-__global__ void KeBack2BackGemm(const InType* dA, const InType* dB,
-                                const InType* dC, AccType* dD, int kM, int kN,
-                                int kK, int kP, int kTM, int kTN, int kTK,
-                                int kTP) {
+__global__ void KeFusedGemm(const InType* dA, const InType* dB,
+                            const InType* dC, AccType* dD, int kM, int kN,
+                            int kK, int kP, int kTM, int kTN, int kTK,
+                            int kTP) {
     // Advance to the global data tile to the current CTA.
     const InType* A = dA + blockIdx.z * (kM * kK) + blockIdx.x * (kTM * kK);
     const InType* B = dB + blockIdx.z * (kK * kN);
