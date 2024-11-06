@@ -1,9 +1,14 @@
 #include "fused_gemm.hpp"
 #include "util.hpp"
 
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+#include <string>
+
 template <typename WholeShape, typename CtaTileShape, typename WarpLayout,
           const int kBatch>
-void run(float epsilon = 1e-3, int iters = 20) {
+void run(std::ofstream& fout, float epsilon = 1e-3, int iters = 20) {
     using InType = __half;
     using AccType = float;
 
@@ -195,70 +200,86 @@ void run(float epsilon = 1e-3, int iters = 20) {
         std::cout << std::setprecision(4) << time1 << "\t" << time2 << "\t"
                   << time2 / time1 << std::endl;
 
+        fout << "[" << kM << ", " << kN << ", " << kK << ", " << kP << ", "
+             << kBatch << "], " << "\t";
+        fout << "[" << kTM << ", " << kTN << ", " << kTK << ", " << kTP << "], "
+             << "\t";
+        fout << time1 << "\t" << time2 << "\t" << time2 / time1 << std::endl;
     } else {
         std::cerr << "Test failed." << std::endl;
     }
 }
 
 int main() {
+    std::ofstream fout;
+    fout.setf(std::ios::fixed);
+    fout.precision(4);
+
+    std::stringstream file_name;
+    file_name << "fused_gemm.tsv";
+    fout.open(file_name.str(), std::ios::out);
+
+    fout << "[M, N, K, P, kBatch]" << "\t" << "[kTM, kTN, kTK, kTP]" << "\t"
+         << "cuBLAS" << "\t" << "TiledCUDA" << "\t" << "Ratio" << std::endl;
+
     using WarpLayout0 = tl::RowMajor<1, 1>;
     run<FusedGemmShape<16 /*M*/, 16 /*N*/, 16 /*K*/, 16 /*P*/>,
         FusedGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 16 /*kTP*/>,
-        WarpLayout0, 1>();
+        WarpLayout0, 1>(fout);
 
     run<FusedGemmShape<16 /*M*/, 32 /*N*/, 16 /*K*/, 32 /*P*/>,
         FusedGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 32 /*kTP*/>,
-        WarpLayout0, 1>();
+        WarpLayout0, 1>(fout);
 
     using WarpLayout1 = tl::RowMajor<2, 1>;
     run<FusedGemmShape<32 /*M*/, 64 /*N*/, 32 /*K*/, 64 /*P*/>,
         FusedGemmShape<32 /*kTM*/, 32 /*kTN*/, 32 /*kTK*/, 64 /*kTP*/>,
-        WarpLayout1, 1>();
+        WarpLayout1, 1>(fout);
 
     run<FusedGemmShape<64 /*M*/, 64 /*N*/, 32 /*K*/, 64 /*P*/>,
         FusedGemmShape<32 /*kTM*/, 32 /*kTN*/, 32 /*kTK*/, 64 /*kTP*/>,
-        WarpLayout1, 1>();
+        WarpLayout1, 1>(fout);
 
     using WarpLayout2 = tl::RowMajor<4, 1>;
 
     run<FusedGemmShape<256 /*M*/, 128 /*N*/, 64 /*K*/, 64 /*P*/>,
         FusedGemmShape<64 /*kTM*/, 32 /*kTN*/, 64 /*kTK*/, 64 /*kTP*/>,
-        WarpLayout1, 1>(5e-3);
+        WarpLayout1, 1>(fout, 5e-3);
 
     run<FusedGemmShape<1024 /*M*/, 1024 /*N*/, 128 /*K*/, 128 /*P*/>,
         FusedGemmShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
-        WarpLayout2, 1>(8e-2 /*epsilon*/);
+        WarpLayout2, 1>(fout, 8e-2 /*epsilon*/);
 
     // batched
     run<FusedGemmShape<16 /*M*/, 16 /*N*/, 16 /*K*/, 16 /*P*/>,
         FusedGemmShape<16 /*kTM*/, 16 /*kTN*/, 16 /*kTK*/, 16 /*kTP*/>,
-        WarpLayout0, 2>();
+        WarpLayout0, 2>(fout);
 
     run<FusedGemmShape<1024 /*M*/, 1024 /*N*/, 128 /*K*/, 128 /*P*/>,
         FusedGemmShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
-        WarpLayout2, 5>(8e-2 /*epsilon*/);
+        WarpLayout2, 5>(fout, 8e-2 /*epsilon*/);
 
     run<FusedGemmShape<64 /*M*/, 256 /*N*/, 128 /*K*/, 128 /*P*/>,
         FusedGemmShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
-        WarpLayout2, 1>(8e-2 /*epsilon*/);
+        WarpLayout2, 1>(fout, 8e-2 /*epsilon*/);
 
     run<FusedGemmShape<2048 /*M*/, 1024 /*N*/, 128 /*K*/, 128 /*P*/>,
         FusedGemmShape<64 /*kTM*/, 128 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
-        WarpLayout2, 1>(8e-2 /*epsilon*/);
+        WarpLayout2, 1>(fout, 8e-2 /*epsilon*/);
 
     run<FusedGemmShape<1024 /*M*/, 2048 /*N*/, 128 /*K*/, 128 /*P*/>,
         FusedGemmShape<64 /*kTM*/, 128 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
-        WarpLayout2, 1>(8e-2 /*epsilon*/);
+        WarpLayout2, 1>(fout, 8e-2 /*epsilon*/);
 
     // Test failed.
     // run<FusedGemmShape<2048 /*M*/, 2048 /*N*/, 128 /*K*/, 128 /*P*/>,
     //     FusedGemmShape<64 /*kTM*/, 128 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
-    //     WarpLayout2, 1>(8e-2 /*epsilon*/);
+    //     WarpLayout2, 1>(fout, 8e-2 /*epsilon*/);
 
     // CUDA error: misaligned address in tiledcuda fused_gemm.
     // run<FusedGemmShape<2048 /*M*/, 2048 /*N*/, 128 /*K*/, 128 /*P*/>,
     //     FusedGemmShape<128 /*kTM*/, 128 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
-    //     WarpLayout2, 1>(8e-2 /*epsilon*/);
+    //     WarpLayout2, 1>(fout, 8e-2 /*epsilon*/);
 
     return 0;
 }
