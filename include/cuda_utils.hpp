@@ -26,6 +26,19 @@ inline void __cudaCheck(const cudaError err, const char* file, int line) {
 }
 #define CudaCheck(call) __cudaCheck(call, __FILE__, __LINE__)
 
+#define CudaCheckLastError() __checkLast(__FILE__, __LINE__)
+
+void __checkLast(const char* const file, const int line) {
+    cudaError_t const err{cudaGetLastError()};
+    if (err != cudaSuccess) {
+        std::cerr << "CUDA Runtime Error at: " << file << ":" << line
+                  << std::endl;
+        std::cerr << cudaGetErrorString(err) << std::endl;
+        // We don't exit when we encounter CUDA errors in this example.
+        // std::exit(EXIT_FAILURE);
+    }
+}
+
 inline void __cublasCheck(const cublasStatus_t err, const char* file,
                           int line) {
     if (err != CUBLAS_STATUS_SUCCESS) {

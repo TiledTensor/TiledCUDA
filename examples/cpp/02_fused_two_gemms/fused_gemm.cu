@@ -114,14 +114,7 @@ void run(std::ofstream& fout, float epsilon = 1e-3, int iters = 20) {
                                          kTK, kTP);
     cudaDeviceSynchronize();
 
-    auto err = cudaGetLastError();
-
-    // check err
-    if (err != cudaSuccess) {
-        std::cerr << "CUDA error: " << cudaGetErrorString(err)
-                  << " in tiledcuda fused_gemm." << std::endl;
-        return;
-    }
+    CudaCheckLastError();
 
     h_d = d_d;
 
@@ -138,13 +131,7 @@ void run(std::ofstream& fout, float epsilon = 1e-3, int iters = 20) {
                      thrust::raw_pointer_cast(d_acc.data()), false);
     cudaDeviceSynchronize();
 
-    err = cudaGetLastError();
-    // check err
-    if (err != cudaSuccess) {
-        std::cerr << "CUDA error: " << cudaGetErrorString(err)
-                  << " in cublas two hgemm." << std::endl;
-        return;
-    }
+    CudaCheckLastError();
 
     h_acc = d_acc;
     h_d2 = d_d2;
