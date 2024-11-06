@@ -1,5 +1,7 @@
 #pragma once
 
+#include "util/cuda_timer.hpp"
+
 #include <cublas_v2.h>
 #include <float.h>
 #include <thrust/device_vector.h>
@@ -24,9 +26,10 @@ float rand_float(float a = 1e-1, float b = 5e-2) {
   acc[m, n] = A[m, k] @ B[k, n]
     D[m, p] = acc[m, n] @ C[n, p]
 */
-void cublas_two_gemms(int kM, int kN, int kK, int kP, int kBatch,
-                      const __half* As, const __half* Bs, const __half* Cs,
-                      __half* Ds, __half* accs) {
+float cublas_two_gemms(int kM, int kN, int kK, int kP, int kBatch,
+                       const __half* As, const __half* Bs, const __half* Cs,
+                       __half* Ds, __half* accs, bool timeit = false,
+                       int warmup = 10, int iters = 20) {
     cublasHandle_t handle;
     cublasCreate(&handle);
 
@@ -60,7 +63,59 @@ void cublas_two_gemms(int kM, int kN, int kK, int kP, int kBatch,
                     &alf, C, kN, acc, kN, &bet, D, kP);
     }
 
+    float elapsed = 0.;
+    if (timeit) {
+        for (int i = 0; i < warmup; ++i) {
+            A = As;
+            B = Bs;
+            C = Cs;
+            acc = accs;
+            D = Ds;
+            for (int b = 0; b < kBatch; ++b) {
+                A += b * kM * kK;
+                B += b * kK * kN;
+                C += b * kM * kN;
+                acc += b * kM * kN;
+                D += b * kM * kP;
+
+                cublasHgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N /* transb*/, kN,
+                            kM, kK, &alf, B, kK, A, kK, &bet, acc, kN);
+
+                cublasHgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N /* transb*/, kP,
+                            kM, kN, &alf, C, kN, acc, kN, &bet, D, kP);
+            }
+        }
+        cudaDeviceSynchronize();
+
+        CudaTimer timer;
+        timer.start();
+        for (int i = 0; i < iters; ++i) {
+            A = As;
+            B = Bs;
+            C = Cs;
+            acc = accs;
+            D = Ds;
+            for (int b = 0; b < kBatch; ++b) {
+                A += b * kM * kK;
+                B += b * kK * kN;
+                C += b * kM * kN;
+                acc += b * kM * kN;
+                D += b * kM * kP;
+
+                cublasHgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N /* transb*/, kN,
+                            kM, kK, &alf, B, kK, A, kK, &bet, acc, kN);
+
+                cublasHgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N /* transb*/, kP,
+                            kM, kN, &alf, C, kN, acc, kN, &bet, D, kP);
+            }
+        }
+        cudaDeviceSynchronize();
+        elapsed = timer.stop() / iters;
+    }
+
     cublasDestroy(handle);
+
+    return elapsed;
 }
 
 bool check_results(const float* values1, const __half* values2, int numel,

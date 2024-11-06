@@ -3,7 +3,7 @@
 
 template <typename WholeShape, typename CtaTileShape, typename WarpLayout,
           const int kBatch>
-void run(float epsilon = 1e-3) {
+void run(float epsilon = 1e-3, int iters = 20) {
     using InType = __half;
     using AccType = float;
 
@@ -109,6 +109,15 @@ void run(float epsilon = 1e-3) {
                                          kTK, kTP);
     cudaDeviceSynchronize();
 
+    auto err = cudaGetLastError();
+
+    // check err
+    if (err != cudaSuccess) {
+        std::cerr << "CUDA error: " << cudaGetErrorString(err)
+                  << " in tiledcuda fused_gemm." << std::endl;
+        return;
+    }
+
     h_d = d_d;
 
     thrust::host_vector<InType> h_acc(kM * kN * kBatch);
@@ -121,8 +130,17 @@ void run(float epsilon = 1e-3) {
 
     cublas_two_gemms(kM, kN, kK, kP, kBatch, A, B, C,
                      thrust::raw_pointer_cast(d_d2.data()),
-                     thrust::raw_pointer_cast(d_acc.data()));
+                     thrust::raw_pointer_cast(d_acc.data()), false);
     cudaDeviceSynchronize();
+
+    err = cudaGetLastError();
+    // check err
+    if (err != cudaSuccess) {
+        std::cerr << "CUDA error: " << cudaGetErrorString(err)
+                  << " in cublas two hgemm." << std::endl;
+        return;
+    }
+
     h_acc = d_acc;
     h_d2 = d_d2;
 
@@ -142,12 +160,43 @@ void run(float epsilon = 1e-3) {
     }
 #endif
 
-    if (check_results(data, ground_truth, kM * kP, epsilon)) {
+    bool passed = check_results(data, ground_truth, kM * kP * kBatch, epsilon);
+
+    if (passed) {
         std::cout << "[" << kM << ", " << kN << ", " << kK << ", " << kP
                   << "], batch = " << kBatch << ", passed." << std::endl;
     } else {
         std::cout << "[" << kM << ", " << kN << ", " << kK << ", " << kP
                   << "], batch = " << kBatch << ", failed." << std::endl;
+    }
+
+    if (passed) {
+        int warm_up = 10;
+        for (int i = 0; i < warm_up; ++i)
+            kernel<<<grid, block, shm_size, 0>>>(A, B, C, D, kM, kN, kK, kP,
+                                                 kTM, kTN, kTK, kTP);
+        cudaDeviceSynchronize();
+
+        CudaTimer timer;
+        timer.start();
+        for (int i = 0; i < iters; ++i) {
+            kernel<<<grid, block, shm_size, 0>>>(A, B, C, D, kM, kN, kK, kP,
+                                                 kTM, kTN, kTK, kTP);
+        }
+        cudaDeviceSynchronize();
+        float time2 = timer.stop() / iters;
+
+        float time1 =
+            cublas_two_gemms(kM, kN, kK, kP, kBatch, A, B, C,
+                             thrust::raw_pointer_cast(d_d2.data()),
+                             thrust::raw_pointer_cast(d_acc.data()), true);
+
+        std::cout << "cuBLAS\tTiledCUDA\tRatio" << std::endl;
+        std::cout << std::setprecision(4) << time1 << "\t" << time2 << "\t"
+                  << time2 / time1 << std::endl;
+
+    } else {
+        std::cerr << "Test failed." << std::endl;
     }
 }
 
@@ -171,6 +220,7 @@ int main() {
         WarpLayout1, 1>();
 
     using WarpLayout2 = tl::RowMajor<4, 1>;
+
     run<FusedGemmShape<256 /*M*/, 128 /*N*/, 64 /*K*/, 64 /*P*/>,
         FusedGemmShape<64 /*kTM*/, 32 /*kTN*/, 64 /*kTK*/, 64 /*kTP*/>,
         WarpLayout1, 1>(5e-3);
@@ -191,6 +241,24 @@ int main() {
     run<FusedGemmShape<64 /*M*/, 256 /*N*/, 128 /*K*/, 128 /*P*/>,
         FusedGemmShape<64 /*kTM*/, 64 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
         WarpLayout2, 1>(8e-2 /*epsilon*/);
+
+    run<FusedGemmShape<2048 /*M*/, 1024 /*N*/, 128 /*K*/, 128 /*P*/>,
+        FusedGemmShape<64 /*kTM*/, 128 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
+        WarpLayout2, 1>(8e-2 /*epsilon*/);
+
+    run<FusedGemmShape<1024 /*M*/, 2048 /*N*/, 128 /*K*/, 128 /*P*/>,
+        FusedGemmShape<64 /*kTM*/, 128 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
+        WarpLayout2, 1>(8e-2 /*epsilon*/);
+
+    // Test failed.
+    // run<FusedGemmShape<2048 /*M*/, 2048 /*N*/, 128 /*K*/, 128 /*P*/>,
+    //     FusedGemmShape<64 /*kTM*/, 128 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
+    //     WarpLayout2, 1>(8e-2 /*epsilon*/);
+
+    // CUDA error: misaligned address in tiledcuda fused_gemm.
+    // run<FusedGemmShape<2048 /*M*/, 2048 /*N*/, 128 /*K*/, 128 /*P*/>,
+    //     FusedGemmShape<128 /*kTM*/, 128 /*kTN*/, 128 /*kTK*/, 128 /*kTP*/>,
+    //     WarpLayout2, 1>(8e-2 /*epsilon*/);
 
     return 0;
 }
