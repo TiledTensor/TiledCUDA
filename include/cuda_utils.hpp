@@ -26,6 +26,16 @@ inline void __cudaCheck(const cudaError err, const char* file, int line) {
 }
 #define CudaCheck(call) __cudaCheck(call, __FILE__, __LINE__)
 
+inline void __checkLast(const char* const file, const int line) {
+    cudaError_t const err{cudaGetLastError()};
+    if (err != cudaSuccess) {
+        fprintf(stderr, "%s(%d): CUDA Runtime Error at: %s.\n", file, line,
+                cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+}
+#define CudaCheckLastError() __checkLast(__FILE__, __LINE__)
+
 inline void __cublasCheck(const cublasStatus_t err, const char* file,
                           int line) {
     if (err != CUBLAS_STATUS_SUCCESS) {

@@ -1,7 +1,5 @@
 #include "cuda_info.hpp"
 
-#include "cuda_utils.hpp"
-
 #include <sstream>
 #include <vector>
 
