@@ -162,7 +162,7 @@ __global__ void KeFusedGemm(const InType* dA, const InType* dB,
             load_rb(sB, rB);
             __syncthreads();
 
-            compute::gemm_(rA, rB, acc);
+            compute::gemm(rA, rB, acc);
         }
         load_rc(sC, rC);
         __syncthreads();
@@ -170,7 +170,7 @@ __global__ void KeFusedGemm(const InType* dA, const InType* dB,
         ConvertAcc cast_acc;  // Convert acc to half precision
         cast_acc(acc, acc_half);
 
-        compute::gemm_(acc_half, rC, rD);
+        compute::gemm(acc_half, rC, rD);
         acc.clear();
     }
     __syncthreads();

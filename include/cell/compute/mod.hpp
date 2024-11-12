@@ -5,3 +5,4 @@
 #include "cell/compute/map.hpp"
 #include "cell/compute/math_functor.hpp"
 #include "cell/compute/reduce.hpp"
+#include "cell/compute/softmax.hpp"

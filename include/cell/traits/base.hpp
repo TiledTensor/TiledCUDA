@@ -1,7 +1,5 @@
 #pragma once
 
-#include "types/layout.hpp"
-
 #include <cutlass/numeric_size.h>
 #include <cutlass/numeric_types.h>
 

@@ -234,8 +234,7 @@ struct SharedToRegLoader : public Base {
     }
 };
 
-/// @brief partial specialization for 16x16x16 wmma's output, and
-/// st.shared.f32
+/// @brief partial specialization for 16x16x16 wmma's output, and st.shared.f32
 ///        to revert the data distrubution into an comphrehensive
 ///        row-major matrix.
 template <typename Reg_, typename WarpLayout_>
@@ -246,8 +245,7 @@ struct RegToSharedStorer {
     using BaseShape = BaseTileShape<DType>;
     using WarpLayout = WarpLayout_;
 
-    /// @brief Store the WMMA output register tile to shared memory. The
-    /// source
+    /// @brief Store the WMMA output register tile to shared memory. The source
     ///        is the current thread's local register tile, and the
     ///        destination is shared memory.
     template <typename Shared>

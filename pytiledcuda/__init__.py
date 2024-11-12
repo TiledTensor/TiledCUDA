@@ -8,11 +8,6 @@ def scatter_nd(scatter_data, scatter_indices, scatter_updates):
                                    scatter_indices)
 
 
-def gemm(a, b, c, m, n, k):
-    torch.ops.tiledcuda.gemm(a, b, c, m, n, k)
-
-
-
 def flash_attention_fwd(Q, K, V, O, m, n, k, p):
     torch.ops.tiledcuda.flash_attention_fwd(Q, K, V, O, m, n, k, p)
 

@@ -200,7 +200,7 @@ __global__ void test_wmma(const Element* ga, const Element* gb,
         load_rA(sAs(k), rA);
         load_rB(sBs(k), rB);
 
-        compute::gemm_(rA, rB, acc);
+        compute::gemm(rA, rB, acc);
     }
     __syncthreads();
 
