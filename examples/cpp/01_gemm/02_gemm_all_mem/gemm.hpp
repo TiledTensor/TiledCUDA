@@ -146,7 +146,7 @@ __global__ void gemm(const InType* dA, const InType* dB, AccType* dC) {
             s2r_a(sAs(k2), rA);
             s2r_b(sBs(k2), rB);
 
-            compute::gemm_(rA, rB, acc);
+            compute::gemm(rA, rB, acc);
         }
     }
     r2s_c(acc, sC);

@@ -95,7 +95,7 @@ __global__ void test_wmma(LoadRegA& load_rA, LoadRegB& load_rB,
         load_rA(sA, rA);
         load_rB(sB, rB);
 
-        compute::gemm_(rA, rB, acc);
+        compute::gemm(rA, rB, acc);
     }
 
     store_rC(acc, sC);

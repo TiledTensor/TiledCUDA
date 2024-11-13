@@ -1,4 +1,3 @@
-
 #pragma once
 #include "cell/traits/base.hpp"
 #include "config.hpp"
@@ -7,7 +6,7 @@
 
 namespace tiledcuda::cell {
 
-/**
+/*
  * @namespace tile_layout
  *
  * @brief This namespace provides a set of utilities for defining tile layouts.

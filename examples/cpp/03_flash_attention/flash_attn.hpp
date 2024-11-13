@@ -237,7 +237,7 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
             load_rk(sK, rK);
             __syncthreads();
 
-            compute::gemm_(rQ, rK, attn_block_f32);
+            compute::gemm(rQ, rK, attn_block_f32);
         }
         load_rv(sV, rV);
         __syncthreads();
@@ -273,7 +273,7 @@ __global__ void KeFlashAttention(const InType* dQ, const InType* dK,
         vec_add(prev_norm_mul_sum, cur_norm_mul_sum, new_sum_vec);
 
         // Compute unnormized attention block.
-        compute::gemm_(attn_block, rV, exp_values_f32);
+        compute::gemm(attn_block, rV, exp_values_f32);
 
         cast_o(exp_values_f32, exp_values);
 

@@ -10,13 +10,6 @@
 namespace tiledcuda::cell::compute {
 namespace tl = tile_layout;
 
-template <typename TensorA, typename TensorB, typename TensorAcc,
-          typename TiledMma>
-DEVICE void gemm(const TiledMma& mma, const TensorA& a, const TensorB& b,
-                 TensorAcc& acc) {
-    cute::gemm(mma, a, b, acc);
-}
-
 namespace detail {
 
 /// @brief: Functor to warp wmma PTX instruction. See the below document for
@@ -89,7 +82,7 @@ struct Gemm {
 }  // namespace detail
 
 template <typename RegTileA, typename RegTileB, typename RegTileC>
-DEVICE void gemm_(const RegTileA& a, const RegTileB& b, RegTileC& c) {
+DEVICE void gemm(const RegTileA& a, const RegTileB& b, RegTileC& c) {
     detail::Gemm<RegTileA, RegTileB, RegTileC> gemm;
     gemm(a, b, c);
 }
