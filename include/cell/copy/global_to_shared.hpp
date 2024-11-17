@@ -221,7 +221,7 @@ struct SharedToGlobalStorerImpl<Shared_, Global_, kRowExec_, kColExec_,
                   "be the same.");
     static_assert(Global::kType == tl::Layout::kColMajor,
                   "The layout of Global memory and Shared memory tile should "
-                  "be row-major.");
+                  "be column-major.");
     static_assert(std::is_same_v<typename Global::DType, DType>,
                   "The data type of Shared and Global must be the same.");
 
@@ -229,6 +229,8 @@ struct SharedToGlobalStorerImpl<Shared_, Global_, kRowExec_, kColExec_,
     static constexpr int kColExec = kColExec_;
 
     // strides to iterate over each 16x16 `BaseTile` in the shared memory
+    static constexpr int kSrcColStride = BaseShape::kCols * Shared::kColStride;
+
     static constexpr int kDstRowStride = BaseShape::kRows;
     static constexpr int kDstColStride = BaseShape::kCols * Global::kColStride;
 
@@ -236,8 +238,8 @@ struct SharedToGlobalStorerImpl<Shared_, Global_, kRowExec_, kColExec_,
         int src_offset = 0, dst_offset = 0;
         for (int i = 0; i < kRowExec; ++i) {
             for (int j = 0; j < kColExec; ++j) {
-                src_offset = (i * kColExec + j) * BaseShape::kNumel;  // shared
-                dst_offset = i * kDstRowStride + j * kDstColStride;   // global
+                src_offset = i * BaseShape::kNumel + j * kSrcColStride;
+                dst_offset = i * kDstRowStride + j * kDstColStride;
 
                 this->copy(src + src_offset, dst + dst_offset);
             }
@@ -287,8 +289,8 @@ struct GlobalToSharedLoader : public Base {
     }
 
   private:
-    using OffsetHelper = warp::SharedOffsetHelper<WarpLayout, WarpReuse::kCont,
-                                                  WarpLayout::kType, Shared>;
+    using OffsetHelper =
+        warp::SharedOffsetHelper<WarpLayout, WarpReuse::kCont, Shared>;
     OffsetHelper offset_helper_;
 };
 
@@ -333,8 +335,8 @@ struct SharedToGlobalStorer : public Base {
     }
 
   private:
-    using OffsetHelper = warp::SharedOffsetHelper<WarpLayout, WarpReuse::kCont,
-                                                  WarpLayout::kType, Shared>;
+    using OffsetHelper =
+        warp::SharedOffsetHelper<WarpLayout, WarpReuse::kCont, Shared>;
     OffsetHelper offset_helper_;
 };
 }  // namespace tiledcuda::cell::copy

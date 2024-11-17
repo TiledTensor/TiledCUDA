@@ -41,11 +41,11 @@ class STileIterator {
     static_assert(Tile::kCols >= dim_size<1, ChunkShape>,
                   "Tile::kCols must be >= dim_size<1, ChunkShape>");
 
-    static constexpr int kStride0 = dim_size<0, ChunkShape>;
-    static constexpr int kStride1 = dim_size<1, ChunkShape>;
+    static constexpr int kChunkRow = dim_size<0, ChunkShape>;
+    static constexpr int kChunkCol = dim_size<1, ChunkShape>;
 
-    static constexpr int sc0 = Tile::kRows / kStride0;
-    static constexpr int sc1 = Tile::kCols / kStride1;
+    static constexpr int sc0 = Tile::kRows / kChunkRow;
+    static constexpr int sc1 = Tile::kCols / kChunkCol;
 
     HOST_DEVICE STileIterator() : data_(nullptr) {}
 
@@ -65,90 +65,39 @@ class STileIterator {
                       "A single index is supported only when the strip count "
                       "of one of the iterator's dimensions is 1.");
 
+        int x = sc0 == 1 ? 0 : i;
+        int y = sc0 == 1 ? i : 0;
+
         using TileLayout =
-            decltype(tl::make_tile_layout<kStride0, kStride1, Tile::kRowStride,
-                                          Tile::kColStride, true>());
+            decltype(tl::make_shared_tile_layout<kChunkRow, kChunkCol,
+                                                 kTileRowStride, kTileColStride,
+                                                 Tile::kType>());
+
         using NewTile = SharedTile<DType, TileLayout, Tile::kSwizzled>;
 
-        int offset = i * BaseShape::kNumel;
-        NewTile tile(data_ + offset);
+        int offset1 = x * (kChunkRow * Tile::kRowStride) +
+                      y * kTilePerChunkCol * BaseShape::kNumel;
+        int offset2 = x * kTilePerChunkRow * BaseShape::kNumel +
+                      y * (Tile::kColStride * kChunkCol);
+        int offset = Tile::kType == tl::Layout::kRowMajor ? offset1 : offset2;
 
+        NewTile tile(data_ + offset);
         return tile;
     }
 
     DEVICE auto operator()(int x, int y) {
-        // FIXME(ying): Fix this implementation according to the new layout of
-        // shared memory.
-        assert(false && "This function is not correctly implemented yet.");
-
-        assert(data_);               // The iterator is not initialized.
-        assert(x < sc0 && y < sc1);  // indices must be within the strip count.
-
-        using TileLayout =
-            decltype(tl::make_tile_layout<kStride0, kStride1, Tile::kRowStride,
-                                          Tile::kColStride>());
-        using NewTile = SharedTile<DType, TileLayout, Tile::kSwizzled>;
-
-        int offset = Tile::kType == tl::Layout::kRowMajor
-                         ? x * (kStride0 * Tile::kCols) + y * kStride1
-                         : x * kStride0 + y * (Tile::kRows * kStride1);
-        NewTile tile(data_ + offset);
-
-        return tile;
+        assert(false && "Not implemented yet.");
+        return 0;
     }
 
     DEVICE auto operator()(int x, const Underscore& y) {
-        // FIXME(ying): Fix this implementation according to the new layout of
-        // shared memory.
-        assert(false && "This function is not correctly implemented yet.");
-
-        assert(data_);    // The iterator is not initialized.
-        assert(x < sc0);  // index must be within the strip count.
-
-        // Updated the layout for sub-tiles accessed by the sliced iterator.
-        // Note: Only the shape changes; the stride remains the same.
-        using TileLayout = decltype(tl::make_tile_layout<kStride0, Tile::kCols,
-                                                         Tile::kRowStride,
-                                                         Tile::kColStride>());
-
-        using NewTile = SharedTile<DType, TileLayout, Tile::kSwizzled>;
-        using Iter = STileIterator<NewTile, ChunkShape>;
-        static_assert(Iter::sc0 == 1);
-
-        // advance pointer to the correct start position
-        int offset = Tile::kType == tl::Layout::kRowMajor
-                         ? x * (kStride0 * Tile::kCols)
-                         : x * kStride0;
-
-        Iter iter(data_ + offset);
-        return iter;
+        assert(false && "Not implemented yet.");
+        return 0;
     }
 
     DEVICE auto operator()(const Underscore& x, int y) {
-        // FIXME(ying): Fix this implementation according to the new layout of
-        // shared memory.
-        assert(false && "This function is not correctly implemented yet.");
-
-        assert(data_);    // The iterator is not initialized.
-        assert(y < sc1);  // index must be within the strip count.
-
-        // Updated the layout for sub-tiles accessed by the sliced iterator.
-        // Note: Only the shape changes; the stride remains the same.
-        using TileLayout = decltype(tl::make_tile_layout<Tile::kRows, kStride1,
-                                                         Tile::kRowStride,
-                                                         Tile::kColStride>());
-
-        using NewTile = SharedTile<DType, TileLayout, Tile::kSwizzled>;
-        using Iter = STileIterator<NewTile, ChunkShape>;
-        static_assert(Iter::sc1 == 1);
-
-        // advance pointer to the correct start position
-        int offset = Tile::kType == tl::Layout::kRowMajor
-                         ? y * kStride1
-                         : y * (Tile::kRows * kStride1);
-
-        Iter iter(data_ + offset);
-        return iter;
+        assert(false && "Not implemented yet.");
+        return 0;
     }
 
     DEVICE auto to_tile() {
@@ -157,6 +106,25 @@ class STileIterator {
     }
 
   private:
+    static constexpr int kTilePerRow = Tile::kRows / BaseShape::kRows;
+    static constexpr int kTilePerCol = Tile::kCols / BaseShape::kCols;
+
+    static constexpr int kTilePerChunkRow = kChunkRow / BaseShape::kRows;
+    static constexpr int kTilePerChunkCol = kChunkCol / BaseShape::kCols;
+
+    // The shared memory tile iterator creates a sub-tile that spans multiple
+    // `BaseTile`s. The row and column strides are used to address a single
+    // `BaseTile`. DO NOT modify these unless you fully understand how this
+    // layout is used with the Shared to Register loader, as changes might
+    // cause significant errors.
+    static constexpr int kTileRowStride = Tile::kType == tl::Layout::kRowMajor
+                                              ? kTilePerCol * BaseShape::kNumel
+                                              : BaseShape::kNumel;
+
+    static constexpr int kTileColStride = Tile::kType == tl::Layout::kRowMajor
+                                              ? BaseShape::kNumel
+                                              : kTilePerRow * BaseShape::kNumel;
+
     DType* data_;
 };
 
