@@ -69,6 +69,11 @@ __global__ void swizzled_copy(const Element* data, G2S1& g2s,
 #ifdef DEBUG
             if (thread(0)) {
                 printf("\niteration [%d, %d]\n", k, i);
+                s_tiles(i).dump_value();
+
+                printf("\ns_swizzled_tiles:\n");
+                s_swizzled_tiles(i).dump_value();
+
                 printf("r_tile:\n");
                 r_tile.dump_value();
 
@@ -472,31 +477,25 @@ TEST(TestSwizzledStored, test_row_major) {
 }
 
 TEST(TestNonSwizzledStored, test_col_major) {
-    // FIXME(ying): This test is disabled because the changes of the master
-    // branch. Store a column-major tile is not supported after the changes.
-    // static constexpr int kSwizzled = false;
+    static constexpr int kSwizzled = false;
 
-    // test_col_major_store<__half, tl::RowMajor<1, 1>, 16, 16, kSwizzled>();
-    // test_col_major_store<__half, tl::RowMajor<2, 1>, 32, 32, kSwizzled>();
+    test_col_major_store<__half, tl::RowMajor<1, 1>, 16, 16, kSwizzled>();
+    test_col_major_store<__half, tl::RowMajor<2, 1>, 32, 32, kSwizzled>();
+    test_col_major_store<__half, tl::RowMajor<1, 2>, 128, 64, kSwizzled>();
+    test_col_major_store<__half, tl::RowMajor<2, 2>, 64, 64, kSwizzled>();
 
-    // test_col_major_store<__half, tl::RowMajor<1, 2>, 128, 64, kSwizzled>();
-    // test_col_major_store<__half, tl::RowMajor<2, 2>, 64, 64, kSwizzled>();
-
-    // test_col_major_store<float, tl::RowMajor<1, 1>, 16, 16, kSwizzled>();
-    // test_col_major_store<float, tl::RowMajor<2, 1>, 64, 32, kSwizzled>();
-    // test_col_major_store<float, tl::RowMajor<1, 2>, 128, 64, kSwizzled>();
-    // test_col_major_store<float, tl::RowMajor<2, 2>, 64, 64, kSwizzled>();
+    test_col_major_store<float, tl::RowMajor<1, 1>, 16, 16, kSwizzled>();
+    test_col_major_store<float, tl::RowMajor<2, 1>, 64, 32, kSwizzled>();
+    test_col_major_store<float, tl::RowMajor<1, 2>, 128, 64, kSwizzled>();
+    test_col_major_store<float, tl::RowMajor<2, 2>, 64, 64, kSwizzled>();
 }
 
 TEST(TestSwizzledStored, test_col_major) {
-    // FIXME(ying): This test is disabled because the changes of the master
-    // branch. Store a column-major tile is not supported after the changes.
-
-    // static constexpr int kSwizzled = true;
-    // test_col_major_store<float, tl::RowMajor<1, 1>, 16, 16, kSwizzled>();
-    // test_col_major_store<float, tl::RowMajor<2, 1>, 64, 32, kSwizzled>();
-    // test_col_major_store<float, tl::RowMajor<1, 2>, 128, 64, kSwizzled>();
-    // test_col_major_store<float, tl::RowMajor<2, 2>, 64, 64, kSwizzled>();
+    static constexpr int kSwizzled = true;
+    test_col_major_store<float, tl::RowMajor<1, 1>, 16, 16, kSwizzled>();
+    test_col_major_store<float, tl::RowMajor<2, 1>, 64, 32, kSwizzled>();
+    test_col_major_store<float, tl::RowMajor<1, 2>, 128, 64, kSwizzled>();
+    test_col_major_store<float, tl::RowMajor<2, 2>, 64, 64, kSwizzled>();
 }
 
 }  // namespace tiledcuda::testing

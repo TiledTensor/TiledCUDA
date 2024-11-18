@@ -156,9 +156,6 @@ struct CopyBase {
          */
         int wid = threadIdx.x / warpSize;
 
-        // FIXME(haruhi): The switch-case structure is currently inelegant.
-        // Consider refining the code structure using more appropriate methods,
-        // such as partial specialization.
         switch (tl::layout_type<WarpLayout>) {
             case tl::Layout::kRowMajor:
                 return wid / tl::num_cols<WarpLayout>;
@@ -194,9 +191,6 @@ struct CopyBase {
          */
         int wid = threadIdx.x / warpSize;
 
-        // FIXME(haruhi): The switch-case structure is currently inelegant.
-        // Consider refining the code structure using more appropriate methods,
-        // such as partial specialization.
         switch (tl::layout_type<WarpLayout>) {
             case tl::Layout::kRowMajor:
                 return wid % tl::num_cols<WarpLayout>;
@@ -209,13 +203,16 @@ struct CopyBase {
     }
 };
 
-template <typename WarpLayout, const WarpReuse kMode_, const tl::Layout kType,
-          typename Shared_>
-struct SharedOffsetHelper;
+namespace {
+// This is a hotfix for the current implementation, that is not intended to be
+// exposed outside this header file. Thus, it is placed in an anonymous
+// namespace. Fix this when the implementation is improved.
+template <typename WarpLayout, const WarpReuse kMode, typename Shared,
+          const bool kIsSharedLayout>
+struct SharedOffsetHelperImpl;
 
-template <typename WarpLayout, const WarpReuse kMode_, typename Shared_>
-struct SharedOffsetHelper<WarpLayout, kMode_, tl::Layout::kRowMajor, Shared_> {
-    template <const WarpReuse kMode>
+template <typename WarpLayout_, const WarpReuse kMode_, typename Shared_>
+struct SharedOffsetHelperImpl<WarpLayout_, kMode_, Shared_, false> {
     DEVICE int warp_row_id() {
         int warp_row = 0;
         switch (kMode) {
@@ -234,7 +231,6 @@ struct SharedOffsetHelper<WarpLayout, kMode_, tl::Layout::kRowMajor, Shared_> {
         return warp_row;
     }
 
-    template <const WarpReuse kMode>
     DEVICE int warp_col_id() {
         int warp_col = 0;
         switch (kMode) {
@@ -255,15 +251,16 @@ struct SharedOffsetHelper<WarpLayout, kMode_, tl::Layout::kRowMajor, Shared_> {
 
     DEVICE int get_warp_offset() {
         int tile_id = Shared::kType == tl::Layout::kRowMajor
-                          ? base_tiles_row_major_(warp_row_id<kMode>(),
-                                                  warp_col_id<kMode>())
-                          : base_tiles_col_major_(warp_row_id<kMode>(),
-                                                  warp_col_id<kMode>());
+                          ? base_tiles_row_major_(warp_row_id(), warp_col_id())
+                          : base_tiles_col_major_(warp_row_id(), warp_col_id());
         return tile_id * BaseShape::kNumel;
     }
 
   private:
     using Shared = Shared_;
+    using WarpLayout = WarpLayout_;
+    // data type __half here is to instantiate the templated class `BaseShape`.
+    // It does not affect shape-related information.
     using BaseShape = traits::BaseTileShape<__half>;
 
     static constexpr int kWarpSize = 32;
@@ -292,4 +289,141 @@ struct SharedOffsetHelper<WarpLayout, kMode_, tl::Layout::kRowMajor, Shared_> {
     BaseTilesColMajorLayout base_tiles_col_major_;
 };
 
+template <typename WarpLayout_, const WarpReuse kMode_, typename Shared_>
+struct SharedOffsetHelperImpl<WarpLayout_, kMode_, Shared_, true> {
+    /*
+     * @brief In a thread block, warps are organized as 2-D matrices, each with
+     * a row index and a column index. Given `threadIdx.x`, this function
+     * calculates the row index of the current thread.
+     */
+    DEVICE int warp_row_id() {
+        int warp_id = threadIdx.x / warpSize;  // the 1-d warp index
+
+        switch (tl::layout_type<WarpLayout>) {
+            case tl::Layout::kRowMajor:
+                return warp_id / tl::num_cols<WarpLayout>;
+            case tl::Layout::kColMajor:
+                return warp_id % tl::num_rows<WarpLayout>;
+            default:
+                assert(false && "Not implemented yet.");
+                return -1;
+        }
+    }
+
+    /*
+     * @brief In a thread block, warps are organized as 2-D matrices, each with
+     * a row index and a column index. Given `threadIdx.x`, this function
+     * calculates the column index of the current thread.
+     */
+    DEVICE int warp_col_id() {
+        int warp_id = threadIdx.x / warpSize;  // the 1-d warp index
+
+        switch (tl::layout_type<WarpLayout>) {
+            case tl::Layout::kRowMajor:
+                return warp_id % tl::num_cols<WarpLayout>;
+            case tl::Layout::kColMajor:
+                return warp_id / tl::num_rows<WarpLayout>;
+            default:
+                assert(false && "Not implemented yet.");
+                return -1;
+        }
+    }
+
+    DEVICE int get_warp_offset() {
+        int warp_row = warp_row_id();
+        int warp_col = warp_col_id();
+
+        int offset = 0;
+        switch (kMode) {
+            case WarpReuse::kCont:
+            case WarpReuse::kCir:
+                offset = warp_row * Shared::kRowStride * kTilePerWarpCol +
+                         warp_col * Shared::kColStride * kTilePerWarpRow;
+                break;
+            case WarpReuse::kColReuseCont:
+            case WarpReuse::kColReuseCir:
+                offset = warp_col * Shared::kColStride * kTilePerWarpRow;
+                break;
+            case WarpReuse::kRowReuseCont:
+            case WarpReuse::kRowReuseCir:
+                offset = warp_row * Shared::kRowStride * kTilePerWarpCol;
+                break;
+            default:
+                assert(false && "Not implemented yet.");
+        }
+        return offset;
+    }
+
+  private:
+    using Shared = Shared_;
+    using WarpLayout = WarpLayout_;
+    static constexpr WarpReuse kMode = kMode_;
+    // data type __half here is to instantiate the templated class `BaseShape`.
+    // It does not affect shape-related information.
+    using BaseShape = traits::BaseTileShape<__half>;
+
+    constexpr static int kTilePerRow = Shared::kCols / BaseShape::kCols;
+    constexpr static int kTilePerCol = Shared::kRows / BaseShape::kRows;
+
+    constexpr static int kTilePerWarpRow =
+        kTilePerRow / tl::num_cols<WarpLayout>;
+    constexpr static int kTilePerWarpCol =
+        kTilePerCol / tl::num_rows<WarpLayout>;
+
+    // for row-major shared memory tile
+    constexpr static int kRowStride1 =
+        kTilePerCol / tl::num_rows<WarpLayout> * kTilePerRow;
+    constexpr static int kColStride1 = kTilePerRow / tl::num_cols<WarpLayout>;
+
+    using BaseTilesRowMajorLayout =
+        cute::Layout<Shape<Int<kTilePerCol>, Int<kTilePerRow>>,
+                     Stride<Int<kRowStride1>, Int<kColStride1>>>;
+    BaseTilesRowMajorLayout base_tiles_row_major_;
+
+    // for column-major shared memory tile
+    constexpr static int kRowStride2 = kTilePerCol / tl::num_rows<WarpLayout>;
+    constexpr static int kColStride2 =
+        kTilePerRow / tl::num_cols<WarpLayout> * kTilePerCol;
+    using BaseTilesColMajorLayout =
+        cute::Layout<Shape<Int<kTilePerCol>, Int<kTilePerRow>>,
+                     Stride<Int<kRowStride2>, Int<kColStride2>>>;
+    BaseTilesColMajorLayout base_tiles_col_major_;
+};
+}  // namespace
+
+template <typename WarpLayout, const WarpReuse kMode, typename Shared>
+struct SharedOffsetHelper {
+    /*
+     * @brief In a thread block, warps are organized as 2-D matrices, each with
+     * a row index and a column index. Given `threadIdx.x`, this function
+     * calculates the row index of the current thread.
+     */
+    DEVICE int warp_row_id() { return helper_.warp_row_id(); }
+
+    /*
+     * @brief In a thread block, warps are organized as 2-D matrices, each with
+     * a row index and a column index. Given `threadIdx.x`, this function
+     * calculates the column index of the current thread.
+     */
+    DEVICE int warp_col_id() { return helper_.warp_col_id(); }
+
+    DEVICE int get_warp_offset() { return helper_.get_warp_offset(); }
+
+  private:
+    // FIXME(ying): This hotfix addresses the current implementation's inability
+    // to explicitly distinguish between shared memory's row-major or
+    // column-major layout and global memory's layouts. However, this should be
+    // fixed in the future.
+    constexpr static bool kIsSharedLayout =
+        (Shared::Layout::kRowStride == Shared::kCols &&
+         Shared::Layout::kColStride == 1) ||
+                (Shared::Layout::kRowStride == 1 &&
+                 Shared::Layout::kColStride == Shared::kRows)
+            ? false
+            : true;
+    using OffsetHelper =
+        SharedOffsetHelperImpl<WarpLayout, kMode, Shared, kIsSharedLayout>;
+
+    OffsetHelper helper_;
+};
 }  // namespace tiledcuda::cell::copy::warp

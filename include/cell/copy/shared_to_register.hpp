@@ -47,6 +47,7 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
             for (int j = 0; j < kColExec; ++j) {
                 // advance pointer to the 16x16 `BaseTile` indexed by(i, j).
                 offset = base_tiles_(i, j) + lane_offset;
+
                 // issue the hardware-backed memory access instruction.
                 this->ldmatrix(src + offset, dst(i, j).mutable_data());
             }
@@ -55,9 +56,8 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
 
   private:
     using BaseTilesLayout =
-        tl::MatrixLayout<kRowExec, kColExec,
-                         BaseShape::kRows * Shared::kRowStride,
-                         BaseShape::kNumel>;
+        tl::MatrixLayout<kRowExec, kColExec, Shared::kRowStride,
+                         Shared::kColStride>;
     BaseTilesLayout base_tiles_;
 
     using BaseTileSharedLayout =
@@ -71,9 +71,9 @@ template <typename Shared, typename Reg_, const int kRowExec_,
 struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
                              tl::Layout::kColMajor, CopyInst::kLoadMat>
     : public LoadMatBase<typename Shared::DType> {
-    using LoadMat = LoadMatBase<typename Shared::DType>;
-    using DType = Shared::DType;
     using Reg = Reg_;
+    using DType = Shared::DType;
+    using LoadMat = LoadMatBase<DType>;
     using BaseShape = BaseTileShape<DType>;
 
     static constexpr int kRowExec = kRowExec_;
@@ -84,9 +84,10 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
           in_base_tile_(BaseTileSharedLayout{}) {}
 
     DEVICE void operator()(const DType* src, Reg& dst) {
-        // transpose the lane position if the shared memory is in column-major.
-        // 16 threads are mapped to the strided dimension of the data while the
-        // 2 threads are mapped to the contiguous dimension of the data.
+        // transpose the lane position if the shared memory is in
+        // column-major. 16 threads are mapped to the strided dimension
+        // of the data while the 2 threads are mapped to the contiguous
+        // dimension of the data.
         int lane_row = this->lane_col_id() * LoadMat::kNumPerAccess;
         int lane_col = this->lane_row_id();
 
@@ -97,7 +98,6 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
 #pragma unroll
             for (int j = 0; j < kRowExec; ++j) {
                 offset = base_tiles_(j, i) + lane_offset;
-
                 // issue the hardware-backed memory access instruction
                 this->ldmatrix(src + offset, dst(j, i).mutable_data());
             }
@@ -105,9 +105,12 @@ struct SharedToRegLoaderImpl<Shared, Reg_, kRowExec_, kColExec_,
     }
 
   private:
+    static constexpr int kSharedRowStride = Shared::kRowStride;
+    static constexpr int kSharedColStride = Shared::kColStride;
+
     using BaseTilesLayout =
-        tl::MatrixLayout<kRowExec, kColExec, BaseShape::kNumel,
-                         BaseShape::kCols * Shared::kColStride>;
+        tl::MatrixLayout<kRowExec, kColExec, Shared::kRowStride,
+                         Shared::kColStride>;
     BaseTilesLayout base_tiles_;
 
     using BaseTileSharedLayout =
@@ -221,8 +224,8 @@ struct SharedToRegLoader : public Base {
         const DType* src = src_.data();
 
         using OffsetHelper =
-            warp::SharedOffsetHelper<WarpLayout, kMode, WarpLayout::kType,
-                                     Shared>;
+            warp::SharedOffsetHelper<WarpLayout, kMode, Shared>;
+
         OffsetHelper offset_helper_;
         int offset = offset_helper_.get_warp_offset();
 
@@ -230,13 +233,14 @@ struct SharedToRegLoader : public Base {
             detail::SharedToRegLoaderImpl<Shared, Reg, kRowExec, kColExec,
                                           Shared::kType, CopyInst::kLoadMat>;
         Loader loader;
+
         loader(src + offset, dst);
     }
 };
 
 /// @brief partial specialization for 16x16x16 wmma's output, and st.shared.f32
-///        to revert the data distrubution into an comphrehensive
-///        row-major matrix.
+///        to revert the data distrubution into an comphrehensive row-major
+///        matrix.
 template <typename Reg_, typename WarpLayout_>
 struct RegToSharedStorer {
     using Reg = Reg_;
@@ -246,8 +250,8 @@ struct RegToSharedStorer {
     using WarpLayout = WarpLayout_;
 
     /// @brief Store the WMMA output register tile to shared memory. The source
-    ///        is the current thread's local register tile, and the
-    ///        destination is shared memory.
+    ///        is the current thread's local register tile, and the destination
+    ///        is shared memory.
     template <typename Shared>
     DEVICE void operator()(const Reg& src, Shared& dst_) {
         static_assert(std::is_same_v<typename Shared::DType, DType>,
@@ -279,13 +283,12 @@ struct RegToSharedStorer {
         static constexpr int kColExec =
             Shared::kCols / BaseShape::kCols / tl::num_cols<WarpLayout>;
 
-        // 1. advance the pointer to input data to the current warp
-        // according to warp reuse mode. During the store process, threads
-        // do not write to the same shared memory location, thus the warp
-        // reuse mode is set to `Cont`.
+        // 1. advance the pointer to input data to the current warp according to
+        // warp reuse mode. During the store process, threads do not write to
+        // the same shared memory location, thus the warp reuse mode is set to
+        // `Cont`.
         using OffsetHelper =
-            warp::SharedOffsetHelper<WarpLayout, WarpReuse::kCont,
-                                     WarpLayout::kType, Shared>;
+            warp::SharedOffsetHelper<WarpLayout, WarpReuse::kCont, Shared>;
         OffsetHelper offset_helper_;
         int offset = offset_helper_.get_warp_offset();
 
