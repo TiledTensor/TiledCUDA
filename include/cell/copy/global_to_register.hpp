@@ -15,13 +15,7 @@ using namespace traits;
  * @tparam type Global Layout type.
  */
 template <typename Global_, typename BaseTile_, const tl::Layout kType>
-struct GlobalToRegMatLoader {
-    using Global = Global_;
-    using BaseTile = BaseTile_;
-    using DType = Global::DType;
-
-    DEVICE void operator()(const DType* src, BaseTile& dst);
-};
+struct GlobalToRegMatLoader;
 
 template <typename Global_, typename BaseTile_>
 struct GlobalToRegMatLoader<Global_, BaseTile_, tl::Layout::kRowMajor> {
