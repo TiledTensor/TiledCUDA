@@ -271,10 +271,6 @@ struct RegToSharedStorer {
         static_assert(Shared::kCols % BaseShape::kCols == 0,
                       "The number of shared memory columns must be divisible "
                       "by the base tile column.");
-        static_assert(
-            (Shared::kSwizzled && sizeof(DType) == 4 ||
-             Shared::kSwizzled == false),
-            "Not implemented for swizzled layout with 2-byte data types.");
 
         // how many times the 16x16 `BaseTile` is executed along the row and
         // column direction.
