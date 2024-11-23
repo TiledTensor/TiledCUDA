@@ -21,5 +21,4 @@ DEVICE void __copy_async() {
     commit_copy_group();
     wait_group<0>();
 }
-
 }  // namespace tiledcuda::cell

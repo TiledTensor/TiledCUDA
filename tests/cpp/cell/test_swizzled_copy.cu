@@ -467,6 +467,15 @@ TEST(TestNonSwizzledStore, test_row_major) {
 TEST(TestSwizzledStored, test_row_major) {
     static constexpr int kSwizzled = true;
 
+    test_row_major_store<__half, tl::RowMajor<1, 1>, 16, 32, kSwizzled>();
+    test_row_major_store<__half, tl::RowMajor<1, 1>, 16, 32, kSwizzled>();
+    test_row_major_store<__half, tl::RowMajor<1, 1>, 16, 48, kSwizzled>();
+    test_row_major_store<__half, tl::RowMajor<2, 1>, 32, 48, kSwizzled>();
+    test_row_major_store<__half, tl::RowMajor<1, 1>, 16, 32, kSwizzled>();
+    test_row_major_store<__half, tl::RowMajor<2, 1>, 64, 32, kSwizzled>();
+    test_row_major_store<__half, tl::RowMajor<1, 2>, 128, 64, kSwizzled>();
+    test_row_major_store<__half, tl::RowMajor<2, 2>, 64, 64, kSwizzled>();
+
     test_row_major_store<float, tl::RowMajor<1, 1>, 16, 32, kSwizzled>();
     test_row_major_store<float, tl::RowMajor<1, 1>, 16, 48, kSwizzled>();
     test_row_major_store<float, tl::RowMajor<2, 1>, 32, 48, kSwizzled>();

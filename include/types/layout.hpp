@@ -95,6 +95,33 @@ struct SharedLayout {
 template <const int kBitsPerAccess>
 struct SwizzledRowMajor;
 
+/// @brief  Swizzled row-major layout for storing half-typed 16x16 BaseTile.
+template <>
+struct SwizzledRowMajor<32> {
+    using BaseShape = traits::BaseTileShape<__half>;
+
+    static constexpr int kB = 2;
+    static constexpr int kM = 3;
+    static constexpr int kS = 3;
+
+    static_assert(
+        BaseShape::kNumel == ((1 << kB) * (1 << kM) * (1 << kS)),
+        "Swizzling is performed based on the BaseTile, and the number of "
+        "elements in a BaseTile should be equal to 2^B x 2^S x 2^M.");
+
+    using SwizzledBaseTile = decltype(composition(
+        cute::Swizzle<kB, kM, kS>{},
+        cute::Layout<Shape<Int<BaseShape::kRows>, Int<BaseShape::kCols>>,
+                     Stride<Int<BaseShape::kCols>, _1>>{}));
+
+    DEVICE SwizzledRowMajor() : swizzled_(SwizzledBaseTile{}){};
+
+    DEVICE int operator()(int i, int j) const { return swizzled_(i, j); }
+
+  private:
+    SwizzledBaseTile swizzled_;
+};
+
 template <>
 struct SwizzledRowMajor<64> {
     using BaseShape = traits::BaseTileShape<float>;
@@ -230,6 +257,15 @@ struct SharedLayoutWrapperImpl<false, Layout::kColMajor, kBitsPerAcces> {
 /// @brief Shared memory layout for swizzled row-major layout with 16-bit data
 ///        type.
 template <>
+struct SharedLayoutWrapperImpl<true, Layout::kRowMajor, 32> {
+    using BaseShape = traits::BaseTileShape<__half>;
+
+    using Layout = SwizzledRowMajor<32>;
+};
+
+/// @brief Shared memory layout for swizzled row-major layout with 16-bit data
+///        type.
+template <>
 struct SharedLayoutWrapperImpl<true, Layout::kRowMajor, 64> {
     using BaseShape = traits::BaseTileShape<__half>;
 
@@ -322,6 +358,5 @@ HOST_DEVICE auto make_col_major_layout(const int row, const int col,
     return cute::make_layout(cute::make_shape(row, col),
                              cute::make_stride(cute::_1{}, stride));
 }
-
 }  // namespace tile_layout
 }  // namespace tiledcuda::cell
