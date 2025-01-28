@@ -10,6 +10,8 @@ TiledCUDA adopts a hardware bottom-up approach by building kernels around the co
 
 ## Latest News 🔥
 
+- [2025/01/28] :bangbang: We have **migrated the latest developments and updates** of the TiledCUDA project to a new repository. We invite you to visit and follow our new repository at [microsoft/TileFusion](https://github.com/microsoft/TileFusion). For any questions or further assistance, please feel free to reach out to us at the new repository.
+
 - [2024/8/30] TiledCUDA supported FlashAttention-v2, [FlashAttention-v2 Example](src/kernels/flash_attn.cu).
 
 
